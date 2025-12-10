@@ -1,0 +1,35 @@
+services:
+  frontend:
+    image: ${FRONTEND_IMAGE}
+    ports:
+      - "7901:80"
+    restart: always
+  backend:
+    image: ${BACKEND_IMAGE}
+    ports:
+      - "7900:80"
+    volumes:
+      - ./.env:/.env
+      # Используем volume для кеширeeования зависимостей
+      - go_cache:/gocache
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+    networks:
+      - shared
+
+
+volumes:
+  go_cache:
+
+  shared:
+    external: true
+    name: shared-network
+
+networks:
+  shared:
+    external: true
+    name: shared-network

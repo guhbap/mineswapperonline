@@ -6,6 +6,7 @@ import (
 	"log"
 	mathrand "math/rand"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -446,6 +447,10 @@ func generateID() string {
 
 func main() {
 	server := NewServer()
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
 
 	r := mux.NewRouter()
 	r.HandleFunc("/ws", server.handleWebSocket)
@@ -465,6 +470,6 @@ func main() {
 		})
 	}
 
-	log.Println("Сервер запущен на :8080")
-	log.Fatal(http.ListenAndServe(":8080", corsMiddleware(r)))
+	log.Printf("Сервер запущен на :%s", port)
+	log.Fatal(http.ListenAndServe(":"+port, corsMiddleware(r)))
 }
