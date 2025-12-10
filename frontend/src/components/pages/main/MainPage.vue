@@ -31,7 +31,7 @@ const handleNicknameSubmit = (submittedNickname: string) => {
   const host = import.meta.env.DEV
     ? 'localhost:8080'
     : window.location.host
-  const wsUrl = `${protocol}//${host}/ws`
+  const wsUrl = `${protocol}//${host}/api/ws`
 
   wsClient.value = new WebSocketClient(
     wsUrl,

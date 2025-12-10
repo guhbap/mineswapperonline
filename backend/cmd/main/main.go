@@ -453,8 +453,8 @@ func main() {
 	}
 
 	r := mux.NewRouter()
-	r.HandleFunc("/ws", server.handleWebSocket)
-	r.PathPrefix("/").Handler(http.FileServer(http.Dir("../frontend/dist/")))
+	r.HandleFunc("/api/ws", server.handleWebSocket)
+	// r.PathPrefix("/").Handler(http.FileServer(http.Dir("../frontend/dist/")))
 
 	// CORS middleware
 	corsMiddleware := func(next http.Handler) http.Handler {
