@@ -1,0 +1,127 @@
+<template>
+  <div v-if="show" class="nickname-modal-overlay" @click.self="handleOverlayClick">
+    <div class="nickname-modal">
+      <h2 class="nickname-modal__title">Введите ваш никнейм</h2>
+      <input
+        v-model="nickname"
+        @keyup.enter="handleSubmit"
+        type="text"
+        class="nickname-modal__input"
+        placeholder="Ваш никнейм"
+        maxlength="20"
+        autofocus
+      />
+      <button @click="handleSubmit" class="nickname-modal__button">
+        Войти в игру
+      </button>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const props = defineProps<{
+  show: boolean
+}>()
+
+const emit = defineEmits<{
+  submit: [nickname: string]
+}>()
+
+const nickname = ref('')
+
+const handleSubmit = () => {
+  const trimmed = nickname.value.trim()
+  if (trimmed.length > 0) {
+    emit('submit', trimmed)
+  }
+}
+
+const handleOverlayClick = () => {
+  // Не закрываем при клике на overlay, требуем ввод никнейма
+}
+</script>
+
+<style scoped>
+.nickname-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.nickname-modal {
+  background: white;
+  padding: 2.5rem;
+  border-radius: 1rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  min-width: 400px;
+  max-width: 90vw;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nickname-modal__title {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.5rem;
+  color: #1f2937;
+  text-align: center;
+}
+
+.nickname-modal__input {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  font-size: 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.nickname-modal__input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.nickname-modal__button {
+  width: 100%;
+  padding: 0.875rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.nickname-modal__button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.nickname-modal__button:active {
+  transform: translateY(0);
+}
+</style>
+
