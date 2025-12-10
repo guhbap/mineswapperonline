@@ -264,6 +264,18 @@ func (s *Server) handleCellClick(playerID string, click *CellClick) {
 		return
 	}
 
+	// Если это первое открытие, убеждаемся, что ячейка безопасна (0)
+	isFirstClick := s.gameState.Revealed == 0
+	if isFirstClick {
+		// Если первая ячейка содержит мину или имеет соседние мины, перемещаем мины
+		if cell.IsMine || cell.NeighborMines > 0 {
+			log.Printf("Первое открытие небезопасно, перемещаем мины: row=%d, col=%d", row, col)
+			s.ensureFirstClickSafe(row, col)
+			// Обновляем ссылку на ячейку после перемещения мин
+			cell = &s.gameState.Board[row][col]
+		}
+	}
+
 	cell.IsRevealed = true
 	s.gameState.Revealed++
 	log.Printf("Ячейка открыта: row=%d, col=%d, isMine=%v, neighborMines=%d, revealed=%d",
@@ -300,6 +312,76 @@ func (s *Server) handleCellClick(playerID string, click *CellClick) {
 	log.Printf("Отправка обновленного состояния игры после клика")
 	s.gameState.mu.Unlock() // Разблокируем перед broadcastGameState
 	s.broadcastGameState()
+}
+
+func (s *Server) ensureFirstClickSafe(firstRow, firstCol int) {
+	// Собираем все мины в радиусе 1 клетки от первой ячейки
+	minesToMove := make([]struct{ row, col int }, 0)
+
+	for di := -1; di <= 1; di++ {
+		for dj := -1; dj <= 1; dj++ {
+			ni, nj := firstRow+di, firstCol+dj
+			if ni >= 0 && ni < s.gameState.Rows && nj >= 0 && nj < s.gameState.Cols {
+				if s.gameState.Board[ni][nj].IsMine {
+					minesToMove = append(minesToMove, struct{ row, col int }{ni, nj})
+					s.gameState.Board[ni][nj].IsMine = false
+				}
+			}
+		}
+	}
+
+	// Перемещаем мины в случайные свободные места
+	mathrand.Seed(time.Now().UnixNano())
+	for range minesToMove {
+		// Ищем свободное место (не в радиусе 1 от первой ячейки и не занятое миной)
+		attempts := 0
+		for attempts < 100 {
+			newRow := mathrand.Intn(s.gameState.Rows)
+			newCol := mathrand.Intn(s.gameState.Cols)
+
+			// Проверяем, что это не в радиусе 1 от первой ячейки
+			tooClose := false
+			for di := -1; di <= 1; di++ {
+				for dj := -1; dj <= 1; dj++ {
+					if newRow == firstRow+di && newCol == firstCol+dj {
+						tooClose = true
+						break
+					}
+				}
+				if tooClose {
+					break
+				}
+			}
+
+			if !tooClose && !s.gameState.Board[newRow][newCol].IsMine {
+				s.gameState.Board[newRow][newCol].IsMine = true
+				break
+			}
+			attempts++
+		}
+	}
+
+	// Пересчитываем соседние мины для всех ячеек
+	for i := 0; i < s.gameState.Rows; i++ {
+		for j := 0; j < s.gameState.Cols; j++ {
+			if !s.gameState.Board[i][j].IsMine {
+				count := 0
+				for di := -1; di <= 1; di++ {
+					for dj := -1; dj <= 1; dj++ {
+						ni, nj := i+di, j+dj
+						if ni >= 0 && ni < s.gameState.Rows && nj >= 0 && nj < s.gameState.Cols {
+							if s.gameState.Board[ni][nj].IsMine {
+								count++
+							}
+						}
+					}
+				}
+				s.gameState.Board[i][j].NeighborMines = count
+			}
+		}
+	}
+
+	log.Printf("Мины перемещены, первая ячейка теперь безопасна")
 }
 
 func (s *Server) revealNeighbors(row, col int) {
