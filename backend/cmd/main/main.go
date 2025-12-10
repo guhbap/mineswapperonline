@@ -244,7 +244,12 @@ func (s *Server) handleCellClick(playerID string, click *CellClick) {
 	cell := &s.gameState.Board[row][col]
 
 	if click.Flag {
-		// Переключение флага
+		// Переключение флага - нельзя ставить на открытые ячейки
+		if cell.IsRevealed {
+			log.Printf("Нельзя поставить флаг на открытую ячейку: row=%d, col=%d", row, col)
+			s.gameState.mu.Unlock()
+			return
+		}
 		cell.IsFlagged = !cell.IsFlagged
 		log.Printf("Флаг переключен: row=%d, col=%d, flagged=%v", row, col, cell.IsFlagged)
 		s.gameState.mu.Unlock()

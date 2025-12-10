@@ -150,6 +150,11 @@ const handleCellClick = (row: number, col: number, isRightClick: boolean) => {
   }
   if (gameState.value?.gameOver || gameState.value?.gameWon) return
 
+  // Проверка: нельзя ставить флаг на открытые ячейки
+  if (isRightClick && gameState.value?.board?.[row]?.[col]?.isRevealed) {
+    return
+  }
+
   console.log('Отправка клика:', row, col, isRightClick)
   props.wsClient.sendCellClick(row, col, isRightClick)
 }
