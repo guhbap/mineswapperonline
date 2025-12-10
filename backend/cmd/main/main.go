@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"log"
 	mathrand "math/rand"
 	"net/http"
@@ -70,10 +71,26 @@ type CellClick struct {
 	Flag bool `json:"flag"`
 }
 
-type Server struct {
-	players   map[string]*Player
-	gameState *GameState
+type Room struct {
+	ID        string             `json:"id"`
+	Name      string             `json:"name"`
+	Password  string             `json:"-"` // Не отправляем пароль клиентам
+	Rows      int                `json:"rows"`
+	Cols      int                `json:"cols"`
+	Mines     int                `json:"mines"`
+	Players   map[string]*Player `json:"-"`
+	GameState *GameState         `json:"-"`
+	CreatedAt time.Time          `json:"createdAt"`
 	mu        sync.RWMutex
+}
+
+type RoomManager struct {
+	rooms map[string]*Room
+	mu    sync.RWMutex
+}
+
+type Server struct {
+	roomManager *RoomManager
 }
 
 var colors = []string{
@@ -81,10 +98,29 @@ var colors = []string{
 	"#F7DC6F", "#BB8FCE", "#85C1E2", "#F8B739", "#52BE80",
 }
 
+func NewRoomManager() *RoomManager {
+	return &RoomManager{
+		rooms: make(map[string]*Room),
+	}
+}
+
+func NewRoom(id, name, password string, rows, cols, mines int) *Room {
+	return &Room{
+		ID:        id,
+		Name:      name,
+		Password:  password,
+		Rows:      rows,
+		Cols:      cols,
+		Mines:     mines,
+		Players:   make(map[string]*Player),
+		GameState: NewGameState(rows, cols, mines),
+		CreatedAt: time.Now(),
+	}
+}
+
 func NewServer() *Server {
 	return &Server{
-		players:   make(map[string]*Player),
-		gameState: NewGameState(16, 16, 40),
+		roomManager: NewRoomManager(),
 	}
 }
 
@@ -141,10 +177,68 @@ func NewGameState(rows, cols, mines int) *GameState {
 	return gs
 }
 
+func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int) *Room {
+	roomID := generateID()
+	room := NewRoom(roomID, name, password, rows, cols, mines)
+	rm.mu.Lock()
+	rm.rooms[roomID] = room
+	rm.mu.Unlock()
+	log.Printf("Создана комната: %s (ID: %s)", name, roomID)
+	return room
+}
+
+func (rm *RoomManager) GetRoom(roomID string) *Room {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+	return rm.rooms[roomID]
+}
+
+func (rm *RoomManager) GetRoomsList() []map[string]interface{} {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+	roomsList := make([]map[string]interface{}, 0, len(rm.rooms))
+	for _, room := range rm.rooms {
+		room.mu.RLock()
+		playerCount := len(room.Players)
+		room.mu.RUnlock()
+		roomsList = append(roomsList, map[string]interface{}{
+			"id":          room.ID,
+			"name":        room.Name,
+			"hasPassword": room.Password != "",
+			"rows":        room.Rows,
+			"cols":        room.Cols,
+			"mines":       room.Mines,
+			"players":     playerCount,
+			"createdAt":   room.CreatedAt,
+		})
+	}
+	return roomsList
+}
+
+func (rm *RoomManager) DeleteRoom(roomID string) {
+	rm.mu.Lock()
+	delete(rm.rooms, roomID)
+	rm.mu.Unlock()
+	log.Printf("Комната удалена: %s", roomID)
+}
+
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	roomID := r.URL.Query().Get("room")
+	if roomID == "" {
+		http.Error(w, "Room ID required", http.StatusBadRequest)
+		return
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("Ошибка обновления соединения: %v", err)
+		return
+	}
+
+	room := s.roomManager.GetRoom(roomID)
+	if room == nil {
+		conn.WriteJSON(map[string]string{"error": "Room not found"})
+		conn.Close()
 		return
 	}
 
@@ -157,15 +251,15 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		Conn:  conn,
 	}
 
-	s.mu.Lock()
-	s.players[playerID] = player
-	s.mu.Unlock()
+	room.mu.Lock()
+	room.Players[playerID] = player
+	room.mu.Unlock()
 
-	log.Printf("Игрок подключен: %s", playerID)
+	log.Printf("Игрок %s подключен к комнате %s", playerID, roomID)
 
 	// Отправка начального состояния игры
 	log.Printf("Отправка начального состояния игры игроку %s", playerID)
-	s.sendGameState(player)
+	s.sendGameStateToPlayer(room, player)
 	log.Printf("Начальное состояние игры отправлено игроку %s", playerID)
 
 	// Обработка сообщений
@@ -185,7 +279,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			player.Nickname = msg.Nickname
 			player.mu.Unlock()
 			log.Printf("Никнейм игрока %s установлен: %s", playerID, msg.Nickname)
-			s.broadcastPlayerList()
+			s.broadcastPlayerList(room)
 
 		case "cursor":
 			if msg.Cursor != nil {
@@ -196,135 +290,141 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				msg.Color = player.Color
 				player.mu.Unlock()
 				log.Printf("Курсор от игрока %s (%s): x=%.2f, y=%.2f", playerID, msg.Nickname, msg.Cursor.X, msg.Cursor.Y)
-				s.broadcastToOthers(playerID, msg)
+				s.broadcastToOthers(room, playerID, msg)
 			}
 
 		case "cellClick":
 			if msg.CellClick != nil {
 				log.Printf("Обработка клика: row=%d, col=%d, flag=%v", msg.CellClick.Row, msg.CellClick.Col, msg.CellClick.Flag)
-				s.handleCellClick(playerID, msg.CellClick)
+				s.handleCellClick(room, playerID, msg.CellClick)
 				log.Printf("Клик обработан, состояние игры обновлено")
 			}
 
 		case "newGame":
-			s.mu.Lock()
-			s.gameState = NewGameState(16, 16, 40)
-			s.mu.Unlock()
+			room.mu.Lock()
+			room.GameState = NewGameState(room.Rows, room.Cols, room.Mines)
+			room.mu.Unlock()
 			log.Printf("Новая игра начата")
-			s.broadcastGameState()
+			s.broadcastGameState(room)
 		}
 	}
 
 	// Отключение игрока
-	s.mu.Lock()
-	delete(s.players, playerID)
-	s.mu.Unlock()
+	room.mu.Lock()
+	delete(room.Players, playerID)
+	playersLeft := len(room.Players)
+	room.mu.Unlock()
 
-	s.broadcastPlayerList()
+	s.broadcastPlayerList(room)
 	conn.Close()
-	log.Printf("Игрок отключен: %s", playerID)
+	log.Printf("Игрок отключен: %s, игроков в комнате: %d", playerID, playersLeft)
+
+	// Удаляем комнату, если она пустая
+	if playersLeft == 0 {
+		s.roomManager.DeleteRoom(roomID)
+	}
 }
 
-func (s *Server) handleCellClick(playerID string, click *CellClick) {
-	s.gameState.mu.Lock()
+func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) {
+	room.GameState.mu.Lock()
 
-	if s.gameState.GameOver || s.gameState.GameWon {
+	if room.GameState.GameOver || room.GameState.GameWon {
 		log.Printf("Игра уже окончена, клик игнорируется")
-		s.gameState.mu.Unlock()
+		room.GameState.mu.Unlock()
 		return
 	}
 
 	row, col := click.Row, click.Col
-	if row < 0 || row >= s.gameState.Rows || col < 0 || col >= s.gameState.Cols {
+	if row < 0 || row >= room.GameState.Rows || col < 0 || col >= room.GameState.Cols {
 		log.Printf("Некорректные координаты: row=%d, col=%d", row, col)
-		s.gameState.mu.Unlock()
+		room.GameState.mu.Unlock()
 		return
 	}
 
-	cell := &s.gameState.Board[row][col]
+	cell := &room.GameState.Board[row][col]
 
 	if click.Flag {
 		// Переключение флага - нельзя ставить на открытые ячейки
 		if cell.IsRevealed {
 			log.Printf("Нельзя поставить флаг на открытую ячейку: row=%d, col=%d", row, col)
-			s.gameState.mu.Unlock()
+			room.GameState.mu.Unlock()
 			return
 		}
 		cell.IsFlagged = !cell.IsFlagged
 		log.Printf("Флаг переключен: row=%d, col=%d, flagged=%v", row, col, cell.IsFlagged)
-		s.gameState.mu.Unlock()
-		s.broadcastGameState()
+		room.GameState.mu.Unlock()
+		s.broadcastGameState(room)
 		return
 	}
 
 	// Открытие ячейки
 	if cell.IsFlagged || cell.IsRevealed {
 		log.Printf("Ячейка уже открыта или помечена флагом: row=%d, col=%d", row, col)
-		s.gameState.mu.Unlock()
+		room.GameState.mu.Unlock()
 		return
 	}
 
 	// Если это первое открытие, убеждаемся, что ячейка безопасна (0)
-	isFirstClick := s.gameState.Revealed == 0
+	isFirstClick := room.GameState.Revealed == 0
 	if isFirstClick {
 		// Если первая ячейка содержит мину или имеет соседние мины, перемещаем мины
 		if cell.IsMine || cell.NeighborMines > 0 {
 			log.Printf("Первое открытие небезопасно, перемещаем мины: row=%d, col=%d", row, col)
-			s.ensureFirstClickSafe(row, col)
+			s.ensureFirstClickSafe(room, row, col)
 			// Обновляем ссылку на ячейку после перемещения мин
-			cell = &s.gameState.Board[row][col]
+			cell = &room.GameState.Board[row][col]
 		}
 	}
 
 	cell.IsRevealed = true
-	s.gameState.Revealed++
+	room.GameState.Revealed++
 	log.Printf("Ячейка открыта: row=%d, col=%d, isMine=%v, neighborMines=%d, revealed=%d",
-		row, col, cell.IsMine, cell.NeighborMines, s.gameState.Revealed)
+		row, col, cell.IsMine, cell.NeighborMines, room.GameState.Revealed)
 
 	if cell.IsMine {
-		s.gameState.GameOver = true
+		room.GameState.GameOver = true
 		// Сохраняем информацию об игроке, который проиграл
-		s.mu.RLock()
-		player := s.players[playerID]
+		room.mu.RLock()
+		player := room.Players[playerID]
 		if player != nil {
 			player.mu.Lock()
-			s.gameState.LoserPlayerID = playerID
-			s.gameState.LoserNickname = player.Nickname
+			room.GameState.LoserPlayerID = playerID
+			room.GameState.LoserNickname = player.Nickname
 			player.mu.Unlock()
 		}
-		s.mu.RUnlock()
-		log.Printf("Игра окончена - подорвалась мина! Игрок: %s (%s)", s.gameState.LoserNickname, playerID)
+		room.mu.RUnlock()
+		log.Printf("Игра окончена - подорвалась мина! Игрок: %s (%s)", room.GameState.LoserNickname, playerID)
 	} else {
 		// Автоматическое открытие соседних пустых ячеек
 		if cell.NeighborMines == 0 {
 			log.Printf("Открытие соседних ячеек для row=%d, col=%d", row, col)
-			s.revealNeighbors(row, col)
+			s.revealNeighbors(room, row, col)
 		}
 
 		// Проверка победы
-		totalCells := s.gameState.Rows * s.gameState.Cols
-		if s.gameState.Revealed == totalCells-s.gameState.Mines {
-			s.gameState.GameWon = true
+		totalCells := room.GameState.Rows * room.GameState.Cols
+		if room.GameState.Revealed == totalCells-room.GameState.Mines {
+			room.GameState.GameWon = true
 			log.Printf("Победа! Все ячейки открыты!")
 		}
 	}
 
 	log.Printf("Отправка обновленного состояния игры после клика")
-	s.gameState.mu.Unlock() // Разблокируем перед broadcastGameState
-	s.broadcastGameState()
+	room.GameState.mu.Unlock() // Разблокируем перед broadcastGameState
+	s.broadcastGameState(room)
 }
 
-func (s *Server) ensureFirstClickSafe(firstRow, firstCol int) {
+func (s *Server) ensureFirstClickSafe(room *Room, firstRow, firstCol int) {
 	// Собираем все мины в радиусе 1 клетки от первой ячейки
 	minesToMove := make([]struct{ row, col int }, 0)
 
 	for di := -1; di <= 1; di++ {
 		for dj := -1; dj <= 1; dj++ {
 			ni, nj := firstRow+di, firstCol+dj
-			if ni >= 0 && ni < s.gameState.Rows && nj >= 0 && nj < s.gameState.Cols {
-				if s.gameState.Board[ni][nj].IsMine {
+			if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
+				if room.GameState.Board[ni][nj].IsMine {
 					minesToMove = append(minesToMove, struct{ row, col int }{ni, nj})
-					s.gameState.Board[ni][nj].IsMine = false
+					room.GameState.Board[ni][nj].IsMine = false
 				}
 			}
 		}
@@ -336,8 +436,8 @@ func (s *Server) ensureFirstClickSafe(firstRow, firstCol int) {
 		// Ищем свободное место (не в радиусе 1 от первой ячейки и не занятое миной)
 		attempts := 0
 		for attempts < 100 {
-			newRow := mathrand.Intn(s.gameState.Rows)
-			newCol := mathrand.Intn(s.gameState.Cols)
+			newRow := mathrand.Intn(room.GameState.Rows)
+			newCol := mathrand.Intn(room.GameState.Cols)
 
 			// Проверяем, что это не в радиусе 1 от первой ячейки
 			tooClose := false
@@ -353,8 +453,8 @@ func (s *Server) ensureFirstClickSafe(firstRow, firstCol int) {
 				}
 			}
 
-			if !tooClose && !s.gameState.Board[newRow][newCol].IsMine {
-				s.gameState.Board[newRow][newCol].IsMine = true
+			if !tooClose && !room.GameState.Board[newRow][newCol].IsMine {
+				room.GameState.Board[newRow][newCol].IsMine = true
 				break
 			}
 			attempts++
@@ -362,21 +462,21 @@ func (s *Server) ensureFirstClickSafe(firstRow, firstCol int) {
 	}
 
 	// Пересчитываем соседние мины для всех ячеек
-	for i := 0; i < s.gameState.Rows; i++ {
-		for j := 0; j < s.gameState.Cols; j++ {
-			if !s.gameState.Board[i][j].IsMine {
+	for i := 0; i < room.GameState.Rows; i++ {
+		for j := 0; j < room.GameState.Cols; j++ {
+			if !room.GameState.Board[i][j].IsMine {
 				count := 0
 				for di := -1; di <= 1; di++ {
 					for dj := -1; dj <= 1; dj++ {
 						ni, nj := i+di, j+dj
-						if ni >= 0 && ni < s.gameState.Rows && nj >= 0 && nj < s.gameState.Cols {
-							if s.gameState.Board[ni][nj].IsMine {
+						if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
+							if room.GameState.Board[ni][nj].IsMine {
 								count++
 							}
 						}
 					}
 				}
-				s.gameState.Board[i][j].NeighborMines = count
+				room.GameState.Board[i][j].NeighborMines = count
 			}
 		}
 	}
@@ -384,20 +484,20 @@ func (s *Server) ensureFirstClickSafe(firstRow, firstCol int) {
 	log.Printf("Мины перемещены, первая ячейка теперь безопасна")
 }
 
-func (s *Server) revealNeighbors(row, col int) {
+func (s *Server) revealNeighbors(room *Room, row, col int) {
 	for di := -1; di <= 1; di++ {
 		for dj := -1; dj <= 1; dj++ {
 			if di == 0 && dj == 0 {
 				continue
 			}
 			ni, nj := row+di, col+dj
-			if ni >= 0 && ni < s.gameState.Rows && nj >= 0 && nj < s.gameState.Cols {
-				cell := &s.gameState.Board[ni][nj]
+			if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
+				cell := &room.GameState.Board[ni][nj]
 				if !cell.IsRevealed && !cell.IsFlagged && !cell.IsMine {
 					cell.IsRevealed = true
-					s.gameState.Revealed++
+					room.GameState.Revealed++
 					if cell.NeighborMines == 0 {
-						s.revealNeighbors(ni, nj)
+						s.revealNeighbors(room, ni, nj)
 					}
 				}
 			}
@@ -405,25 +505,25 @@ func (s *Server) revealNeighbors(row, col int) {
 	}
 }
 
-func (s *Server) sendGameState(player *Player) {
-	s.gameState.mu.RLock()
+func (s *Server) sendGameStateToPlayer(room *Room, player *Player) {
+	room.GameState.mu.RLock()
 	gameStateCopy := GameState{
-		Rows:          s.gameState.Rows,
-		Cols:          s.gameState.Cols,
-		Mines:         s.gameState.Mines,
-		GameOver:      s.gameState.GameOver,
-		GameWon:       s.gameState.GameWon,
-		Revealed:      s.gameState.Revealed,
-		LoserPlayerID: s.gameState.LoserPlayerID,
-		LoserNickname: s.gameState.LoserNickname,
+		Rows:          room.GameState.Rows,
+		Cols:          room.GameState.Cols,
+		Mines:         room.GameState.Mines,
+		GameOver:      room.GameState.GameOver,
+		GameWon:       room.GameState.GameWon,
+		Revealed:      room.GameState.Revealed,
+		LoserPlayerID: room.GameState.LoserPlayerID,
+		LoserNickname: room.GameState.LoserNickname,
 	}
-	boardCopy := make([][]Cell, len(s.gameState.Board))
-	for i := range s.gameState.Board {
-		boardCopy[i] = make([]Cell, len(s.gameState.Board[i]))
-		copy(boardCopy[i], s.gameState.Board[i])
+	boardCopy := make([][]Cell, len(room.GameState.Board))
+	for i := range room.GameState.Board {
+		boardCopy[i] = make([]Cell, len(room.GameState.Board[i]))
+		copy(boardCopy[i], room.GameState.Board[i])
 	}
 	gameStateCopy.Board = boardCopy
-	s.gameState.mu.RUnlock()
+	room.GameState.mu.RUnlock()
 
 	msg := Message{
 		Type:      "gameState",
@@ -441,25 +541,25 @@ func (s *Server) sendGameState(player *Player) {
 	}
 }
 
-func (s *Server) broadcastGameState() {
-	s.gameState.mu.RLock()
+func (s *Server) broadcastGameState(room *Room) {
+	room.GameState.mu.RLock()
 	gameStateCopy := GameState{
-		Rows:          s.gameState.Rows,
-		Cols:          s.gameState.Cols,
-		Mines:         s.gameState.Mines,
-		GameOver:      s.gameState.GameOver,
-		GameWon:       s.gameState.GameWon,
-		Revealed:      s.gameState.Revealed,
-		LoserPlayerID: s.gameState.LoserPlayerID,
-		LoserNickname: s.gameState.LoserNickname,
+		Rows:          room.GameState.Rows,
+		Cols:          room.GameState.Cols,
+		Mines:         room.GameState.Mines,
+		GameOver:      room.GameState.GameOver,
+		GameWon:       room.GameState.GameWon,
+		Revealed:      room.GameState.Revealed,
+		LoserPlayerID: room.GameState.LoserPlayerID,
+		LoserNickname: room.GameState.LoserNickname,
 	}
-	boardCopy := make([][]Cell, len(s.gameState.Board))
-	for i := range s.gameState.Board {
-		boardCopy[i] = make([]Cell, len(s.gameState.Board[i]))
-		copy(boardCopy[i], s.gameState.Board[i])
+	boardCopy := make([][]Cell, len(room.GameState.Board))
+	for i := range room.GameState.Board {
+		boardCopy[i] = make([]Cell, len(room.GameState.Board[i]))
+		copy(boardCopy[i], room.GameState.Board[i])
 	}
 	gameStateCopy.Board = boardCopy
-	s.gameState.mu.RUnlock()
+	room.GameState.mu.RUnlock()
 
 	msg := Message{
 		Type:      "gameState",
@@ -469,15 +569,15 @@ func (s *Server) broadcastGameState() {
 	log.Printf("Broadcast gameState: Rows=%d, Cols=%d, Revealed=%d, GameOver=%v, GameWon=%v",
 		gameStateCopy.Rows, gameStateCopy.Cols, gameStateCopy.Revealed, gameStateCopy.GameOver, gameStateCopy.GameWon)
 
-	s.mu.RLock()
-	playersCount := len(s.players)
-	s.mu.RUnlock()
+	room.mu.RLock()
+	playersCount := len(room.Players)
+	room.mu.RUnlock()
 
 	log.Printf("Отправка состояния игры %d игрокам", playersCount)
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for id, player := range s.players {
+	room.mu.RLock()
+	defer room.mu.RUnlock()
+	for id, player := range room.Players {
 		player.mu.Lock()
 		if err := player.Conn.WriteJSON(msg); err != nil {
 			log.Printf("Ошибка отправки состояния игры игроку %s: %v", id, err)
@@ -488,20 +588,20 @@ func (s *Server) broadcastGameState() {
 	}
 }
 
-func (s *Server) broadcastToOthers(senderID string, msg Message) {
-	s.mu.RLock()
-	playersCount := len(s.players)
-	s.mu.RUnlock()
+func (s *Server) broadcastToOthers(room *Room, senderID string, msg Message) {
+	room.mu.RLock()
+	playersCount := len(room.Players)
+	room.mu.RUnlock()
 
 	if playersCount <= 1 {
 		log.Printf("Только один игрок, курсор не отправляется другим")
 		return
 	}
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	room.mu.RLock()
+	defer room.mu.RUnlock()
 	sentCount := 0
-	for id, player := range s.players {
+	for id, player := range room.Players {
 		if id != senderID {
 			player.mu.Lock()
 			if err := player.Conn.WriteJSON(msg); err != nil {
@@ -515,10 +615,10 @@ func (s *Server) broadcastToOthers(senderID string, msg Message) {
 	log.Printf("Курсор отправлен %d игрокам (всего игроков: %d)", sentCount, playersCount)
 }
 
-func (s *Server) broadcastPlayerList() {
-	s.mu.RLock()
-	playersList := make([]map[string]string, 0, len(s.players))
-	for _, player := range s.players {
+func (s *Server) broadcastPlayerList(room *Room) {
+	room.mu.RLock()
+	playersList := make([]map[string]string, 0, len(room.Players))
+	for _, player := range room.Players {
 		player.mu.Lock()
 		playersList = append(playersList, map[string]string{
 			"id":       player.ID,
@@ -527,16 +627,16 @@ func (s *Server) broadcastPlayerList() {
 		})
 		player.mu.Unlock()
 	}
-	s.mu.RUnlock()
+	room.mu.RUnlock()
 
 	msgData := map[string]interface{}{
 		"type":    "players",
 		"players": playersList,
 	}
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for _, player := range s.players {
+	room.mu.RLock()
+	defer room.mu.RUnlock()
+	for _, player := range room.Players {
 		player.mu.Lock()
 		if err := player.Conn.WriteJSON(msgData); err != nil {
 			log.Printf("Ошибка отправки списка игроков: %v", err)
@@ -560,6 +660,9 @@ func main() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/api/ws", server.handleWebSocket)
+	r.HandleFunc("/api/rooms", server.handleGetRooms).Methods("GET")
+	r.HandleFunc("/api/rooms", server.handleCreateRoom).Methods("POST")
+	r.HandleFunc("/api/rooms/join", server.handleJoinRoom).Methods("POST")
 	// r.PathPrefix("/").Handler(http.FileServer(http.Dir("../frontend/dist/")))
 
 	// CORS middleware
@@ -578,4 +681,94 @@ func main() {
 
 	log.Printf("Сервер запущен на :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, corsMiddleware(r)))
+}
+
+func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Name     string `json:"name"`
+		Password string `json:"password"`
+		Rows     int    `json:"rows"`
+		Cols     int    `json:"cols"`
+		Mines    int    `json:"mines"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Валидация
+	if req.Name == "" {
+		http.Error(w, "Room name required", http.StatusBadRequest)
+		return
+	}
+	if req.Rows < 5 || req.Rows > 30 || req.Cols < 5 || req.Cols > 30 {
+		http.Error(w, "Rows and cols must be between 5 and 30", http.StatusBadRequest)
+		return
+	}
+	maxMines := (req.Rows * req.Cols) - 1
+	if req.Mines < 1 || req.Mines > maxMines {
+		http.Error(w, "Mines must be between 1 and (rows*cols-1)", http.StatusBadRequest)
+		return
+	}
+
+	room := s.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":          room.ID,
+		"name":        room.Name,
+		"hasPassword": room.Password != "",
+		"rows":        room.Rows,
+		"cols":        room.Cols,
+		"mines":       room.Mines,
+	})
+}
+
+func (s *Server) handleGetRooms(w http.ResponseWriter, r *http.Request) {
+	rooms := s.roomManager.GetRoomsList()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(rooms)
+}
+
+func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		RoomID   string `json:"roomId"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	room := s.roomManager.GetRoom(req.RoomID)
+	if room == nil {
+		http.Error(w, "Room not found", http.StatusNotFound)
+		return
+	}
+
+	if room.Password != "" && room.Password != req.Password {
+		http.Error(w, "Invalid password", http.StatusUnauthorized)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":    room.ID,
+		"name":  room.Name,
+		"rows":  room.Rows,
+		"cols":  room.Cols,
+		"mines": room.Mines,
+	})
 }

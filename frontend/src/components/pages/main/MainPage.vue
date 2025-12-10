@@ -1,11 +1,35 @@
 <template>
   <div class="main-page">
+    <!-- Выбор комнаты -->
+    <div v-if="!selectedRoom && !nickname" class="rooms-wrapper">
+      <RoomsList
+        @create="showCreateModal = true"
+        @join="handleRoomSelect"
+      />
+      <CreateRoomModal
+        v-if="showCreateModal"
+        :show="showCreateModal"
+        @submit="handleCreateRoom"
+        @cancel="showCreateModal = false"
+      />
+      <JoinRoomModal
+        v-if="selectedRoomForJoin"
+        :show="!!selectedRoomForJoin"
+        :room="selectedRoomForJoin"
+        @submit="handleJoinRoom"
+        @cancel="selectedRoomForJoin = null"
+      />
+    </div>
+
+    <!-- Ввод никнейма -->
     <NicknameModal
-      v-if="!nickname"
-      :show="!nickname"
+      v-if="selectedRoom && !nickname"
+      :show="selectedRoom && !nickname"
       @submit="handleNicknameSubmit"
     />
-    <div v-else class="game-wrapper">
+
+    <!-- Игра -->
+    <div v-if="nickname && selectedRoom" class="game-wrapper">
       <MinesweeperGame
         :ws-client="wsClient"
         :nickname="nickname"
@@ -18,20 +42,48 @@
 import { ref, onUnmounted } from 'vue'
 import NicknameModal from '@/components/NicknameModal.vue'
 import MinesweeperGame from '@/components/MinesweeperGame.vue'
+import RoomsList from '@/components/RoomsList.vue'
+import CreateRoomModal from '@/components/CreateRoomModal.vue'
+import JoinRoomModal from '@/components/JoinRoomModal.vue'
 import { WebSocketClient, type WebSocketMessage, type IWebSocketClient } from '@/api/websocket'
+import { createRoom, type Room } from '@/api/rooms'
 
 const nickname = ref('')
 const wsClient = ref<IWebSocketClient | null>(null)
+const selectedRoom = ref<Room | null>(null)
+const selectedRoomForJoin = ref<Room | null>(null)
+const showCreateModal = ref(false)
+
+const handleRoomSelect = (room: Room) => {
+  selectedRoomForJoin.value = room
+}
+
+const handleJoinRoom = (room: Room) => {
+  selectedRoom.value = room
+  selectedRoomForJoin.value = null
+}
+
+const handleCreateRoom = async (data: { name: string; password?: string; rows: number; cols: number; mines: number }) => {
+  try {
+    const room = await createRoom(data)
+    selectedRoom.value = room
+    showCreateModal.value = false
+  } catch (error) {
+    console.error('Ошибка создания комнаты:', error)
+  }
+}
 
 const handleNicknameSubmit = (submittedNickname: string) => {
+  if (!selectedRoom.value) return
+
   nickname.value = submittedNickname
 
-  // Создаем WebSocket соединение
+  // Создаем WebSocket соединение с room ID
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = import.meta.env.DEV
     ? 'localhost:8080'
     : window.location.host
-  const wsUrl = `${protocol}//${host}/api/ws`
+  const wsUrl = `${protocol}//${host}/api/ws?room=${selectedRoom.value.id}`
 
   wsClient.value = new WebSocketClient(
     wsUrl,
