@@ -6,6 +6,8 @@ services:
     restart: always
   backend:
     image: ${BACKEND_IMAGE}
+    env_file:
+      - .env
     ports:
       - "7900:80"
     volumes:
