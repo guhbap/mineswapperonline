@@ -23,6 +23,8 @@ export interface WebSocketMessage {
     gameOver: boolean
     gameWon: boolean
     revealed: number
+    loserPlayerId?: string
+    loserNickname?: string
   }
   players?: Array<{
     id: string

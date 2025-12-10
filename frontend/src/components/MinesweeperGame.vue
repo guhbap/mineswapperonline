@@ -102,7 +102,12 @@
     <!-- Сообщения о состоянии игры -->
     <div v-if="gameState?.gameOver" class="game-message game-message--over">
       <h2>Игра окончена!</h2>
-      <p>Вы подорвались на мине 💣</p>
+      <p v-if="gameState.loserNickname">
+        <strong>{{ gameState.loserNickname }}</strong> подорвался на мине 💣
+      </p>
+      <p v-else>
+        Вы подорвались на мине 💣
+      </p>
     </div>
     <div v-else-if="gameState?.gameWon" class="game-message game-message--won">
       <h2>Победа! 🎉</h2>
@@ -255,9 +260,10 @@ onUnmounted(() => {
   max-width: 800px;
   margin-bottom: 1.5rem;
   padding: 1rem;
-  background: white;
+  background: var(--bg-primary);
   border-radius: 0.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px var(--shadow);
+  transition: background 0.3s ease;
 }
 
 .game-info {
@@ -273,14 +279,16 @@ onUnmounted(() => {
 
 .info-label {
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-weight: 500;
+  transition: color 0.3s ease;
 }
 
 .info-value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text-primary);
+  transition: color 0.3s ease;
 }
 
 .new-game-button {
@@ -309,7 +317,7 @@ onUnmounted(() => {
 .game-board {
   display: grid;
   gap: 2px;
-  background: #9ca3af;
+  background: var(--border-color);
   padding: 2px;
   border-radius: 0.5rem;
   position: relative;
@@ -318,25 +326,25 @@ onUnmounted(() => {
 .cell {
   width: 32px;
   height: 32px;
-  background: #e5e7eb;
-  border: 2px outset #d1d5db;
+  background: var(--bg-tertiary);
+  border: 2px outset var(--border-color);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   font-weight: 700;
   font-size: 0.875rem;
-  transition: background-color 0.1s;
+  transition: background-color 0.1s, border-color 0.3s ease;
   user-select: none;
 }
 
 .cell:hover:not(.cell--revealed):not(.cell--flagged) {
-  background: #d1d5db;
+  background: var(--border-color);
 }
 
 .cell--revealed {
-  background: #f9fafb;
-  border: 1px solid #d1d5db;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-style: inset;
 }
 
@@ -344,12 +352,21 @@ onUnmounted(() => {
   background: #fee2e2;
 }
 
+[data-theme="dark"] .cell--mine {
+  background: #7f1d1d;
+}
+
 .cell--flagged {
   background: #fef3c7;
 }
 
+[data-theme="dark"] .cell--flagged {
+  background: #78350f;
+}
+
 .cell-number {
-  color: #1f2937;
+  color: var(--text-primary);
+  transition: color 0.3s ease;
 }
 
 .cell-mine {
@@ -392,13 +409,14 @@ onUnmounted(() => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: white;
+  background: var(--bg-primary);
   padding: 2rem 3rem;
   border-radius: 1rem;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 60px var(--shadow);
   text-align: center;
   z-index: 200;
   animation: fadeIn 0.3s ease-out;
+  transition: background 0.3s ease;
 }
 
 @keyframes fadeIn {
@@ -415,13 +433,15 @@ onUnmounted(() => {
 .game-message h2 {
   margin: 0 0 0.5rem 0;
   font-size: 2rem;
-  color: #1f2937;
+  color: var(--text-primary);
+  transition: color 0.3s ease;
 }
 
 .game-message p {
   margin: 0;
   font-size: 1.125rem;
-  color: #6b7280;
+  color: var(--text-secondary);
+  transition: color 0.3s ease;
 }
 
 .game-message--over h2 {
@@ -435,7 +455,8 @@ onUnmounted(() => {
 .loading-message {
   padding: 2rem;
   text-align: center;
-  color: #6b7280;
+  color: var(--text-secondary);
+  transition: color 0.3s ease;
 }
 
 .loading-message .error {
@@ -449,22 +470,26 @@ onUnmounted(() => {
 }
 
 .loading-message .debug {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 0.875rem;
   margin-top: 0.25rem;
+  transition: color 0.3s ease;
 }
 
 .debug-info {
   position: fixed;
   top: 10px;
   right: 10px;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
+  background: var(--bg-primary);
+  color: var(--text-primary);
   padding: 0.5rem;
   border-radius: 0.25rem;
   font-size: 0.75rem;
   z-index: 2000;
   max-width: 200px;
+  box-shadow: 0 2px 8px var(--shadow);
+  border: 1px solid var(--border-color);
+  transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
 .debug-cursor {

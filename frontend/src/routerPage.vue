@@ -19,18 +19,19 @@
 }
 
 .nav {
-  background: white;
+  background: var(--bg-primary);
   padding: 1rem 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 4px var(--shadow);
   display: flex;
   gap: 1rem;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--border-color);
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 .nav__link {
   padding: 0.75rem 1.5rem;
   text-decoration: none;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-weight: 600;
   border-radius: 0.5rem;
   transition: all 0.2s ease-in-out;
@@ -39,7 +40,7 @@
 
 .nav__link:hover {
   color: #667eea;
-  background-color: #f3f4f6;
+  background-color: var(--bg-tertiary);
 }
 
 .nav__link--active {

@@ -35,14 +35,16 @@ type CursorPosition struct {
 }
 
 type GameState struct {
-	Board    [][]Cell `json:"board"`
-	Rows     int      `json:"rows"`
-	Cols     int      `json:"cols"`
-	Mines    int      `json:"mines"`
-	GameOver bool     `json:"gameOver"`
-	GameWon  bool     `json:"gameWon"`
-	Revealed int      `json:"revealed"`
-	mu       sync.RWMutex
+	Board         [][]Cell `json:"board"`
+	Rows          int      `json:"rows"`
+	Cols          int      `json:"cols"`
+	Mines         int      `json:"mines"`
+	GameOver      bool     `json:"gameOver"`
+	GameWon       bool     `json:"gameWon"`
+	Revealed      int      `json:"revealed"`
+	LoserPlayerID string   `json:"loserPlayerId,omitempty"`
+	LoserNickname string   `json:"loserNickname,omitempty"`
+	mu            sync.RWMutex
 }
 
 type Cell struct {
@@ -88,13 +90,15 @@ func NewServer() *Server {
 
 func NewGameState(rows, cols, mines int) *GameState {
 	gs := &GameState{
-		Rows:     rows,
-		Cols:     cols,
-		Mines:    mines,
-		GameOver: false,
-		GameWon:  false,
-		Revealed: 0,
-		Board:    make([][]Cell, rows),
+		Rows:          rows,
+		Cols:          cols,
+		Mines:         mines,
+		GameOver:      false,
+		GameWon:       false,
+		Revealed:      0,
+		LoserPlayerID: "",
+		LoserNickname: "",
+		Board:         make([][]Cell, rows),
 	}
 
 	// Инициализация поля
@@ -206,6 +210,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			s.mu.Lock()
 			s.gameState = NewGameState(16, 16, 40)
 			s.mu.Unlock()
+			log.Printf("Новая игра начата")
 			s.broadcastGameState()
 		}
 	}
@@ -261,7 +266,17 @@ func (s *Server) handleCellClick(playerID string, click *CellClick) {
 
 	if cell.IsMine {
 		s.gameState.GameOver = true
-		log.Printf("Игра окончена - подорвалась мина!")
+		// Сохраняем информацию об игроке, который проиграл
+		s.mu.RLock()
+		player := s.players[playerID]
+		if player != nil {
+			player.mu.Lock()
+			s.gameState.LoserPlayerID = playerID
+			s.gameState.LoserNickname = player.Nickname
+			player.mu.Unlock()
+		}
+		s.mu.RUnlock()
+		log.Printf("Игра окончена - подорвалась мина! Игрок: %s (%s)", s.gameState.LoserNickname, playerID)
 	} else {
 		// Автоматическое открытие соседних пустых ячеек
 		if cell.NeighborMines == 0 {
@@ -306,12 +321,14 @@ func (s *Server) revealNeighbors(row, col int) {
 func (s *Server) sendGameState(player *Player) {
 	s.gameState.mu.RLock()
 	gameStateCopy := GameState{
-		Rows:     s.gameState.Rows,
-		Cols:     s.gameState.Cols,
-		Mines:    s.gameState.Mines,
-		GameOver: s.gameState.GameOver,
-		GameWon:  s.gameState.GameWon,
-		Revealed: s.gameState.Revealed,
+		Rows:          s.gameState.Rows,
+		Cols:          s.gameState.Cols,
+		Mines:         s.gameState.Mines,
+		GameOver:      s.gameState.GameOver,
+		GameWon:       s.gameState.GameWon,
+		Revealed:      s.gameState.Revealed,
+		LoserPlayerID: s.gameState.LoserPlayerID,
+		LoserNickname: s.gameState.LoserNickname,
 	}
 	boardCopy := make([][]Cell, len(s.gameState.Board))
 	for i := range s.gameState.Board {
@@ -340,12 +357,14 @@ func (s *Server) sendGameState(player *Player) {
 func (s *Server) broadcastGameState() {
 	s.gameState.mu.RLock()
 	gameStateCopy := GameState{
-		Rows:     s.gameState.Rows,
-		Cols:     s.gameState.Cols,
-		Mines:    s.gameState.Mines,
-		GameOver: s.gameState.GameOver,
-		GameWon:  s.gameState.GameWon,
-		Revealed: s.gameState.Revealed,
+		Rows:          s.gameState.Rows,
+		Cols:          s.gameState.Cols,
+		Mines:         s.gameState.Mines,
+		GameOver:      s.gameState.GameOver,
+		GameWon:       s.gameState.GameWon,
+		Revealed:      s.gameState.Revealed,
+		LoserPlayerID: s.gameState.LoserPlayerID,
+		LoserNickname: s.gameState.LoserNickname,
 	}
 	boardCopy := make([][]Cell, len(s.gameState.Board))
 	for i := range s.gameState.Board {

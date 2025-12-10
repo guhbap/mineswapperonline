@@ -59,13 +59,14 @@ const handleOverlayClick = () => {
 }
 
 .nickname-modal {
-  background: white;
+  background: var(--bg-primary);
   padding: 2.5rem;
   border-radius: 1rem;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 60px var(--shadow);
   min-width: 400px;
   max-width: 90vw;
   animation: slideIn 0.3s ease-out;
+  transition: background 0.3s ease;
 }
 
 @keyframes slideIn {
@@ -82,19 +83,22 @@ const handleOverlayClick = () => {
 .nickname-modal__title {
   margin: 0 0 1.5rem 0;
   font-size: 1.5rem;
-  color: #1f2937;
+  color: var(--text-primary);
   text-align: center;
+  transition: color 0.3s ease;
 }
 
 .nickname-modal__input {
   width: 100%;
   padding: 0.875rem 1rem;
   font-size: 1rem;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--border-color);
   border-radius: 0.5rem;
   margin-bottom: 1.5rem;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, background 0.3s ease, color 0.3s ease;
   box-sizing: border-box;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .nickname-modal__input:focus {
