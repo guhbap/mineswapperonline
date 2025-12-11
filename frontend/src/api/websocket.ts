@@ -31,6 +31,13 @@ export interface WebSocketMessage {
     nickname: string
     color: string
   }>
+  chat?: {
+    text: string
+    isSystem?: boolean
+    action?: string
+    row?: number
+    col?: number
+  }
 }
 
 export interface Cell {
@@ -200,6 +207,16 @@ export class WebSocketClient implements IWebSocketClient {
 
   sendNewGame() {
     this.send({ type: 'newGame' })
+  }
+
+  sendChatMessage(text: string) {
+    this.send({
+      type: 'chat',
+      chat: {
+        text: text,
+        isSystem: false
+      }
+    })
   }
 
   private startPingInterval() {

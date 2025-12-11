@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	mathrand "math/rand"
 	"net/http"
@@ -67,6 +68,15 @@ type Message struct {
 	Cursor    *CursorPosition `json:"cursor,omitempty"`
 	CellClick *CellClick      `json:"cellClick,omitempty"`
 	GameState *GameState      `json:"gameState,omitempty"`
+	Chat      *ChatMessage    `json:"chat,omitempty"`
+}
+
+type ChatMessage struct {
+	Text     string `json:"text"`
+	IsSystem bool   `json:"isSystem,omitempty"`
+	Action   string `json:"action,omitempty"` // "flag", "reveal", "explode"
+	Row      int    `json:"row,omitempty"`
+	Col      int    `json:"col,omitempty"`
 }
 
 type CellClick struct {
@@ -335,6 +345,18 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			player.mu.Unlock()
 			continue
 
+		case "chat":
+			if msg.Chat != nil {
+				player.mu.Lock()
+				msg.PlayerID = playerID
+				msg.Nickname = player.Nickname
+				msg.Color = player.Color
+				player.mu.Unlock()
+				// Отправляем сообщение всем игрокам в комнате
+				s.broadcastToAll(room, msg)
+			}
+			continue
+
 		case "nickname":
 			player.mu.Lock()
 			player.Nickname = msg.Nickname
@@ -404,6 +426,19 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 
 	cell := &room.GameState.Board[row][col]
 
+	// Получаем информацию об игроке для сервисных сообщений
+	room.mu.RLock()
+	player := room.Players[playerID]
+	var nickname string
+	var playerColor string
+	if player != nil {
+		player.mu.Lock()
+		nickname = player.Nickname
+		playerColor = player.Color
+		player.mu.Unlock()
+	}
+	room.mu.RUnlock()
+
 	if click.Flag {
 		// Переключение флага - нельзя ставить на открытые ячейки
 		if cell.IsRevealed {
@@ -411,10 +446,33 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			room.GameState.mu.Unlock()
 			return
 		}
+		wasFlagged := cell.IsFlagged
 		cell.IsFlagged = !cell.IsFlagged
 		log.Printf("Флаг переключен: row=%d, col=%d, flagged=%v", row, col, cell.IsFlagged)
 		room.GameState.mu.Unlock()
 		s.broadcastGameState(room)
+
+		// Отправляем сервисное сообщение в чат
+		if nickname != "" {
+			action := "поставил флаг"
+			if wasFlagged {
+				action = "убрал флаг"
+			}
+			chatMsg := Message{
+				Type:     "chat",
+				PlayerID: playerID,
+				Nickname: nickname,
+				Color:    playerColor,
+				Chat: &ChatMessage{
+					Text:     fmt.Sprintf("%s %s на (%d, %d)", nickname, action, row+1, col+1),
+					IsSystem: true,
+					Action:   "flag",
+					Row:      row,
+					Col:      col,
+				},
+			}
+			s.broadcastToAll(room, chatMsg)
+		}
 		return
 	}
 
@@ -445,8 +503,6 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 	if cell.IsMine {
 		room.GameState.GameOver = true
 		// Сохраняем информацию об игроке, который проиграл
-		room.mu.RLock()
-		player := room.Players[playerID]
 		if player != nil {
 			player.mu.Lock()
 			room.GameState.LoserPlayerID = playerID
@@ -461,13 +517,48 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 				}
 			}
 		}
-		room.mu.RUnlock()
 		log.Printf("Игра окончена - подорвалась мина! Игрок: %s (%s)", room.GameState.LoserNickname, playerID)
+
+		// Отправляем сервисное сообщение о взрыве
+		if nickname != "" {
+			chatMsg := Message{
+				Type:     "chat",
+				PlayerID: playerID,
+				Nickname: nickname,
+				Color:    playerColor,
+				Chat: &ChatMessage{
+					Text:     fmt.Sprintf("%s подорвался на мине на (%d, %d) 💣", nickname, row+1, col+1),
+					IsSystem: true,
+					Action:   "explode",
+					Row:      row,
+					Col:      col,
+				},
+			}
+			s.broadcastToAll(room, chatMsg)
+		}
 	} else {
 		// Автоматическое открытие соседних пустых ячеек
 		if cell.NeighborMines == 0 {
 			log.Printf("Открытие соседних ячеек для row=%d, col=%d", row, col)
 			s.revealNeighbors(room, row, col)
+		}
+
+		// Отправляем сервисное сообщение об открытии поля
+		if nickname != "" {
+			chatMsg := Message{
+				Type:     "chat",
+				PlayerID: playerID,
+				Nickname: nickname,
+				Color:    playerColor,
+				Chat: &ChatMessage{
+					Text:     fmt.Sprintf("%s открыл поле на (%d, %d)", nickname, row+1, col+1),
+					IsSystem: true,
+					Action:   "reveal",
+					Row:      row,
+					Col:      col,
+				},
+			}
+			s.broadcastToAll(room, chatMsg)
 		}
 
 		// Проверка победы
@@ -695,6 +786,18 @@ func (s *Server) broadcastToOthers(room *Room, senderID string, msg Message) {
 		}
 	}
 	log.Printf("Курсор отправлен %d игрокам (всего игроков: %d)", sentCount, playersCount)
+}
+
+func (s *Server) broadcastToAll(room *Room, msg Message) {
+	room.mu.RLock()
+	defer room.mu.RUnlock()
+	for id, player := range room.Players {
+		player.mu.Lock()
+		if err := player.Conn.WriteJSON(msg); err != nil {
+			log.Printf("Ошибка отправки сообщения чата игроку %s: %v", id, err)
+		}
+		player.mu.Unlock()
+	}
 }
 
 func (s *Server) broadcastPlayerList(room *Room) {

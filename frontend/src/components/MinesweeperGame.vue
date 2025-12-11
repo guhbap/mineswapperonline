@@ -52,6 +52,7 @@
               'cell--revealed': cell.isRevealed,
               'cell--mine': cell.isRevealed && cell.isMine,
               'cell--flagged': cell.isFlagged,
+              'cell--show-mine': (gameState?.gameOver || gameState?.gameWon) && cell.isMine && !cell.isRevealed,
             }
           ]"
           @click="handleCellClick(rowIndex, colIndex, false)"
@@ -61,6 +62,7 @@
             {{ cell.neighborMines }}
           </span>
           <span v-else-if="cell.isRevealed && cell.isMine" class="cell-mine">💣</span>
+          <span v-else-if="(gameState?.gameOver || gameState?.gameWon) && cell.isMine && !cell.isRevealed" class="cell-mine">💣</span>
           <span v-else-if="cell.isFlagged" class="cell-flag">🚩</span>
         </div>
       </div>
@@ -102,6 +104,14 @@
       </div>
       </div>
 
+        <!-- Чат -->
+        <div class="chat-wrapper">
+          <Chat
+            :ws-client="wsClient"
+            :own-nickname="nickname"
+          />
+        </div>
+
         <!-- Правый рекламный блок -->
         <div class="ad-block ad-block--right">
           <div id="yandex_rtb_R-A-17973092-2"></div>
@@ -110,7 +120,22 @@
     <!-- </template> -->
 
     <!-- Сообщения о состоянии игры -->
-    <div v-if="gameState?.gameOver" class="game-message game-message--over">
+    <div
+      v-if="gameState?.gameOver"
+      class="game-message game-message--over"
+      :class="{ 'game-message--transparent': isModalTransparent }"
+    >
+      <button
+        class="game-message__transparency-button"
+        @mousedown="isModalTransparent = true"
+        @mouseup="isModalTransparent = false"
+        @mouseleave="isModalTransparent = false"
+        @touchstart="isModalTransparent = true"
+        @touchend="isModalTransparent = false"
+        title="Удерживайте для прозрачности"
+      >
+        👁️
+      </button>
       <h2>Игра окончена!</h2>
       <p v-if="gameState.loserNickname">
         <router-link
@@ -127,7 +152,22 @@
         Новая игра
       </button>
     </div>
-    <div v-else-if="gameState?.gameWon" class="game-message game-message--won">
+    <div
+      v-else-if="gameState?.gameWon"
+      class="game-message game-message--won"
+      :class="{ 'game-message--transparent': isModalTransparent }"
+    >
+      <button
+        class="game-message__transparency-button"
+        @mousedown="isModalTransparent = true"
+        @mouseup="isModalTransparent = false"
+        @mouseleave="isModalTransparent = false"
+        @touchstart="isModalTransparent = true"
+        @touchend="isModalTransparent = false"
+        title="Удерживайте для прозрачности"
+      >
+        👁️
+      </button>
       <h2>Победа! 🎉</h2>
       <p>Все мины найдены!</p>
       <button @click="handleNewGame" class="game-message__button">
@@ -141,6 +181,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import type { WebSocketMessage, Cell, IWebSocketClient } from '@/api/websocket'
 import { useCursorAnimation } from '@/composables/useCursorAnimation'
+import Chat from '@/components/Chat.vue'
 
 const props = defineProps<{
   wsClient: IWebSocketClient | null
@@ -150,6 +191,7 @@ const props = defineProps<{
 const gameState = ref<WebSocketMessage['gameState'] | null>(null)
 const otherCursors = ref<Array<{ playerId: string; x: number; y: number; nickname: string; color: string }>>([])
 const cursorTimeout = ref<Map<string, number>>(new Map())
+const isModalTransparent = ref(false)
 
 // Используем анимацию курсоров
 const { animatedCursors, updateCursor, removeCursor } = useCursorAnimation()
@@ -351,7 +393,7 @@ onUnmounted(() => {
   align-items: flex-start;
   gap: 2rem;
   width: 100%;
-  max-width: 1400px;
+  max-width: 1600px;
 }
 
 .ad-block {
@@ -368,11 +410,20 @@ onUnmounted(() => {
 }
 
 .ad-block--right {
-  order: 3;
+  order: 4;
 }
 
 .game-board-wrapper {
   order: 2;
+}
+
+.chat-wrapper {
+  order: 3;
+  flex-shrink: 0;
+  width: 300px;
+  height: 500px;
+  display: flex;
+  flex-direction: column;
 }
 
 .game-header {
@@ -487,6 +538,14 @@ onUnmounted(() => {
   background: #78350f;
 }
 
+.cell--show-mine {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+[data-theme="dark"] .cell--show-mine {
+  background: rgba(127, 29, 29, 0.5);
+}
+
 .cell-number {
   color: var(--text-primary);
   transition: color 0.3s ease;
@@ -559,7 +618,17 @@ onUnmounted(() => {
   text-align: center;
   z-index: 200;
   animation: fadeIn 0.3s ease-out;
-  transition: background 0.3s ease;
+  transition: background 0.3s ease, opacity 0.2s ease;
+  position: relative;
+}
+
+.game-message--transparent {
+  opacity: 0.15;
+  pointer-events: none;
+}
+
+.game-message--transparent .game-message__transparency-button {
+  pointer-events: auto;
 }
 
 @keyframes fadeIn {
@@ -607,6 +676,34 @@ onUnmounted(() => {
 
 .game-message__button:active {
   transform: translateY(0);
+}
+
+.game-message__transparency-button {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.25rem;
+  transition: all 0.2s ease;
+  user-select: none;
+  z-index: 10;
+}
+
+.game-message__transparency-button:hover {
+  background: var(--bg-tertiary);
+  transform: scale(1.1);
+}
+
+.game-message__transparency-button:active {
+  transform: scale(0.95);
 }
 
 .game-message--over h2 {
