@@ -124,13 +124,16 @@ export function useGameBoardZoom(
    * Обрабатываем только pinch-to-zoom (2 пальца), панорамирование - через браузер
    */
   const handleTouchStart = (event: TouchEvent) => {
+    // Обрабатываем только если это два пальца для pinch-to-zoom
     if (event.touches.length === 2) {
-      // Pinch-to-zoom: два пальца
       touchStartDistance.value = getTouchDistance(event.touches)
       touchStartZoom.value = zoomLevel.value
       isPanning.value = false
+    } else {
+      // Для одного пальца сбрасываем состояние pinch-to-zoom
+      touchStartDistance.value = 0
     }
-    // Для одного пальца не делаем ничего - позволяем браузеру обрабатывать скролл
+    // Не предотвращаем событие - позволяем браузеру обрабатывать скролл
   }
 
   /**
@@ -138,25 +141,33 @@ export function useGameBoardZoom(
    * Предотвращаем только для pinch-to-zoom, чтобы не мешать панорамированию
    */
   const handleTouchMove = (event: TouchEvent) => {
+    // Обрабатываем только pinch-to-zoom (2 пальца)
     if (event.touches.length === 2 && touchStartDistance.value > 0) {
-      // Pinch-to-zoom - предотвращаем стандартное поведение только для этого случая
+      // Предотвращаем стандартное поведение только для pinch-to-zoom
       event.preventDefault()
       const currentDistance = getTouchDistance(event.touches)
-      const scale = currentDistance / touchStartDistance.value
-      const newZoom = touchStartZoom.value * scale
-      setZoom(newZoom)
+      if (currentDistance > 0 && touchStartDistance.value > 0) {
+        const scale = currentDistance / touchStartDistance.value
+        const newZoom = touchStartZoom.value * scale
+        setZoom(newZoom)
+      }
       isPanning.value = false
+      return
     }
-    // Для одного пальца не предотвращаем событие - позволяем браузеру обрабатывать скролл
-    // Событие будет всплывать до .game-board-wrapper, который имеет overflow: auto
+    // Для одного пальца ничего не делаем - позволяем браузеру обрабатывать скролл
+    // Не вызываем preventDefault, чтобы скролл работал
   }
 
   /**
    * Обработчик окончания касания
    */
-  const handleTouchEnd = () => {
-    touchStartDistance.value = 0
-    isPanning.value = false
+  const handleTouchEnd = (event: TouchEvent) => {
+    // Если остался один палец после pinch-to-zoom, сбрасываем состояние
+    if (event.touches.length === 0 || event.touches.length === 1) {
+      touchStartDistance.value = 0
+      isPanning.value = false
+    }
+    // Не предотвращаем событие - позволяем браузеру обрабатывать скролл
   }
 
   return {

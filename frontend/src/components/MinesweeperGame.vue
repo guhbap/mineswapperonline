@@ -918,12 +918,17 @@ onUnmounted(() => {
     scroll-behavior: smooth;
     /* Убеждаемся, что скролл работает даже при увеличенном контенте */
     overscroll-behavior: contain;
+    /* Улучшаем производительность скролла */
+    will-change: scroll-position;
   }
 
   .game-board-container {
     width: fit-content;
     margin: 0 auto;
+    /* Не блокируем touch-события для панорамирования, но обрабатываем pinch-to-zoom */
     touch-action: pan-x pan-y pinch-zoom;
+    /* Улучшаем производительность трансформации */
+    will-change: transform;
   }
 
   .game-board {
