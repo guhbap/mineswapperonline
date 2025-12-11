@@ -61,6 +61,10 @@ export class WebSocketClient implements IWebSocketClient {
   private pendingCursorPosition: { x: number; y: number } | null = null
   private cursorThrottleDelay = 50 // Отправляем позицию курсора каждые 50ms
   private lastCursorSendTime = 0
+  private pingInterval: ReturnType<typeof setInterval> | null = null
+  private pingIntervalDelay = 30000 // Отправляем ping каждые 30 секунд
+  private lastPongTime = 0
+  private pongTimeout: ReturnType<typeof setTimeout> | null = null
 
   constructor(
     private url: string,
@@ -76,19 +80,41 @@ export class WebSocketClient implements IWebSocketClient {
       
       this.ws.onopen = () => {
         this.reconnectAttempts = 0
+        this.lastPongTime = Date.now()
+        this.startPingInterval()
         this.onOpen?.()
       }
 
       this.ws.onmessage = (event) => {
         try {
+          // Проверяем, является ли это pong сообщением (бинарные данные от сервера)
+          // или JSON сообщением
+          if (event.data instanceof Blob) {
+            // Это может быть pong от сервера (бинарное сообщение)
+            return
+          }
+          
           const msg: WebSocketMessage = JSON.parse(event.data)
+          
+          // Обрабатываем pong сообщение
+          if (msg.type === 'pong') {
+            this.lastPongTime = Date.now()
+            if (this.pongTimeout) {
+              clearTimeout(this.pongTimeout)
+              this.pongTimeout = null
+            }
+            return
+          }
+          
           this.onMessage(msg)
         } catch (error) {
-          console.error('Ошибка парсинга сообщения:', error, event.data)
+          // Если не JSON, возможно это бинарное сообщение (ping/pong)
+          // Игнорируем ошибку парсинга для бинарных сообщений
         }
       }
 
       this.ws.onclose = () => {
+        this.stopPingInterval()
         this.onClose?.()
         this.attemptReconnect()
       }
@@ -176,7 +202,46 @@ export class WebSocketClient implements IWebSocketClient {
     this.send({ type: 'newGame' })
   }
 
+  private startPingInterval() {
+    this.stopPingInterval()
+    
+    this.pingInterval = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        // Отправляем ping сообщение
+        this.send({ type: 'ping' })
+        
+        // Устанавливаем таймаут для ожидания pong
+        if (this.pongTimeout) {
+          clearTimeout(this.pongTimeout)
+        }
+        
+        this.pongTimeout = setTimeout(() => {
+          // Если не получили pong в течение 10 секунд, считаем соединение разорванным
+          const timeSinceLastPong = Date.now() - this.lastPongTime
+          if (timeSinceLastPong > 10000) {
+            console.warn('Не получен pong от сервера, переподключаемся...')
+            if (this.ws) {
+              this.ws.close()
+            }
+          }
+        }, 10000)
+      }
+    }, this.pingIntervalDelay)
+  }
+
+  private stopPingInterval() {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval)
+      this.pingInterval = null
+    }
+    if (this.pongTimeout) {
+      clearTimeout(this.pongTimeout)
+      this.pongTimeout = null
+    }
+  }
+
   disconnect() {
+    this.stopPingInterval()
     if (this.cursorThrottleTimer) {
       clearTimeout(this.cursorThrottleTimer)
       this.cursorThrottleTimer = null
@@ -188,6 +253,7 @@ export class WebSocketClient implements IWebSocketClient {
     this.lastCursorPosition = null
     this.pendingCursorPosition = null
     this.lastCursorSendTime = 0
+    this.lastPongTime = 0
   }
 
   isConnected(): boolean {

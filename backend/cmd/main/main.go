@@ -259,6 +259,29 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Игрок %s подключен к комнате %s", playerID, roomID)
 
+	// Настройка ping-pong для поддержания соединения
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
+	// Запускаем горутину для отправки ping
+	pingTicker := time.NewTicker(30 * time.Second)
+	defer pingTicker.Stop()
+
+	go func() {
+		for range pingTicker.C {
+			player.mu.Lock()
+			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				log.Printf("Ошибка отправки ping игроку %s: %v", playerID, err)
+				player.mu.Unlock()
+				return
+			}
+			player.mu.Unlock()
+		}
+	}()
+
 	// Отправка начального состояния игры
 	log.Printf("Отправка начального состояния игры игроку %s", playerID)
 	s.sendGameStateToPlayer(room, player)
@@ -269,13 +292,28 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		var msg Message
 		err := conn.ReadJSON(&msg)
 		if err != nil {
-			log.Printf("Ошибка чтения сообщения: %v", err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("Ошибка чтения сообщения: %v", err)
+			}
 			break
 		}
+
+		// Обновляем deadline при получении сообщения
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 
 		log.Printf("Получено сообщение от игрока %s: тип=%s", playerID, msg.Type)
 
 		switch msg.Type {
+		case "ping":
+			// Отвечаем pong на ping сообщение
+			pongMsg := Message{Type: "pong"}
+			player.mu.Lock()
+			if err := player.Conn.WriteJSON(pongMsg); err != nil {
+				log.Printf("Ошибка отправки pong игроку %s: %v", playerID, err)
+			}
+			player.mu.Unlock()
+			continue
+
 		case "nickname":
 			player.mu.Lock()
 			player.Nickname = msg.Nickname
