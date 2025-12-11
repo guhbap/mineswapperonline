@@ -6,13 +6,23 @@
       <div class="modal__form">
         <div class="form-group">
           <label class="form-label">Название комнаты</label>
-          <input
-            v-model="form.name"
-            type="text"
-            class="form-input"
-            placeholder="Название комнаты"
-            maxlength="30"
-          />
+          <div class="form-input-wrapper">
+            <input
+              v-model="form.name"
+              type="text"
+              class="form-input"
+              placeholder="Название комнаты"
+              maxlength="30"
+            />
+            <button
+              type="button"
+              @click="generateRoomName"
+              class="form-input-button"
+              title="Сгенерировать случайное название"
+            >
+              🎲
+            </button>
+          </div>
         </div>
 
         <div class="form-group">
@@ -86,7 +96,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { generateRandomName } from '@/utils/nameGenerator'
 
 const props = defineProps<{
   show: boolean
@@ -107,6 +118,20 @@ const form = ref({
 
 const hasPassword = ref(false)
 const error = ref('')
+
+// Генерируем случайное название при открытии модалки
+watch(() => props.show, (isShowing) => {
+  if (isShowing && !form.value.name.trim()) {
+    form.value.name = generateRandomName()
+  }
+})
+
+onMounted(() => {
+  // Генерируем случайное название при монтировании, если поле пустое
+  if (!form.value.name.trim()) {
+    form.value.name = generateRandomName()
+  }
+})
 
 const maxMines = computed(() => {
   return form.value.rows * form.value.cols - 1
@@ -140,6 +165,10 @@ const handleSubmit = () => {
 
   emit('submit', data)
   error.value = ''
+}
+
+const generateRoomName = () => {
+  form.value.name = generateRandomName()
 }
 
 const handleCancel = () => {
@@ -240,7 +269,15 @@ const handleOverlayClick = () => {
   margin-bottom: 0.25rem;
 }
 
+.form-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .form-input {
+  flex: 1;
   padding: 0.75rem;
   font-size: 1rem;
   border: 2px solid var(--border-color);
@@ -254,6 +291,34 @@ const handleOverlayClick = () => {
 .form-input:focus {
   outline: none;
   border-color: #667eea;
+}
+
+.form-input-button {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: 2px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.form-input-button:hover {
+  background: var(--bg-tertiary);
+  border-color: #667eea;
+  transform: scale(1.05);
+}
+
+.form-input-button:active {
+  transform: scale(0.95);
 }
 
 .form-row {
@@ -367,6 +432,12 @@ const handleOverlayClick = () => {
   .form-input {
     padding: 0.5rem;
     font-size: 0.875rem;
+  }
+
+  .form-input-button {
+    width: 2rem;
+    height: 2rem;
+    font-size: 1rem;
   }
 }
 </style>
