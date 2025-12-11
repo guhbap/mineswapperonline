@@ -164,4 +164,3 @@ func (h *AuthHandler) findUserByID(id int) (models.User, error) {
 
 	return user, err
 }
-

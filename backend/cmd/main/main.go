@@ -878,6 +878,7 @@ func main() {
 	protected.HandleFunc("/auth/me", authHandler.GetMe).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/profile", profileHandler.GetProfile).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/profile/activity", profileHandler.UpdateActivity).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/profile/color", profileHandler.UpdateColor).Methods("POST", "OPTIONS")
 
 	// Публичный маршрут для просмотра профиля по username
 	r.HandleFunc("/profile", profileHandler.GetProfileByUsername).Methods("GET", "OPTIONS").Queries("username", "{username}")
