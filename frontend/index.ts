@@ -33,16 +33,25 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/',
     component: RouterPage,
-    redirect: '/main',
     children: [
       { 
-        path: '/main', 
-        name: 'Main', 
+        path: '', 
+        name: 'Home', 
         component: MainPage,
         meta: {
           title: 'Сапер Онлайн - Играй в Сапера с Друзьями',
           description: 'Играйте в Сапера онлайн с друзьями в реальном времени! Создавайте комнаты, соревнуйтесь и наслаждайтесь классической игрой Сапер в многопользовательском режиме.',
           keywords: 'сапер онлайн, сапер игра, minesweeper online, играть в сапера, сапер с друзьями, многопользовательский сапер'
+        }
+      },
+      {
+        path: 'room/:id',
+        name: 'Room',
+        component: MainPage,
+        meta: {
+          title: 'Комната - Сапер Онлайн',
+          description: 'Подключитесь к игровой комнате Сапера',
+          keywords: 'комната сапера, подключиться к комнате, играть в сапера'
         }
       }
     ]
@@ -61,12 +70,12 @@ router.beforeEach((to, from, next) => {
   const isAuthenticated = authStore.isAuthenticated
 
   // Публичные маршруты (доступны без авторизации)
-  const publicRoutes = ['/login', '/register', '/main']
-  const isPublicRoute = publicRoutes.includes(to.path)
+  const publicRoutes = ['/login', '/register', '/']
+  const isPublicRoute = publicRoutes.includes(to.path) || to.path.startsWith('/room/')
 
   // Страницы входа/регистрации - перенаправляем на главную, если уже авторизован
   if (isAuthenticated && (to.path === '/login' || to.path === '/register')) {
-    next('/main')
+    next('/')
     return
   }
 

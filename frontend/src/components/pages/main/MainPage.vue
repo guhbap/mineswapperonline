@@ -17,7 +17,7 @@
         :show="!!selectedRoomForJoin"
         :room="selectedRoomForJoin"
         @submit="handleJoinRoom"
-        @cancel="selectedRoomForJoin = null"
+        @cancel="handleCancelJoinRoom"
       />
     </section>
 
@@ -39,7 +39,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted, computed, onMounted } from 'vue'
+import { ref, onUnmounted, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import NicknameModal from '@/components/NicknameModal.vue'
 import MinesweeperGame from '@/components/MinesweeperGame.vue'
@@ -47,7 +48,10 @@ import RoomsList from '@/components/RoomsList.vue'
 import CreateRoomModal from '@/components/CreateRoomModal.vue'
 import JoinRoomModal from '@/components/JoinRoomModal.vue'
 import { WebSocketClient, type WebSocketMessage, type IWebSocketClient } from '@/api/websocket'
-import { createRoom, type Room } from '@/api/rooms'
+import { createRoom, getRooms, type Room } from '@/api/rooms'
+
+const router = useRouter()
+const route = useRoute()
 
 const authStore = useAuthStore()
 const nickname = ref('')
@@ -72,6 +76,11 @@ const resetToRoomSelection = () => {
   if (!authStore.isAuthenticated) {
     nickname.value = ''
   }
+
+  // Обновляем URL на корень
+  if (route.path.startsWith('/room/')) {
+    router.replace('/')
+  }
 }
 
 // Слушаем событие для сброса игры
@@ -79,8 +88,47 @@ const handleResetGame = () => {
   resetToRoomSelection()
 }
 
+// Функция для загрузки комнаты по ID из URL
+const loadRoomFromUrl = async () => {
+  const roomId = route.params.id as string
+  if (!roomId) return
+
+  try {
+    // Получаем список комнат и ищем нужную
+    const rooms = await getRooms()
+    const room = rooms.find(r => r.id === roomId)
+
+    if (room) {
+      // Открываем модалку подключения к комнате
+      selectedRoomForJoin.value = room
+    } else {
+      // Комната не найдена, перенаправляем на главную
+      router.replace('/')
+    }
+  } catch (error) {
+    console.error('Ошибка загрузки комнаты:', error)
+    router.replace('/')
+  }
+}
+
+// Отслеживаем изменения роута
+watch(() => route.params.id, (newId, oldId) => {
+  if (newId && !selectedRoom.value && newId !== oldId) {
+    // Если есть ID в URL, но мы не в комнате - загружаем комнату
+    loadRoomFromUrl()
+  } else if (!newId && selectedRoom.value) {
+    // Если убрали ID из URL, но мы в комнате - выходим
+    resetToRoomSelection()
+  }
+})
+
 onMounted(() => {
   window.addEventListener('reset-game', handleResetGame)
+
+  // Проверяем, есть ли ID комнаты в URL при загрузке
+  if (route.params.id && !selectedRoom.value) {
+    loadRoomFromUrl()
+  }
 })
 
 onUnmounted(() => {
@@ -105,9 +153,20 @@ const handleRoomSelect = (room: Room) => {
   selectedRoomForJoin.value = room
 }
 
+const handleCancelJoinRoom = () => {
+  selectedRoomForJoin.value = null
+  // Если мы пришли по ссылке с ID комнаты, возвращаемся на главную
+  if (route.path.startsWith('/room/')) {
+    router.replace('/')
+  }
+}
+
 const handleJoinRoom = (room: Room) => {
   selectedRoom.value = room
   selectedRoomForJoin.value = null
+
+  // Обновляем URL на /room/:id
+  router.replace(`/room/${room.id}`)
 
   // Если пользователь авторизован, автоматически подключаемся
   if (authStore.isAuthenticated && authStore.user) {
@@ -121,6 +180,9 @@ const handleCreateRoom = async (data: { name: string; password?: string; rows: n
     const room = await createRoom(data)
     selectedRoom.value = room
     showCreateModal.value = false
+
+    // Обновляем URL на /room/:id
+    router.replace(`/room/${room.id}`)
 
     // Если пользователь авторизован, автоматически подключаемся
     if (authStore.isAuthenticated && authStore.user) {

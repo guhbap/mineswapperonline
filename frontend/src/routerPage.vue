@@ -5,7 +5,7 @@
         <a 
           @click="handleMainClick" 
           class="nav__link" 
-          :class="{ 'nav__link--active': $route.path === '/main' }"
+          :class="{ 'nav__link--active': $route.path === '/' || $route.path === '' }"
         >
           Главная
         </a>
@@ -42,11 +42,11 @@ const handleLogout = () => {
 
 const handleMainClick = () => {
   // Если мы уже на главной странице - отправляем событие для сброса игры
-  if (route.path === '/main') {
+  if (route.path === '/' || route.path === '') {
     window.dispatchEvent(new CustomEvent('reset-game'))
   } else {
     // Иначе просто переходим на главную
-    router.push('/main')
+    router.push('/')
   }
 }
 </script>
