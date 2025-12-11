@@ -8,12 +8,8 @@ ENV NODE_ENV=$BUILD_MODE
 # Копируем только файлы зависимостей для лучшего кэширования
 COPY package.json package-lock.json ./
 
-# Устанавливаем зависимости в зависимости от режима сборки
-RUN if [ "$BUILD_MODE" = "devbuild" ]; then \
-      npm ci --include=dev; \
-    else \
-      npm ci --omit=dev; \
-    fi
+# Устанавливаем все зависимости (включая dev), так как build tools (vite и т.д.) находятся в devDependencies
+RUN npm ci --include=dev
 
 # Копируем исходный код
 COPY . .
