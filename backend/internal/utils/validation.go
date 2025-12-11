@@ -5,7 +5,7 @@ func ValidateRoomParams(name string, rows, cols, mines int) error {
 	if name == "" {
 		return ErrRoomNameRequired
 	}
-	if rows < 5 || rows > 30 || cols < 5 || cols > 30 {
+	if rows < 5 || rows > 50 || cols < 5 || cols > 50 {
 		return ErrInvalidDimensions
 	}
 	maxMines := (rows * cols) - 1
@@ -33,4 +33,3 @@ func ValidateRegisterParams(username, email, password string) error {
 	}
 	return nil
 }
-
