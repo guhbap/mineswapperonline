@@ -44,15 +44,16 @@ type CursorPosition struct {
 }
 
 type GameState struct {
-	Board         [][]Cell `json:"b"`
-	Rows          int      `json:"r"`
-	Cols          int      `json:"c"`
-	Mines         int      `json:"m"`
-	GameOver      bool     `json:"go"`
-	GameWon       bool     `json:"gw"`
-	Revealed      int      `json:"rv"`
-	LoserPlayerID string   `json:"lpid,omitempty"`
-	LoserNickname string   `json:"ln,omitempty"`
+	Board         [][]Cell        `json:"b"`
+	Rows          int             `json:"r"`
+	Cols          int             `json:"c"`
+	Mines         int             `json:"m"`
+	GameOver      bool            `json:"go"`
+	GameWon       bool            `json:"gw"`
+	Revealed      int             `json:"rv"`
+	LoserPlayerID string          `json:"lpid,omitempty"`
+	LoserNickname string          `json:"ln,omitempty"`
+	flagSetTimes  map[int]time.Time // Время установки флага для каждой ячейки (ключ: row*cols + col)
 	mu            sync.RWMutex
 }
 
@@ -166,6 +167,7 @@ func NewGameState(rows, cols, mines int) *GameState {
 		LoserPlayerID: "",
 		LoserNickname: "",
 		Board:         make([][]Cell, rows),
+		flagSetTimes:  make(map[int]time.Time),
 	}
 
 	// Инициализация поля
@@ -541,7 +543,28 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			room.GameState.mu.Unlock()
 			return
 		}
+		
 		wasFlagged := cell.IsFlagged
+		cellKey := row*room.GameState.Cols + col
+		now := time.Now()
+		
+		// Если пытаемся снять флаг, проверяем защиту от одновременных кликов
+		if wasFlagged {
+			if flagSetTime, exists := room.GameState.flagSetTimes[cellKey]; exists {
+				timeSinceFlagSet := now.Sub(flagSetTime)
+				if timeSinceFlagSet < 1*time.Second {
+					log.Printf("Нельзя снять флаг сразу после установки (защита от одновременных кликов): row=%d, col=%d, прошло %v", row, col, timeSinceFlagSet)
+					room.GameState.mu.Unlock()
+					return
+				}
+			}
+			// Удаляем время установки при снятии флага
+			delete(room.GameState.flagSetTimes, cellKey)
+		} else {
+			// Сохраняем время установки флага
+			room.GameState.flagSetTimes[cellKey] = now
+		}
+		
 		cell.IsFlagged = !cell.IsFlagged
 		log.Printf("Флаг переключен: row=%d, col=%d, flagged=%v", row, col, cell.IsFlagged)
 		room.GameState.mu.Unlock()
