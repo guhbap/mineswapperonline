@@ -141,9 +141,9 @@ const isValid = computed(() => {
   return (
     form.value.name.trim().length > 0 &&
     form.value.rows >= 5 &&
-    form.value.rows <= 30 &&
+    form.value.rows <= 50 &&
     form.value.cols >= 5 &&
-    form.value.cols <= 30 &&
+    form.value.cols <= 50 &&
     form.value.mines >= 1 &&
     form.value.mines <= maxMines.value
   )
