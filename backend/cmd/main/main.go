@@ -43,6 +43,11 @@ type CursorPosition struct {
 	Y        float64 `json:"y"`
 }
 
+type FlagInfo struct {
+	SetTime  time.Time
+	PlayerID string
+}
+
 type GameState struct {
 	Board         [][]Cell        `json:"b"`
 	Rows          int             `json:"r"`
@@ -53,7 +58,7 @@ type GameState struct {
 	Revealed      int             `json:"rv"`
 	LoserPlayerID string          `json:"lpid,omitempty"`
 	LoserNickname string          `json:"ln,omitempty"`
-	flagSetTimes  map[int]time.Time // Время установки флага для каждой ячейки (ключ: row*cols + col)
+	flagSetInfo   map[int]FlagInfo // Информация об установке флага для каждой ячейки (ключ: row*cols + col)
 	mu            sync.RWMutex
 }
 
@@ -167,7 +172,7 @@ func NewGameState(rows, cols, mines int) *GameState {
 		LoserPlayerID: "",
 		LoserNickname: "",
 		Board:         make([][]Cell, rows),
-		flagSetTimes:  make(map[int]time.Time),
+		flagSetInfo:   make(map[int]FlagInfo),
 	}
 
 	// Инициализация поля
@@ -550,19 +555,26 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		
 		// Если пытаемся снять флаг, проверяем защиту от одновременных кликов
 		if wasFlagged {
-			if flagSetTime, exists := room.GameState.flagSetTimes[cellKey]; exists {
-				timeSinceFlagSet := now.Sub(flagSetTime)
-				if timeSinceFlagSet < 1*time.Second {
-					log.Printf("Нельзя снять флаг сразу после установки (защита от одновременных кликов): row=%d, col=%d, прошло %v", row, col, timeSinceFlagSet)
-					room.GameState.mu.Unlock()
-					return
+			if flagInfo, exists := room.GameState.flagSetInfo[cellKey]; exists {
+				// Если это тот же игрок, который поставил флаг - разрешаем снять сразу
+				if flagInfo.PlayerID != playerID {
+					// Если это другой игрок - применяем защиту в 1 секунду
+					timeSinceFlagSet := now.Sub(flagInfo.SetTime)
+					if timeSinceFlagSet < 1*time.Second {
+						log.Printf("Нельзя снять флаг сразу после установки другим игроком (защита от одновременных кликов): row=%d, col=%d, прошло %v", row, col, timeSinceFlagSet)
+						room.GameState.mu.Unlock()
+						return
+					}
 				}
 			}
-			// Удаляем время установки при снятии флага
-			delete(room.GameState.flagSetTimes, cellKey)
+			// Удаляем информацию об установке при снятии флага
+			delete(room.GameState.flagSetInfo, cellKey)
 		} else {
-			// Сохраняем время установки флага
-			room.GameState.flagSetTimes[cellKey] = now
+			// Сохраняем время установки и playerID того, кто поставил флаг
+			room.GameState.flagSetInfo[cellKey] = FlagInfo{
+				SetTime:  now,
+				PlayerID: playerID,
+			}
 		}
 		
 		cell.IsFlagged = !cell.IsFlagged
