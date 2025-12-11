@@ -673,23 +673,24 @@ func main() {
 	authHandler := handlers.NewAuthHandler(db)
 	// roomHandler := handlers.NewRoomHandler(roomManager) // Используем старые обработчики для совместимости
 
-	r := mux.NewRouter()
+	router := mux.NewRouter()
 
+	r := router.PathPrefix("/api").Subrouter()
 	// Публичные маршруты
-	r.HandleFunc("/api/auth/register", authHandler.Register).Methods("POST", "OPTIONS")
-	r.HandleFunc("/api/auth/login", authHandler.Login).Methods("POST", "OPTIONS")
-	r.HandleFunc("/api/ws", server.handleWebSocket)
-	r.HandleFunc("/api/rooms", server.handleGetRooms).Methods("GET", "OPTIONS")
-	r.HandleFunc("/api/rooms", server.handleCreateRoom).Methods("POST", "OPTIONS")
-	r.HandleFunc("/api/rooms/join", server.handleJoinRoom).Methods("POST", "OPTIONS")
+	r.HandleFunc("/auth/register", authHandler.Register).Methods("POST", "OPTIONS")
+	r.HandleFunc("/auth/login", authHandler.Login).Methods("POST", "OPTIONS")
+	r.HandleFunc("/ws", server.handleWebSocket)
+	r.HandleFunc("/rooms", server.handleGetRooms).Methods("GET", "OPTIONS")
+	r.HandleFunc("/rooms", server.handleCreateRoom).Methods("POST", "OPTIONS")
+	r.HandleFunc("/rooms/join", server.handleJoinRoom).Methods("POST", "OPTIONS")
 
 	// Защищенные маршруты
-	protected := r.PathPrefix("/api").Subrouter()
+	protected := router.PathPrefix("/api").Subrouter()
 	protected.Use(middleware.AuthMiddleware)
 	protected.HandleFunc("/auth/me", authHandler.GetMe).Methods("GET", "OPTIONS")
 
 	log.Printf("Сервер запущен на :%s", cfg.Port)
-	log.Fatal(http.ListenAndServe(":"+cfg.Port, middleware.CORSMiddleware(r)))
+	log.Fatal(http.ListenAndServe(":"+cfg.Port, middleware.CORSMiddleware(router)))
 }
 
 func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
