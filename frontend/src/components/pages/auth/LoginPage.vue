@@ -55,7 +55,7 @@ const handleSubmit = async () => {
 
   try {
     await authStore.loginUser(username.value, password.value)
-    router.push('/main')
+    router.push('/')
   } catch (err: any) {
     error.value = err.response?.data || 'Ошибка входа. Проверьте данные.'
   } finally {

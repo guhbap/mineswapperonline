@@ -72,6 +72,7 @@ export class WebSocketClient implements IWebSocketClient {
   private pingIntervalDelay = 30000 // Отправляем ping каждые 30 секунд
   private lastPongTime = 0
   private pongTimeout: ReturnType<typeof setTimeout> | null = null
+  private isIntentionallyDisconnected = false
 
   constructor(
     private url: string,
@@ -88,6 +89,7 @@ export class WebSocketClient implements IWebSocketClient {
       this.ws.onopen = () => {
         this.reconnectAttempts = 0
         this.lastPongTime = Date.now()
+        this.isIntentionallyDisconnected = false // Сбрасываем флаг при успешном подключении
         this.startPingInterval()
         this.onOpen?.()
       }
@@ -123,7 +125,10 @@ export class WebSocketClient implements IWebSocketClient {
       this.ws.onclose = () => {
         this.stopPingInterval()
         this.onClose?.()
-        this.attemptReconnect()
+        // Переподключаемся только если отключение было не намеренным
+        if (!this.isIntentionallyDisconnected) {
+          this.attemptReconnect()
+        }
       }
 
       this.ws.onerror = (error) => {
@@ -258,6 +263,9 @@ export class WebSocketClient implements IWebSocketClient {
   }
 
   disconnect() {
+    // Устанавливаем флаг, что отключение намеренное
+    this.isIntentionallyDisconnected = true
+
     this.stopPingInterval()
     if (this.cursorThrottleTimer) {
       clearTimeout(this.cursorThrottleTimer)
@@ -271,6 +279,7 @@ export class WebSocketClient implements IWebSocketClient {
     this.pendingCursorPosition = null
     this.lastCursorSendTime = 0
     this.lastPongTime = 0
+    this.reconnectAttempts = 0
   }
 
   isConnected(): boolean {

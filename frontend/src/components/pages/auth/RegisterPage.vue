@@ -90,7 +90,7 @@ const handleSubmit = async () => {
 
   try {
     await authStore.registerUser(username.value, email.value, password.value)
-    router.push('/main')
+    router.push('/')
   } catch (err: any) {
     error.value = err.response?.data || 'Ошибка регистрации. Попробуйте снова.'
   } finally {
