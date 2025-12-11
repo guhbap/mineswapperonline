@@ -121,6 +121,7 @@ export function useGameBoardZoom(
 
   /**
    * Обработчик начала касания
+   * Обрабатываем только pinch-to-zoom (2 пальца), панорамирование - через браузер
    */
   const handleTouchStart = (event: TouchEvent) => {
     if (event.touches.length === 2) {
@@ -128,18 +129,17 @@ export function useGameBoardZoom(
       touchStartDistance.value = getTouchDistance(event.touches)
       touchStartZoom.value = zoomLevel.value
       isPanning.value = false
-    } else if (event.touches.length === 1 && zoomLevel.value > 1) {
-      // Панорамирование при увеличенном масштабе
-      isPanning.value = true
     }
+    // Для одного пальца не делаем ничего - позволяем браузеру обрабатывать скролл
   }
 
   /**
    * Обработчик движения касания
+   * Предотвращаем только для pinch-to-zoom, чтобы не мешать панорамированию
    */
   const handleTouchMove = (event: TouchEvent) => {
     if (event.touches.length === 2 && touchStartDistance.value > 0) {
-      // Pinch-to-zoom
+      // Pinch-to-zoom - предотвращаем стандартное поведение только для этого случая
       event.preventDefault()
       const currentDistance = getTouchDistance(event.touches)
       const scale = currentDistance / touchStartDistance.value
@@ -147,7 +147,8 @@ export function useGameBoardZoom(
       setZoom(newZoom)
       isPanning.value = false
     }
-    // Панорамирование обрабатывается браузером через overflow: auto
+    // Для одного пальца не предотвращаем событие - позволяем браузеру обрабатывать скролл
+    // Событие будет всплывать до .game-board-wrapper, который имеет overflow: auto
   }
 
   /**

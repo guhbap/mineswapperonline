@@ -32,6 +32,9 @@
         <div
           class="game-board-wrapper"
           @contextmenu.prevent
+          @touchstart="handleTouchStart"
+          @touchmove="handleTouchMove"
+          @touchend="handleTouchEnd"
         >
       <!-- Кнопки зума для мобильных -->
       <div v-if="isMobile" class="zoom-controls">
@@ -66,9 +69,6 @@
         ref="boardContainer"
         class="game-board-container"
         :style="containerStyle"
-        @touchstart="handleTouchStart"
-        @touchmove="handleTouchMove"
-        @touchend="handleTouchEnd"
       >
       <div
         class="game-board"
@@ -910,11 +910,14 @@ onUnmounted(() => {
     width: 100%;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
+    /* Разрешаем панорамирование и pinch-to-zoom на уровне wrapper */
     touch-action: pan-x pan-y pinch-zoom;
     padding: 0.5rem;
     max-height: 60vh;
     position: relative;
     scroll-behavior: smooth;
+    /* Убеждаемся, что скролл работает даже при увеличенном контенте */
+    overscroll-behavior: contain;
   }
 
   .game-board-container {
