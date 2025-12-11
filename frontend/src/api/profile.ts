@@ -16,6 +16,7 @@ export interface UserProfile {
     id: number
     username: string
     email: string
+    color?: string
     createdAt: string
   }
   stats: UserStats
@@ -33,5 +34,9 @@ export async function getProfileByUsername(username: string): Promise<UserProfil
 
 export async function updateActivity(): Promise<void> {
   await axios.post(`${API_BASE}/profile/activity`)
+}
+
+export async function updateColor(color: string): Promise<void> {
+  await axios.post(`${API_BASE}/profile/color`, { color })
 }
 

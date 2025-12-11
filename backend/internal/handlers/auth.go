@@ -135,9 +135,9 @@ func (h *AuthHandler) createUser(username, email, password string) (models.User,
 
 	var user models.User
 	err = h.db.QueryRow(
-		"INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, created_at",
+		"INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, color, created_at",
 		username, email, passwordHash,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.CreatedAt)
 
 	return user, err
 }
@@ -145,9 +145,9 @@ func (h *AuthHandler) createUser(username, email, password string) (models.User,
 func (h *AuthHandler) findUserByUsername(username string) (models.User, error) {
 	var user models.User
 	err := h.db.QueryRow(
-		"SELECT id, username, email, password_hash, created_at FROM users WHERE username = $1",
+		"SELECT id, username, email, password_hash, color, created_at FROM users WHERE username = $1",
 		username,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.Color, &user.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		return models.User{}, err
@@ -158,9 +158,9 @@ func (h *AuthHandler) findUserByUsername(username string) (models.User, error) {
 func (h *AuthHandler) findUserByID(id int) (models.User, error) {
 	var user models.User
 	err := h.db.QueryRow(
-		"SELECT id, username, email, created_at FROM users WHERE id = $1",
+		"SELECT id, username, email, color, created_at FROM users WHERE id = $1",
 		id,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.CreatedAt)
 
 	return user, err
 }

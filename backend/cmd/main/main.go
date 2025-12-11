@@ -273,6 +273,10 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			// Обновляем last_seen для пользователя
 			if s.profileHandler != nil {
 				s.profileHandler.UpdateLastSeen(userID)
+				// Получаем сохраненный цвет пользователя, если есть
+				if userColor, err := s.profileHandler.FindUserColor(userID); err == nil && userColor != "" {
+					color = userColor
+				}
 			}
 		}
 	}

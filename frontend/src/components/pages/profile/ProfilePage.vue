@@ -10,7 +10,10 @@
       <div class="profile-header">
         <h1 class="profile-title">{{ isOwnProfile ? 'Мой профиль' : 'Профиль пользователя' }}</h1>
         <div class="profile-user-info">
-          <div class="user-avatar">
+          <div 
+            class="user-avatar"
+            :style="profile.user.color ? { background: profile.user.color } : {}"
+          >
             <span class="avatar-text">{{ profile.user.username[0].toUpperCase() }}</span>
           </div>
           <div class="user-details">
@@ -21,6 +24,34 @@
               <span>{{ profile.stats.isOnline ? 'В сети' : 'Не в сети' }}</span>
             </div>
           </div>
+        </div>
+        
+        <!-- Выбор цвета (только для своего профиля) -->
+        <div v-if="isOwnProfile" class="color-selector-section">
+          <h3 class="color-selector-title">Цвет игрока</h3>
+          <div class="color-selector">
+            <div
+              v-for="colorOption in colorOptions"
+              :key="colorOption"
+              class="color-option"
+              :class="{ 'color-option--selected': selectedColor === colorOption }"
+              :style="{ backgroundColor: colorOption }"
+              @click="selectColor(colorOption)"
+              :title="colorOption"
+            >
+              <span v-if="selectedColor === colorOption" class="color-check">✓</span>
+            </div>
+            <button
+              v-if="selectedColor"
+              @click="clearColor"
+              class="color-clear-button"
+              title="Сбросить цвет"
+            >
+              ✕
+            </button>
+          </div>
+          <p v-if="savingColor" class="color-saving">Сохранение...</p>
+          <p v-if="colorError" class="color-error">{{ colorError }}</p>
         </div>
       </div>
 
@@ -68,7 +99,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { getProfile, getProfileByUsername, type UserProfile } from '@/api/profile'
+import { getProfile, getProfileByUsername, updateColor, type UserProfile } from '@/api/profile'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -76,6 +107,16 @@ const profile = ref<UserProfile | null>(null)
 const loading = ref(true)
 const error = ref('')
 const isOwnProfile = ref(true)
+const selectedColor = ref<string>('')
+const savingColor = ref(false)
+const colorError = ref('')
+
+const colorOptions = [
+  '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+  '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#52BE80',
+  '#E74C3C', '#3498DB', '#9B59B6', '#1ABC9C', '#F39C12',
+  '#E67E22', '#95A5A6', '#34495E', '#16A085', '#27AE60'
+]
 
 const winRate = computed(() => {
   if (!profile.value || profile.value.stats.gamesPlayed === 0) {
@@ -110,12 +151,63 @@ const loadProfile = async () => {
       // Загружаем свой профиль
       isOwnProfile.value = true
       profile.value = await getProfile()
+      selectedColor.value = profile.value?.user.color || ''
     }
   } catch (err: any) {
     error.value = err.response?.data || 'Ошибка загрузки профиля'
     console.error('Ошибка загрузки профиля:', err)
   } finally {
     loading.value = false
+  }
+}
+
+const selectColor = async (color: string) => {
+  if (selectedColor.value === color) return
+  
+  selectedColor.value = color
+  savingColor.value = true
+  colorError.value = ''
+  
+  try {
+    await updateColor(color)
+    // Обновляем профиль после сохранения
+    if (profile.value) {
+      profile.value.user.color = color
+    }
+    // Обновляем цвет в auth store
+    if (authStore.user) {
+      authStore.user.color = color
+    }
+  } catch (err: any) {
+    colorError.value = err.response?.data || 'Ошибка сохранения цвета'
+    // Откатываем выбор
+    selectedColor.value = profile.value?.user.color || ''
+  } finally {
+    savingColor.value = false
+  }
+}
+
+const clearColor = async () => {
+  selectedColor.value = ''
+  savingColor.value = true
+  colorError.value = ''
+  
+  try {
+    await updateColor('')
+    // Обновляем профиль после сохранения
+    if (profile.value) {
+      profile.value.user.color = undefined
+    }
+    // Обновляем цвет в auth store
+    if (authStore.user) {
+      authStore.user.color = undefined
+    }
+  } catch (err: any) {
+    colorError.value = err.response?.data || 'Ошибка сохранения цвета'
+    // Откатываем выбор
+    selectedColor.value = profile.value?.user.color || ''
+  } finally {
+    savingColor.value = false
   }
 }
 
@@ -320,6 +412,90 @@ onMounted(() => {
 .info-value--private {
   color: var(--text-secondary);
   font-style: italic;
+}
+
+.color-selector-section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 2px solid var(--border-color);
+}
+
+.color-selector-title {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+}
+
+.color-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.color-option {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 3px solid transparent;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px var(--shadow);
+}
+
+.color-option:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px var(--shadow);
+}
+
+.color-option--selected {
+  border-color: var(--text-primary);
+  transform: scale(1.15);
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
+.color-check {
+  color: white;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.color-clear-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.color-clear-button:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--text-secondary);
+  transform: scale(1.1);
+}
+
+.color-saving {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.color-error {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: #dc2626;
 }
 
 @media (max-width: 768px) {

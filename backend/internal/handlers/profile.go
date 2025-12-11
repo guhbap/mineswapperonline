@@ -112,6 +112,66 @@ func (h *ProfileHandler) UpdateActivity(w http.ResponseWriter, r *http.Request) 
 	utils.JSONResponse(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+func (h *ProfileHandler) UpdateColor(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(int)
+	
+	var req struct {
+		Color string `json:"color"`
+	}
+	
+	if err := utils.DecodeJSON(r, &req); err != nil {
+		utils.JSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	
+	// Валидация цвета (hex формат)
+	if req.Color != "" && !isValidHexColor(req.Color) {
+		utils.JSONError(w, http.StatusBadRequest, "Invalid color format. Expected hex color (e.g., #FF5733)")
+		return
+	}
+	
+	_, err := h.db.Exec(
+		"UPDATE users SET color = $1 WHERE id = $2",
+		req.Color, userID,
+	)
+	if err != nil {
+		log.Printf("Error updating color for user %d: %v", userID, err)
+		utils.JSONError(w, http.StatusInternalServerError, "Failed to update color")
+		return
+	}
+	
+	utils.JSONResponse(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *ProfileHandler) FindUserColor(id int) (string, error) {
+	var color sql.NullString
+	err := h.db.QueryRow(
+		"SELECT color FROM users WHERE id = $1",
+		id,
+	).Scan(&color)
+
+	if err == sql.ErrNoRows {
+		return "", err
+	}
+	if color.Valid {
+		return color.String, nil
+	}
+	return "", nil
+}
+
+func isValidHexColor(color string) bool {
+	if len(color) != 7 || color[0] != '#' {
+		return false
+	}
+	for i := 1; i < 7; i++ {
+		c := color[i]
+		if !((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')) {
+			return false
+		}
+	}
+	return true
+}
+
 func (h *ProfileHandler) RecordGameResult(userID int, won bool) error {
 	if won {
 		_, err := h.db.Exec(
@@ -143,9 +203,9 @@ func (h *ProfileHandler) RecordGameResult(userID int, won bool) error {
 func (h *ProfileHandler) findUserByID(id int) (models.User, error) {
 	var user models.User
 	err := h.db.QueryRow(
-		"SELECT id, username, email, created_at FROM users WHERE id = $1",
+		"SELECT id, username, email, color, created_at FROM users WHERE id = $1",
 		id,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		return models.User{}, err
@@ -156,9 +216,9 @@ func (h *ProfileHandler) findUserByID(id int) (models.User, error) {
 func (h *ProfileHandler) findUserByUsername(username string) (models.User, error) {
 	var user models.User
 	err := h.db.QueryRow(
-		"SELECT id, username, email, created_at FROM users WHERE username = $1",
+		"SELECT id, username, email, color, created_at FROM users WHERE username = $1",
 		username,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		return models.User{}, err
