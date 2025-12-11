@@ -76,7 +76,7 @@ const handleRoomSelect = (room: Room) => {
 const handleJoinRoom = (room: Room) => {
   selectedRoom.value = room
   selectedRoomForJoin.value = null
-  
+
   // Если пользователь авторизован, автоматически подключаемся
   if (authStore.isAuthenticated && authStore.user) {
     connectToRoom(authStore.user.username)
@@ -89,7 +89,7 @@ const handleCreateRoom = async (data: { name: string; password?: string; rows: n
     const room = await createRoom(data)
     selectedRoom.value = room
     showCreateModal.value = false
-    
+
     // Если пользователь авторизован, автоматически подключаемся
     if (authStore.isAuthenticated && authStore.user) {
       connectToRoom(authStore.user.username)
@@ -117,23 +117,19 @@ const connectToRoom = (playerNickname: string) => {
 
   wsClient.value = new WebSocketClient(
     wsUrl,
-    (msg: WebSocketMessage) => {
+      (msg: WebSocketMessage) => {
       // Обработка сообщений будет в компоненте игры через событие
-      console.log('MainPage: получено сообщение, отправка события:', msg.type)
       const event = new CustomEvent('ws-message', { detail: msg })
       window.dispatchEvent(event)
-      console.log('MainPage: событие отправлено')
     },
     () => {
-      console.log('WebSocket подключен')
       // Отправляем никнейм после подключения
       if (wsClient.value) {
         wsClient.value.sendNickname(playerNickname)
-        console.log('Никнейм отправлен:', playerNickname)
       }
     },
     () => {
-      console.log('WebSocket отключен')
+      // WebSocket отключен
     },
     (error) => {
       console.error('Ошибка WebSocket:', error)

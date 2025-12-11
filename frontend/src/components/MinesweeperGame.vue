@@ -20,17 +20,8 @@
       <p>Ожидание состояния игры...</p>
       <p v-if="!wsClient?.isConnected()" class="error">WebSocket не подключен</p>
       <p v-else class="info">WebSocket подключен, ожидание данных...</p>
-      <p class="debug">gameState: {{ gameState ? 'есть' : 'null' }}</p>
-      <p class="debug">wsClient: {{ wsClient ? 'есть' : 'null' }}</p>
-      <p class="debug">Курсоров других игроков: {{ otherCursors.length }}</p>
     </div>
     <template v-else>
-      <div class="debug-info">
-        <p>Курсоров других игроков: {{ otherCursors.length }}</p>
-        <div v-for="cursor in otherCursors" :key="cursor.playerId" class="debug-cursor">
-          {{ cursor.nickname }}: ({{ Math.round(cursor.x) }}, {{ Math.round(cursor.y) }})
-        </div>
-      </div>
       <div
         class="game-board-wrapper"
       >
@@ -145,7 +136,6 @@ const handleMouseLeave = () => {
 
 const handleCellClick = (row: number, col: number, isRightClick: boolean) => {
   if (!props.wsClient?.isConnected()) {
-    console.warn('WebSocket не подключен')
     return
   }
   if (gameState.value?.gameOver || gameState.value?.gameWon) return
@@ -155,7 +145,6 @@ const handleCellClick = (row: number, col: number, isRightClick: boolean) => {
     return
   }
 
-  console.log('Отправка клика:', row, col, isRightClick)
   props.wsClient.sendCellClick(row, col, isRightClick)
 }
 
@@ -165,25 +154,14 @@ const handleNewGame = () => {
 }
 
 const handleMessage = (msg: WebSocketMessage) => {
-  console.log('MinesweeperGame handleMessage: получено сообщение:', msg.type, msg)
   if (msg.type === 'gameState' && msg.gameState) {
-    console.log('MinesweeperGame: обновление состояния игры:', {
-      rows: msg.gameState.rows,
-      cols: msg.gameState.cols,
-      mines: msg.gameState.mines,
-      boardSize: msg.gameState.board?.length,
-      revealed: msg.gameState.revealed
-    })
     gameState.value = msg.gameState
-    console.log('MinesweeperGame: gameState обновлен, текущее значение:', gameState.value)
   } else if (msg.type === 'cursor' && msg.cursor) {
     // playerId может быть на верхнем уровне или внутри cursor
     const playerId = msg.playerId || msg.cursor.playerId
     if (!playerId) {
-      console.warn('MinesweeperGame: курсор без playerId', msg)
       return
     }
-    console.log('MinesweeperGame: получен курсор от игрока:', playerId, msg.cursor, msg.nickname, msg.color)
     const existingIndex = otherCursors.value.findIndex(c => c.playerId === playerId)
     const cursorData = {
       playerId: playerId,
@@ -195,10 +173,8 @@ const handleMessage = (msg: WebSocketMessage) => {
 
     if (existingIndex >= 0) {
       otherCursors.value[existingIndex] = cursorData
-      console.log('MinesweeperGame: курсор обновлен, всего курсоров:', otherCursors.value.length)
     } else {
       otherCursors.value.push(cursorData)
-      console.log('MinesweeperGame: курсор добавлен, всего курсоров:', otherCursors.value.length)
     }
 
     // Удаление курсора через 2 секунды без обновлений
@@ -221,24 +197,13 @@ const handleMessage = (msg: WebSocketMessage) => {
 const messageHandler = (event: Event) => {
   const customEvent = event as CustomEvent<WebSocketMessage>
   if (customEvent && customEvent.detail) {
-    console.log('MinesweeperGame: получено событие ws-message:', customEvent.detail.type)
     handleMessage(customEvent.detail)
-  } else {
-    console.warn('MinesweeperGame: получено событие без detail:', event)
   }
 }
 
 onMounted(() => {
   // Слушаем события WebSocket сообщений
   window.addEventListener('ws-message', messageHandler)
-  console.log('MinesweeperGame: слушатель событий установлен, wsClient:', props.wsClient?.isConnected())
-
-  // Если состояние игры уже есть, логируем его
-  if (gameState.value) {
-    console.log('MinesweeperGame: начальное состояние игры:', gameState.value)
-  } else {
-    console.log('MinesweeperGame: состояние игры еще не получено')
-  }
 })
 
 onUnmounted(() => {
@@ -474,32 +439,5 @@ onUnmounted(() => {
   margin-top: 0.5rem;
 }
 
-.loading-message .debug {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
-  transition: color 0.3s ease;
-}
-
-.debug-info {
-  position: fixed;
-  top: 10px;
-  right: 10px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  padding: 0.5rem;
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
-  z-index: 2000;
-  max-width: 200px;
-  box-shadow: 0 2px 8px var(--shadow);
-  border: 1px solid var(--border-color);
-  transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
-}
-
-.debug-cursor {
-  margin-top: 0.25rem;
-  font-size: 0.7rem;
-}
 </style>
 
