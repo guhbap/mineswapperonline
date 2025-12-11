@@ -23,11 +23,6 @@
     </div>
     <!-- <template v-else> -->
       <div class="game-content-wrapper">
-        <!-- Левый рекламный блок -->
-        <div class="ad-block ad-block--left">
-          <div id="yandex_rtb_R-A-17973092-1"></div>
-        </div>
-
         <!-- Игровое поле -->
         <div
           class="game-board-wrapper"
@@ -152,10 +147,6 @@
           />
         </div>
 
-        <!-- Правый рекламный блок -->
-        <div class="ad-block ad-block--right">
-          <div id="yandex_rtb_R-A-17973092-2"></div>
-        </div>
       </div>
     <!-- </template> -->
 
@@ -395,55 +386,7 @@ onMounted(() => {
   window.addEventListener('ws-message', messageHandler)
   // Слушаем событие для очистки игры
   window.addEventListener('reset-game', handleResetGame)
-
-  // Инициализация рекламы Яндекса
-  loadYandexAds()
 })
-
-const loadYandexAds = () => {
-  const win = window as any
-
-  // Инициализируем контекстную рекламу
-  win.yaContextCb = win.yaContextCb || []
-
-  // Функция для рендеринга рекламы
-  const renderAds = () => {
-    if (win.Ya && win.Ya.Context && win.Ya.Context.AdvManager) {
-      // Левый блок
-      win.Ya.Context.AdvManager.render({
-        blockId: 'R-A-17973092-1',
-        renderTo: 'yandex_rtb_R-A-17973092-1'
-      })
-
-      // Правый блок
-      win.Ya.Context.AdvManager.render({
-        blockId: 'R-A-17973092-1',
-        renderTo: 'yandex_rtb_R-A-17973092-2'
-      })
-    }
-  }
-
-  // Если скрипт уже загружен, рендерим сразу
-  if (win.Ya && win.Ya.Context) {
-    renderAds()
-    return
-  }
-
-  // Загружаем скрипт контекстной рекламы, если его еще нет
-  if (!document.querySelector('script[src="https://yandex.ru/ads/system/context.js"]')) {
-    const script = document.createElement('script')
-    script.src = 'https://yandex.ru/ads/system/context.js'
-    script.async = true
-    script.onload = () => {
-      // Ждем немного, чтобы Ya.Context был готов
-      setTimeout(renderAds, 100)
-    }
-    document.head.appendChild(script)
-  }
-
-  // Добавляем в очередь на случай, если скрипт уже загружается
-  win.yaContextCb.push(renderAds)
-}
 
 onUnmounted(() => {
   window.removeEventListener('ws-message', messageHandler)
