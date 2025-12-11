@@ -52,8 +52,18 @@
         >
           +
         </button>
+        <button
+          v-if="zoomLevel !== 1"
+          @click="resetZoom"
+          class="zoom-button zoom-button--reset"
+          aria-label="Сбросить зум"
+          title="Сбросить зум и центрировать"
+        >
+          ⌂
+        </button>
       </div>
       <div
+        ref="boardContainer"
         class="game-board-container"
         :style="{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }"
         @touchstart="handleTouchStart"
@@ -84,6 +94,8 @@
           ]"
           @click="handleCellClick(rowIndex, colIndex, false)"
           @contextmenu.prevent="handleCellClick(rowIndex, colIndex, true)"
+          @touchstart.stop="handleCellTouchStart"
+          @touchend.stop="handleCellTouchEnd(rowIndex, colIndex, $event)"
         >
           <span v-if="cell.isRevealed && !cell.isMine && cell.neighborMines > 0" class="cell-number">
             {{ cell.neighborMines }}
@@ -220,6 +232,7 @@ const gameState = ref<WebSocketMessage['gameState'] | null>(null)
 const otherCursors = ref<Array<{ playerId: string; x: number; y: number; nickname: string; color: string }>>([])
 const cursorTimeout = ref<Map<string, number>>(new Map())
 const isModalTransparent = ref(false)
+const boardContainer = ref<HTMLElement | null>(null)
 
 // Определение мобильного устройства
 const isMobile = computed(() => {
@@ -297,9 +310,27 @@ const zoomOut = () => {
   }
 }
 
+const resetZoom = () => {
+  zoomLevel.value = 1
+  // Прокручиваем контейнер в центр
+  nextTick(() => {
+    const wrapper = document.querySelector('.game-board-wrapper') as HTMLElement
+    if (wrapper) {
+      wrapper.scrollTo({
+        left: wrapper.scrollWidth / 2 - wrapper.clientWidth / 2,
+        top: wrapper.scrollHeight / 2 - wrapper.clientHeight / 2,
+        behavior: 'smooth'
+      })
+    }
+  })
+}
+
 // Pinch-to-zoom для мобильных устройств
 const touchStartDistance = ref(0)
 const touchStartZoom = ref(1)
+const isPanning = ref(false)
+const panStartX = ref(0)
+const panStartY = ref(0)
 
 const getTouchDistance = (touches: TouchList): number => {
   if (touches.length < 2) return 0
@@ -310,23 +341,67 @@ const getTouchDistance = (touches: TouchList): number => {
 
 const handleTouchStart = (event: TouchEvent) => {
   if (event.touches.length === 2) {
+    // Pinch-to-zoom
     touchStartDistance.value = getTouchDistance(event.touches)
     touchStartZoom.value = zoomLevel.value
+    isPanning.value = false
+  } else if (event.touches.length === 1 && zoomLevel.value > 1) {
+    // Панорамирование при увеличенном масштабе
+    isPanning.value = true
+    panStartX.value = event.touches[0].clientX
+    panStartY.value = event.touches[0].clientY
   }
 }
 
 const handleTouchMove = (event: TouchEvent) => {
   if (event.touches.length === 2 && touchStartDistance.value > 0) {
+    // Pinch-to-zoom
     event.preventDefault()
     const currentDistance = getTouchDistance(event.touches)
     const scale = currentDistance / touchStartDistance.value
     const newZoom = touchStartZoom.value * scale
     zoomLevel.value = Math.max(minZoom, Math.min(maxZoom, newZoom))
+    isPanning.value = false
+  } else if (event.touches.length === 1 && isPanning.value && zoomLevel.value > 1) {
+    // Панорамирование - позволяем браузеру обрабатывать через overflow: auto
+    // Не предотвращаем событие, чтобы скролл работал естественно
   }
 }
 
 const handleTouchEnd = () => {
   touchStartDistance.value = 0
+  isPanning.value = false
+}
+
+// Обработка кликов по ячейкам на touch-устройствах
+let cellTouchStartTime = 0
+let cellTouchStartPos = { x: 0, y: 0 }
+
+const handleCellTouchStart = (event: TouchEvent) => {
+  if (event.touches.length === 1) {
+    cellTouchStartTime = Date.now()
+    cellTouchStartPos.x = event.touches[0].clientX
+    cellTouchStartPos.y = event.touches[0].clientY
+  }
+}
+
+const handleCellTouchEnd = (row: number, col: number, event: TouchEvent) => {
+  if (!event.changedTouches || event.changedTouches.length === 0) return
+  
+  const touchEnd = event.changedTouches[0]
+  const touchDuration = Date.now() - cellTouchStartTime
+  const touchDistance = Math.sqrt(
+    Math.pow(touchEnd.clientX - cellTouchStartPos.x, 2) +
+    Math.pow(touchEnd.clientY - cellTouchStartPos.y, 2)
+  )
+
+  // Если это быстрый тап (менее 300ms) и небольшое перемещение (менее 10px), то это клик
+  if (touchDuration < 300 && touchDistance < 10) {
+    // Небольшая задержка, чтобы не конфликтовать с панорамированием
+    setTimeout(() => {
+      handleCellClick(row, col, false)
+    }, 50)
+  }
 }
 
 const handleMessage = (msg: WebSocketMessage) => {
@@ -922,11 +997,13 @@ onUnmounted(() => {
     padding: 0.5rem;
     max-height: 60vh;
     position: relative;
+    scroll-behavior: smooth;
   }
 
   .game-board-container {
     width: fit-content;
     margin: 0 auto;
+    touch-action: pan-x pan-y pinch-zoom;
   }
 
   .game-board {
@@ -986,6 +1063,11 @@ onUnmounted(() => {
     font-weight: 600;
     font-size: 0.875rem;
     color: var(--text-primary);
+  }
+
+  .zoom-button--reset {
+    font-size: 1.25rem;
+    line-height: 1;
   }
 
   .game-info {
