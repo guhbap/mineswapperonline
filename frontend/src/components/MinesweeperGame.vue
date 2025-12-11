@@ -21,7 +21,7 @@
       <p v-if="!wsClient?.isConnected()" class="error">WebSocket не подключен</p>
       <p v-else class="info">WebSocket подключен, ожидание данных...</p>
     </div>
-    <template v-else>
+    <!-- <template v-else> -->
       <div class="game-content-wrapper">
         <!-- Левый рекламный блок -->
         <div class="ad-block ad-block--left">
@@ -35,12 +35,12 @@
         >
       <div
         class="game-board"
-        :style="{ gridTemplateColumns: `repeat(${gameState.cols}, 1fr)` }"
+        :style="{ gridTemplateColumns: `repeat(${gameState?.cols}, 1fr)` }"
         @mousemove="handleMouseMove"
         @mouseleave="handleMouseLeave"
       >
       <div
-        v-for="(row, rowIndex) in gameState.board"
+        v-for="(row, rowIndex) in gameState?.board"
         :key="rowIndex"
       >
         <div
@@ -101,7 +101,7 @@
           <div id="yandex_rtb_R-A-17973092-2"></div>
         </div>
       </div>
-    </template>
+    <!-- </template> -->
 
     <!-- Сообщения о состоянии игры -->
     <div v-if="gameState?.gameOver" class="game-message game-message--over">
