@@ -89,21 +89,24 @@ type CellClick struct {
 }
 
 type Room struct {
-	ID        string             `json:"id"`
-	Name      string             `json:"name"`
-	Password  string             `json:"-"`
-	Rows      int                `json:"rows"`
-	Cols      int                `json:"cols"`
-	Mines     int                `json:"mines"`
-	Players   map[string]*Player `json:"-"`
-	GameState *GameState         `json:"-"`
-	CreatedAt time.Time          `json:"createdAt"`
-	mu        sync.RWMutex
+	ID              string             `json:"id"`
+	Name            string             `json:"name"`
+	Password        string             `json:"-"`
+	Rows            int                `json:"rows"`
+	Cols            int                `json:"cols"`
+	Mines           int                `json:"mines"`
+	Players         map[string]*Player `json:"-"`
+	GameState       *GameState         `json:"-"`
+	CreatedAt       time.Time          `json:"createdAt"`
+	deleteTimer     *time.Timer        // Таймер для отложенного удаления
+	deleteTimerMu   sync.Mutex         // Мьютекс для безопасной работы с таймером
+	mu              sync.RWMutex
 }
 
 type RoomManager struct {
 	rooms map[string]*Room
 	mu    sync.RWMutex
+	server *Server // Ссылка на сервер для доступа к DeleteRoom
 }
 
 type Server struct {
@@ -123,6 +126,10 @@ func NewRoomManager() *RoomManager {
 	}
 }
 
+func (rm *RoomManager) SetServer(server *Server) {
+	rm.server = server
+}
+
 func NewRoom(id, name, password string, rows, cols, mines int) *Room {
 	return &Room{
 		ID:        id,
@@ -138,11 +145,14 @@ func NewRoom(id, name, password string, rows, cols, mines int) *Room {
 }
 
 func NewServer(roomManager *RoomManager, db *database.DB) *Server {
-	return &Server{
+	server := &Server{
 		roomManager:    roomManager,
 		db:             db,
 		profileHandler: handlers.NewProfileHandler(db),
 	}
+	// Устанавливаем ссылку на сервер в RoomManager для доступа к DeleteRoom
+	roomManager.SetServer(server)
+	return server
 }
 
 func NewGameState(rows, cols, mines int) *GameState {
@@ -238,9 +248,64 @@ func (rm *RoomManager) GetRoomsList() []map[string]interface{} {
 
 func (rm *RoomManager) DeleteRoom(roomID string) {
 	rm.mu.Lock()
-	delete(rm.rooms, roomID)
+	room, exists := rm.rooms[roomID]
+	if exists {
+		// Отменяем таймер удаления перед удалением комнаты
+		room.CancelDeletion()
+		delete(rm.rooms, roomID)
+		log.Printf("Комната удалена: %s", roomID)
+	}
 	rm.mu.Unlock()
-	log.Printf("Комната удалена: %s", roomID)
+}
+
+// ScheduleRoomDeletion планирует удаление комнаты через указанное время
+func (rm *RoomManager) ScheduleRoomDeletion(roomID string, delay time.Duration) {
+	rm.mu.RLock()
+	room, exists := rm.rooms[roomID]
+	rm.mu.RUnlock()
+	
+	if !exists {
+		return
+	}
+
+	room.deleteTimerMu.Lock()
+	defer room.deleteTimerMu.Unlock()
+
+	// Отменяем предыдущий таймер, если он существует
+	if room.deleteTimer != nil {
+		room.deleteTimer.Stop()
+	}
+
+	// Создаем новый таймер
+	room.deleteTimer = time.AfterFunc(delay, func() {
+		// Проверяем, что комната все еще пустая перед удалением
+		room.mu.RLock()
+		playersCount := len(room.Players)
+		room.mu.RUnlock()
+
+		if playersCount == 0 {
+			log.Printf("Комната %s пуста более %v, удаляем", roomID, delay)
+			if rm.server != nil {
+				rm.DeleteRoom(roomID)
+			}
+		} else {
+			log.Printf("Комната %s больше не пуста (%d игроков), отмена удаления", roomID, playersCount)
+		}
+	})
+
+	log.Printf("Запланировано удаление комнаты %s через %v", roomID, delay)
+}
+
+// CancelDeletion отменяет запланированное удаление комнаты
+func (r *Room) CancelDeletion() {
+	r.deleteTimerMu.Lock()
+	defer r.deleteTimerMu.Unlock()
+
+	if r.deleteTimer != nil {
+		r.deleteTimer.Stop()
+		r.deleteTimer = nil
+		log.Printf("Отмена удаления комнаты %s", r.ID)
+	}
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -262,6 +327,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		conn.Close()
 		return
 	}
+
+	// Отменяем удаление комнаты, если кто-то подключается
+	room.CancelDeletion()
 
 	playerID := utils.GenerateID()
 	color := colors[mathrand.Intn(len(colors))]
@@ -429,9 +497,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn.Close()
 	log.Printf("Игрок отключен: %s, игроков в комнате: %d", playerID, playersLeft)
 
-	// Удаляем комнату, если она пустая
+	// Планируем удаление комнаты через 5 минут, если она пустая
 	if playersLeft == 0 {
-		s.roomManager.DeleteRoom(roomID)
+		s.roomManager.ScheduleRoomDeletion(roomID, 5*time.Minute)
 	}
 }
 
