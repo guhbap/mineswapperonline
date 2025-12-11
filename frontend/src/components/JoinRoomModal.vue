@@ -108,6 +108,16 @@ const handleOverlayClick = () => {
   animation: slideIn 0.3s ease-out;
 }
 
+@media (max-width: 768px) {
+  .modal {
+    min-width: auto;
+    width: 95vw;
+    max-width: 95vw;
+    padding: 1.5rem;
+    margin: 1rem;
+  }
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -217,6 +227,51 @@ const handleOverlayClick = () => {
 
 .btn-secondary:hover {
   background: var(--border-color);
+}
+
+@media (max-width: 768px) {
+  .modal__title {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  .modal__subtitle {
+    font-size: 1rem;
+  }
+
+  .modal__form {
+    gap: 1rem;
+  }
+
+  .form-input {
+    padding: 0.625rem;
+    font-size: 0.9375rem;
+  }
+
+  .modal__actions {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal {
+    padding: 1rem;
+    border-radius: 0.75rem;
+  }
+
+  .modal__title {
+    font-size: 1.125rem;
+  }
+
+  .form-input {
+    padding: 0.5rem;
+    font-size: 0.875rem;
+  }
 }
 </style>
 

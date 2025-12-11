@@ -69,6 +69,16 @@ const handleOverlayClick = () => {
   transition: background 0.3s ease;
 }
 
+@media (max-width: 768px) {
+  .nickname-modal {
+    min-width: auto;
+    width: 95vw;
+    max-width: 95vw;
+    padding: 1.5rem;
+    margin: 1rem;
+  }
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -126,6 +136,45 @@ const handleOverlayClick = () => {
 
 .nickname-modal__button:active {
   transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+  .nickname-modal__title {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  .nickname-modal__input {
+    padding: 0.75rem;
+    font-size: 0.9375rem;
+    margin-bottom: 1rem;
+  }
+
+  .nickname-modal__button {
+    padding: 0.75rem;
+    font-size: 0.9375rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .nickname-modal {
+    padding: 1rem;
+    border-radius: 0.75rem;
+  }
+
+  .nickname-modal__title {
+    font-size: 1.125rem;
+  }
+
+  .nickname-modal__input {
+    padding: 0.625rem;
+    font-size: 0.875rem;
+  }
+
+  .nickname-modal__button {
+    padding: 0.625rem;
+    font-size: 0.875rem;
+  }
 }
 </style>
 
