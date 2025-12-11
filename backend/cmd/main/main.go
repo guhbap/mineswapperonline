@@ -26,16 +26,19 @@ var upgrader = websocket.Upgrader{
 }
 
 type Player struct {
-	ID       string `json:"id"`
-	UserID   int    `json:"userId,omitempty"` // ID пользователя из БД, если авторизован
-	Nickname string `json:"nickname"`
-	Color    string `json:"color"`
-	Conn     *websocket.Conn
-	mu       sync.Mutex
+	ID                string    `json:"id"`
+	UserID            int       `json:"userId,omitempty"` // ID пользователя из БД, если авторизован
+	Nickname          string    `json:"nickname"`
+	Color             string    `json:"color"`
+	Conn              *websocket.Conn
+	mu                sync.Mutex
+	LastCursorX       float64   // Последняя отправленная позиция курсора X
+	LastCursorY       float64   // Последняя отправленная позиция курсора Y
+	LastCursorSendTime time.Time // Время последней отправки курсора
 }
 
 type CursorPosition struct {
-	PlayerID string  `json:"playerId"`
+	PlayerID string  `json:"pid"` // playerId сокращено до pid
 	X        float64 `json:"x"`
 	Y        float64 `json:"y"`
 }
@@ -371,12 +374,32 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		case "cursor":
 			if msg.Cursor != nil {
 				player.mu.Lock()
-				msg.PlayerID = playerID
-				msg.Cursor.PlayerID = playerID
+				now := time.Now()
+				// Throttling: отправляем не чаще чем раз в 100ms и только если позиция изменилась минимум на 5px
+				timeSinceLastSend := now.Sub(player.LastCursorSendTime)
+				dx := msg.Cursor.X - player.LastCursorX
+				dy := msg.Cursor.Y - player.LastCursorY
+				distance := dx*dx + dy*dy // квадрат расстояния для оптимизации
+				
+				// Отправляем только если прошло достаточно времени И позиция изменилась значительно
+				if timeSinceLastSend < 100*time.Millisecond && distance < 25 { // 5px * 5px = 25
+					player.mu.Unlock()
+					continue // Пропускаем это сообщение
+				}
+				
+				// Обрезаем playerID до 5 символов
+				truncatedPlayerID := truncatePlayerID(playerID)
+				msg.PlayerID = truncatedPlayerID
+				msg.Cursor.PlayerID = truncatedPlayerID
 				msg.Nickname = player.Nickname
 				msg.Color = player.Color
+				
+				// Обновляем последнюю позицию и время
+				player.LastCursorX = msg.Cursor.X
+				player.LastCursorY = msg.Cursor.Y
+				player.LastCursorSendTime = now
 				player.mu.Unlock()
-				log.Printf("Курсор от игрока %s (%s): x=%.2f, y=%.2f", playerID, msg.Nickname, msg.Cursor.X, msg.Cursor.Y)
+				
 				s.broadcastToOthers(room, playerID, msg)
 			}
 

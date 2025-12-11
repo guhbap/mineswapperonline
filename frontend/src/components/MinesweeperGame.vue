@@ -316,8 +316,8 @@ const handleMessage = (msg: WebSocketMessage) => {
   if (msg.type === 'gameState' && msg.gameState) {
     gameState.value = msg.gameState
   } else if (msg.type === 'cursor' && msg.cursor) {
-    // playerId может быть на верхнем уровне или внутри cursor
-    const playerId = msg.playerId || msg.cursor.playerId
+    // playerId может быть на верхнем уровне или внутри cursor (pid)
+    const playerId = msg.playerId || msg.cursor.pid
     if (!playerId) {
       return
     }

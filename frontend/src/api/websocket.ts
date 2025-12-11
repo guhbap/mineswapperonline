@@ -6,7 +6,7 @@ export interface WebSocketMessage {
   nickname?: string
   color?: string
   cursor?: {
-    playerId: string
+    pid: string // playerId сокращено до pid
     x: number
     y: number
   }
@@ -66,7 +66,7 @@ export class WebSocketClient implements IWebSocketClient {
   private cursorThrottleTimer: ReturnType<typeof setTimeout> | null = null
   private lastCursorPosition: { x: number; y: number } | null = null
   private pendingCursorPosition: { x: number; y: number } | null = null
-  private cursorThrottleDelay = 50 // Отправляем позицию курсора каждые 50ms
+  private cursorThrottleDelay = 100 // Отправляем позицию курсора каждые 100ms
   private lastCursorSendTime = 0
   private pingInterval: ReturnType<typeof setInterval> | null = null
   private pingIntervalDelay = 30000 // Отправляем ping каждые 30 секунд
@@ -177,7 +177,7 @@ export class WebSocketClient implements IWebSocketClient {
         playerId: this.truncatePlayerId(message.playerId),
         cursor: message.cursor ? {
           ...message.cursor,
-          playerId: this.truncatePlayerId(message.cursor.playerId) || ''
+          pid: this.truncatePlayerId(message.cursor.pid) || ''
         } : undefined,
         gameState: message.gameState ? {
           ...message.gameState,
@@ -202,11 +202,11 @@ export class WebSocketClient implements IWebSocketClient {
     // Сохраняем последнюю позицию (округленную)
     this.pendingCursorPosition = { x: roundedX, y: roundedY }
 
-    // Проверяем, изменилась ли позиция значительно (минимум 3px)
+    // Проверяем, изменилась ли позиция значительно (минимум 5px)
     if (this.lastCursorPosition) {
       const dx = Math.abs(roundedX - this.lastCursorPosition.x)
       const dy = Math.abs(roundedY - this.lastCursorPosition.y)
-      if (dx < 3 && dy < 3 && (now - this.lastCursorSendTime) < this.cursorThrottleDelay) {
+      if (dx < 5 && dy < 5 && (now - this.lastCursorSendTime) < this.cursorThrottleDelay) {
         return // Позиция не изменилась значительно и не прошло достаточно времени
       }
     }
@@ -215,7 +215,7 @@ export class WebSocketClient implements IWebSocketClient {
     if (now - this.lastCursorSendTime >= this.cursorThrottleDelay) {
       this.lastCursorPosition = { x: roundedX, y: roundedY }
       this.lastCursorSendTime = now
-      this.send({ type: 'cursor', cursor: { playerId: '', x: roundedX, y: roundedY } })
+      this.send({ type: 'cursor', cursor: { pid: '', x: roundedX, y: roundedY } })
       this.pendingCursorPosition = null
       return
     }
@@ -230,7 +230,7 @@ export class WebSocketClient implements IWebSocketClient {
           this.send({
             type: 'cursor',
             cursor: {
-              playerId: '',
+              pid: '',
               x: this.pendingCursorPosition.x,
               y: this.pendingCursorPosition.y
             }
