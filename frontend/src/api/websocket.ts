@@ -56,6 +56,11 @@ export class WebSocketClient implements IWebSocketClient {
   private reconnectAttempts = 0
   private maxReconnectAttempts = 5
   private reconnectDelay = 1000
+  private cursorThrottleTimer: ReturnType<typeof setTimeout> | null = null
+  private lastCursorPosition: { x: number; y: number } | null = null
+  private pendingCursorPosition: { x: number; y: number } | null = null
+  private cursorThrottleDelay = 50 // Отправляем позицию курсора каждые 50ms
+  private lastCursorSendTime = 0
 
   constructor(
     private url: string,
@@ -77,7 +82,6 @@ export class WebSocketClient implements IWebSocketClient {
       this.ws.onmessage = (event) => {
         try {
           const msg: WebSocketMessage = JSON.parse(event.data)
-          console.log('WebSocket: получено сообщение:', msg.type, msg)
           this.onMessage(msg)
         } catch (error) {
           console.error('Ошибка парсинга сообщения:', error, event.data)
@@ -119,7 +123,49 @@ export class WebSocketClient implements IWebSocketClient {
   }
 
   sendCursor(x: number, y: number) {
-    this.send({ type: 'cursor', cursor: { playerId: '', x, y } })
+    const now = Date.now()
+    
+    // Сохраняем последнюю позицию
+    this.pendingCursorPosition = { x, y }
+
+    // Проверяем, изменилась ли позиция значительно (минимум 3px)
+    if (this.lastCursorPosition) {
+      const dx = Math.abs(x - this.lastCursorPosition.x)
+      const dy = Math.abs(y - this.lastCursorPosition.y)
+      if (dx < 3 && dy < 3 && (now - this.lastCursorSendTime) < this.cursorThrottleDelay) {
+        return // Позиция не изменилась значительно и не прошло достаточно времени
+      }
+    }
+
+    // Если прошло достаточно времени с последней отправки, отправляем сразу
+    if (now - this.lastCursorSendTime >= this.cursorThrottleDelay) {
+      this.lastCursorPosition = { x, y }
+      this.lastCursorSendTime = now
+      this.send({ type: 'cursor', cursor: { playerId: '', x, y } })
+      this.pendingCursorPosition = null
+      return
+    }
+
+    // Иначе планируем отправку через throttle
+    if (!this.cursorThrottleTimer) {
+      const delay = this.cursorThrottleDelay - (now - this.lastCursorSendTime)
+      this.cursorThrottleTimer = setTimeout(() => {
+        if (this.pendingCursorPosition) {
+          this.lastCursorPosition = { ...this.pendingCursorPosition }
+          this.lastCursorSendTime = Date.now()
+          this.send({ 
+            type: 'cursor', 
+            cursor: { 
+              playerId: '', 
+              x: this.pendingCursorPosition.x, 
+              y: this.pendingCursorPosition.y 
+            } 
+          })
+          this.pendingCursorPosition = null
+        }
+        this.cursorThrottleTimer = null
+      }, delay)
+    }
   }
 
   sendCellClick(row: number, col: number, flag: boolean) {
@@ -131,10 +177,17 @@ export class WebSocketClient implements IWebSocketClient {
   }
 
   disconnect() {
+    if (this.cursorThrottleTimer) {
+      clearTimeout(this.cursorThrottleTimer)
+      this.cursorThrottleTimer = null
+    }
     if (this.ws) {
       this.ws.close()
       this.ws = null
     }
+    this.lastCursorPosition = null
+    this.pendingCursorPosition = null
+    this.lastCursorSendTime = 0
   }
 
   isConnected(): boolean {

@@ -60,15 +60,14 @@
 
       <!-- Курсоры других игроков -->
       <div
-        v-for="cursor in otherCursors"
+        v-for="cursor in displayCursors"
         :key="cursor.playerId"
         class="remote-cursor"
         :style="{
-          left: cursor.x + 'px',
-          top: cursor.y + 'px',
+          transform: `translate(${cursor.x - 12}px, ${cursor.y - 12}px)`,
           '--cursor-color': cursor.color,
         }"
-        :title="`${cursor.nickname} (${cursor.playerId})`"
+        :title="cursor.nickname"
       >
         <svg
           class="cursor-icon"
@@ -99,17 +98,24 @@
       <p v-else>
         Вы подорвались на мине 💣
       </p>
+      <button @click="handleNewGame" class="game-message__button">
+        Новая игра
+      </button>
     </div>
     <div v-else-if="gameState?.gameWon" class="game-message game-message--won">
       <h2>Победа! 🎉</h2>
       <p>Все мины найдены!</p>
+      <button @click="handleNewGame" class="game-message__button">
+        Новая игра
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import type { WebSocketMessage, Cell, IWebSocketClient } from '@/api/websocket'
+import { useCursorAnimation } from '@/composables/useCursorAnimation'
 
 const props = defineProps<{
   wsClient: IWebSocketClient | null
@@ -119,6 +125,23 @@ const props = defineProps<{
 const gameState = ref<WebSocketMessage['gameState'] | null>(null)
 const otherCursors = ref<Array<{ playerId: string; x: number; y: number; nickname: string; color: string }>>([])
 const cursorTimeout = ref<Map<string, number>>(new Map())
+
+// Используем анимацию курсоров
+const { animatedCursors, updateCursor, removeCursor } = useCursorAnimation()
+
+// Вычисляемое свойство для отображения курсоров с плавной анимацией
+const displayCursors = computed(() => {
+  return Array.from(animatedCursors.value.entries()).map(([playerId, pos]) => {
+    const cursorInfo = otherCursors.value.find(c => c.playerId === playerId)
+    return {
+      playerId,
+      x: pos.x,
+      y: pos.y,
+      nickname: cursorInfo?.nickname || 'Игрок',
+      color: cursorInfo?.color || '#667eea'
+    }
+  })
+})
 
 const handleMouseMove = (event: MouseEvent) => {
   if (!props.wsClient?.isConnected()) return
@@ -162,6 +185,8 @@ const handleMessage = (msg: WebSocketMessage) => {
     if (!playerId) {
       return
     }
+
+    // Обновляем информацию о курсоре
     const existingIndex = otherCursors.value.findIndex(c => c.playerId === playerId)
     const cursorData = {
       playerId: playerId,
@@ -177,14 +202,18 @@ const handleMessage = (msg: WebSocketMessage) => {
       otherCursors.value.push(cursorData)
     }
 
-    // Удаление курсора через 2 секунды без обновлений
+    // Обновляем анимированную позицию курсора
+    updateCursor(playerId, msg.cursor.x, msg.cursor.y)
+
+    // Удаление курсора через 3 секунды без обновлений
     const timeoutId = setTimeout(() => {
       const index = otherCursors.value.findIndex(c => c.playerId === playerId)
       if (index >= 0) {
         otherCursors.value.splice(index, 1)
       }
+      removeCursor(playerId)
       cursorTimeout.value.delete(playerId)
-    }, 2000)
+    }, 3000)
 
     const oldTimeout = cursorTimeout.value.get(playerId)
     if (oldTimeout) {
@@ -210,6 +239,10 @@ onUnmounted(() => {
   window.removeEventListener('ws-message', messageHandler)
   cursorTimeout.value.forEach(timeout => clearTimeout(timeout))
   cursorTimeout.value.clear()
+  // Очищаем все курсоры при размонтировании
+  otherCursors.value.forEach(cursor => {
+    removeCursor(cursor.playerId)
+  })
 })
 </script>
 
@@ -351,7 +384,8 @@ onUnmounted(() => {
   position: absolute;
   pointer-events: none;
   z-index: 1000;
-  transform: translate(-12px, -12px);
+  left: 0;
+  top: 0;
   will-change: transform;
 }
 
@@ -408,10 +442,32 @@ onUnmounted(() => {
 }
 
 .game-message p {
-  margin: 0;
+  margin: 0 0 1.5rem 0;
   font-size: 1.125rem;
   color: var(--text-secondary);
   transition: color 0.3s ease;
+}
+
+.game-message__button {
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  margin-top: 0.5rem;
+}
+
+.game-message__button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.game-message__button:active {
+  transform: translateY(0);
 }
 
 .game-message--over h2 {
