@@ -16,15 +16,15 @@ export interface WebSocketMessage {
     flag: boolean
   }
   gameState?: {
-    board: Cell[][]
-    rows: number
-    cols: number
-    mines: number
-    gameOver: boolean
-    gameWon: boolean
-    revealed: number
-    loserPlayerId?: string
-    loserNickname?: string
+    b: Cell[][] // board
+    r: number // rows
+    c: number // cols
+    m: number // mines
+    go: boolean // gameOver
+    gw: boolean // gameWon
+    rv: number // revealed
+    lpid?: string // loserPlayerId
+    ln?: string // loserNickname
   }
   players?: Array<{
     id: string
@@ -41,10 +41,10 @@ export interface WebSocketMessage {
 }
 
 export interface Cell {
-  isMine: boolean
-  isRevealed: boolean
-  isFlagged: boolean
-  neighborMines: number
+  m: boolean // isMine
+  r: boolean // isRevealed
+  f: boolean // isFlagged
+  n: number // neighborMines
 }
 
 export interface IWebSocketClient {
@@ -164,9 +164,27 @@ export class WebSocketClient implements IWebSocketClient {
     }
   }
 
+  private truncatePlayerId(playerId: string | undefined): string | undefined {
+    if (!playerId) return playerId
+    return playerId.length > 5 ? playerId.substring(0, 5) : playerId
+  }
+
   send(message: WebSocketMessage) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message))
+      // Ограничиваем playerId до 5 символов при отправке
+      const optimizedMessage: WebSocketMessage = {
+        ...message,
+        playerId: this.truncatePlayerId(message.playerId),
+        cursor: message.cursor ? {
+          ...message.cursor,
+          playerId: this.truncatePlayerId(message.cursor.playerId) || ''
+        } : undefined,
+        gameState: message.gameState ? {
+          ...message.gameState,
+          lpid: this.truncatePlayerId(message.gameState.lpid)
+        } : undefined
+      }
+      this.ws.send(JSON.stringify(optimizedMessage))
     }
   }
 

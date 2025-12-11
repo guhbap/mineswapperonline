@@ -41,23 +41,23 @@ type CursorPosition struct {
 }
 
 type GameState struct {
-	Board         [][]Cell `json:"board"`
-	Rows          int      `json:"rows"`
-	Cols          int      `json:"cols"`
-	Mines         int      `json:"mines"`
-	GameOver      bool     `json:"gameOver"`
-	GameWon       bool     `json:"gameWon"`
-	Revealed      int      `json:"revealed"`
-	LoserPlayerID string   `json:"loserPlayerId,omitempty"`
-	LoserNickname string   `json:"loserNickname,omitempty"`
+	Board         [][]Cell `json:"b"`
+	Rows          int      `json:"r"`
+	Cols          int      `json:"c"`
+	Mines         int      `json:"m"`
+	GameOver      bool     `json:"go"`
+	GameWon       bool     `json:"gw"`
+	Revealed      int      `json:"rv"`
+	LoserPlayerID string   `json:"lpid,omitempty"`
+	LoserNickname string   `json:"ln,omitempty"`
 	mu            sync.RWMutex
 }
 
 type Cell struct {
-	IsMine        bool `json:"isMine"`
-	IsRevealed    bool `json:"isRevealed"`
-	IsFlagged     bool `json:"isFlagged"`
-	NeighborMines int  `json:"neighborMines"`
+	IsMine        bool `json:"m"`
+	IsRevealed    bool `json:"r"`
+	IsFlagged     bool `json:"f"`
+	NeighborMines int  `json:"n"`
 }
 
 type Message struct {
@@ -682,8 +682,16 @@ func (s *Server) revealNeighbors(room *Room, row, col int) {
 	}
 }
 
+func truncatePlayerID(playerID string) string {
+	if len(playerID) > 5 {
+		return playerID[:5]
+	}
+	return playerID
+}
+
 func (s *Server) sendGameStateToPlayer(room *Room, player *Player) {
 	room.GameState.mu.RLock()
+	loserPlayerID := truncatePlayerID(room.GameState.LoserPlayerID)
 	gameStateCopy := GameState{
 		Rows:          room.GameState.Rows,
 		Cols:          room.GameState.Cols,
@@ -691,7 +699,7 @@ func (s *Server) sendGameStateToPlayer(room *Room, player *Player) {
 		GameOver:      room.GameState.GameOver,
 		GameWon:       room.GameState.GameWon,
 		Revealed:      room.GameState.Revealed,
-		LoserPlayerID: room.GameState.LoserPlayerID,
+		LoserPlayerID: loserPlayerID,
 		LoserNickname: room.GameState.LoserNickname,
 	}
 	boardCopy := make([][]Cell, len(room.GameState.Board))
@@ -720,6 +728,7 @@ func (s *Server) sendGameStateToPlayer(room *Room, player *Player) {
 
 func (s *Server) broadcastGameState(room *Room) {
 	room.GameState.mu.RLock()
+	loserPlayerID := truncatePlayerID(room.GameState.LoserPlayerID)
 	gameStateCopy := GameState{
 		Rows:          room.GameState.Rows,
 		Cols:          room.GameState.Cols,
@@ -727,7 +736,7 @@ func (s *Server) broadcastGameState(room *Room) {
 		GameOver:      room.GameState.GameOver,
 		GameWon:       room.GameState.GameWon,
 		Revealed:      room.GameState.Revealed,
-		LoserPlayerID: room.GameState.LoserPlayerID,
+		LoserPlayerID: loserPlayerID,
 		LoserNickname: room.GameState.LoserNickname,
 	}
 	boardCopy := make([][]Cell, len(room.GameState.Board))

@@ -4,11 +4,11 @@
       <div class="game-info">
         <div class="info-item">
           <span class="info-label">Мин:</span>
-          <span class="info-value">{{ gameState?.mines || 0 }}</span>
+          <span class="info-value">{{ gameState?.m || 0 }}</span>
         </div>
         <div class="info-item">
           <span class="info-label">Открыто:</span>
-          <span class="info-value">{{ gameState?.revealed || 0 }}</span>
+          <span class="info-value">{{ gameState?.rv || 0 }}</span>
         </div>
       </div>
       <button @click="handleNewGame" class="new-game-button">
@@ -67,12 +67,12 @@
       >
       <div
         class="game-board"
-        :style="{ gridTemplateColumns: `repeat(${gameState?.cols}, 1fr)` }"
+        :style="{ gridTemplateColumns: `repeat(${gameState?.c}, 1fr)` }"
         @mousemove="handleMouseMove"
         @mouseleave="handleMouseLeave"
       >
       <div
-        v-for="(row, rowIndex) in gameState?.board"
+        v-for="(row, rowIndex) in gameState?.b"
         :key="rowIndex"
       >
         <div
@@ -81,10 +81,10 @@
           :class="[
             'cell',
             {
-              'cell--revealed': cell.isRevealed,
-              'cell--mine': cell.isRevealed && cell.isMine,
-              'cell--flagged': cell.isFlagged,
-              'cell--show-mine': (gameState?.gameOver || gameState?.gameWon) && cell.isMine && !cell.isRevealed,
+              'cell--revealed': cell.r,
+              'cell--mine': cell.r && cell.m,
+              'cell--flagged': cell.f,
+              'cell--show-mine': (gameState?.go || gameState?.gw) && cell.m && !cell.r,
             }
           ]"
           @click="handleCellClick(rowIndex, colIndex, false)"
@@ -92,12 +92,12 @@
           @touchstart.stop="handleCellTouchStart"
           @touchend.stop="handleCellTouchEnd(rowIndex, colIndex, $event, handleCellClick)"
         >
-          <span v-if="cell.isRevealed && !cell.isMine && cell.neighborMines > 0" class="cell-number">
-            {{ cell.neighborMines }}
+          <span v-if="cell.r && !cell.m && cell.n > 0" class="cell-number">
+            {{ cell.n }}
           </span>
-          <span v-else-if="cell.isRevealed && cell.isMine" class="cell-mine">💣</span>
-          <span v-else-if="(gameState?.gameOver || gameState?.gameWon) && cell.isMine && !cell.isRevealed" class="cell-mine">💣</span>
-          <span v-else-if="cell.isFlagged" class="cell-flag">🚩</span>
+          <span v-else-if="cell.r && cell.m" class="cell-mine">💣</span>
+          <span v-else-if="(gameState?.go || gameState?.gw) && cell.m && !cell.r" class="cell-mine">💣</span>
+          <span v-else-if="cell.f" class="cell-flag">🚩</span>
         </div>
       </div>
       </div>
@@ -152,7 +152,7 @@
 
     <!-- Сообщения о состоянии игры -->
     <div
-      v-if="gameState?.gameOver"
+      v-if="gameState?.go"
       class="game-message game-message--over"
       :class="{ 'game-message--transparent': isModalTransparent }"
     >
@@ -168,12 +168,12 @@
         👁️
       </button>
       <h2>Игра окончена!</h2>
-      <p v-if="gameState.loserNickname">
+      <p v-if="gameState.ln">
         <router-link
-          :to="`/profile/${gameState.loserNickname}`"
+          :to="`/profile/${gameState.ln}`"
           class="loser-link"
         >
-          <strong>{{ gameState.loserNickname }}</strong>
+          <strong>{{ gameState.ln }}</strong>
         </router-link> подорвался на мине 💣
       </p>
       <p v-else>
@@ -184,7 +184,7 @@
       </button>
     </div>
     <div
-      v-else-if="gameState?.gameWon"
+      v-else-if="gameState?.gw"
       class="game-message game-message--won"
       :class="{ 'game-message--transparent': isModalTransparent }"
     >
@@ -297,10 +297,10 @@ const handleCellClick = (row: number, col: number, isRightClick: boolean = false
   if (!props.wsClient?.isConnected()) {
     return
   }
-  if (gameState.value?.gameOver || gameState.value?.gameWon) return
+  if (gameState.value?.go || gameState.value?.gw) return
 
   // Проверка: нельзя ставить флаг на открытые ячейки
-  if (isRightClick && gameState.value?.board?.[row]?.[col]?.isRevealed) {
+  if (isRightClick && gameState.value?.b?.[row]?.[col]?.r) {
     return
   }
 
