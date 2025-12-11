@@ -25,11 +25,8 @@ const { theme, toggleTheme } = useTheme()
 
 <style scoped>
 .theme-toggle {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   border: none;
   background: var(--bg-secondary);
@@ -38,9 +35,9 @@ const { theme, toggleTheme } = useTheme()
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
-  z-index: 1000;
+  flex-shrink: 0;
 }
 
 .theme-toggle:hover {
@@ -53,10 +50,22 @@ const { theme, toggleTheme } = useTheme()
 }
 
 .theme-icon {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   stroke: currentColor;
   fill: none;
+}
+
+@media (max-width: 768px) {
+  .theme-toggle {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .theme-icon {
+    width: 18px;
+    height: 18px;
+  }
 }
 </style>
 

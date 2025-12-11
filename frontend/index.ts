@@ -41,17 +41,15 @@ router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
   const isAuthenticated = authStore.isAuthenticated
 
-  // Публичные маршруты
-  const publicRoutes = ['/login', '/register']
+  // Публичные маршруты (доступны без авторизации)
+  const publicRoutes = ['/login', '/register', '/main']
   const isPublicRoute = publicRoutes.includes(to.path)
 
-  if (!isAuthenticated && !isPublicRoute) {
-    // Перенаправляем на страницу входа, если не авторизован
-    next('/login')
-  } else if (isAuthenticated && isPublicRoute) {
-    // Перенаправляем на главную, если уже авторизован и пытается зайти на страницы входа/регистрации
+  // Страницы входа/регистрации - перенаправляем на главную, если уже авторизован
+  if (isAuthenticated && (to.path === '/login' || to.path === '/register')) {
     next('/main')
   } else {
+    // Все остальные маршруты доступны
     next()
   }
 })

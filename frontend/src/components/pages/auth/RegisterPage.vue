@@ -1,5 +1,8 @@
 <template>
   <div class="auth-page">
+    <div class="auth-page__theme-toggle">
+      <ThemeToggle />
+    </div>
     <div class="auth-container">
       <h1 class="auth-title">Регистрация</h1>
       <form @submit.prevent="handleSubmit" class="auth-form">
@@ -52,6 +55,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import TextInput from '@/components/inputs/TextInput.vue'
+import ThemeToggle from '@/components/ThemeToggle.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -103,6 +107,14 @@ const handleSubmit = async () => {
   min-height: 100vh;
   padding: 2rem;
   background: var(--bg-primary, #f9fafb);
+  position: relative;
+}
+
+.auth-page__theme-toggle {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
 }
 
 .auth-container {

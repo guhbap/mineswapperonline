@@ -1,7 +1,7 @@
 <template>
   <div class="main-page">
     <!-- Выбор комнаты -->
-    <div v-if="!selectedRoom && !nickname" class="rooms-wrapper">
+    <div v-if="!selectedRoom && !getNickname" class="rooms-wrapper">
       <RoomsList
         @create="showCreateModal = true"
         @join="handleRoomSelect"
@@ -21,25 +21,26 @@
       />
     </div>
 
-    <!-- Ввод никнейма -->
+    <!-- Ввод никнейма (только для гостей) -->
     <NicknameModal
-      v-if="selectedRoom && !nickname"
-      :show="selectedRoom && !nickname"
+      v-if="shouldShowNicknameModal"
+      :show="shouldShowNicknameModal"
       @submit="handleNicknameSubmit"
     />
 
     <!-- Игра -->
-    <div v-if="nickname && selectedRoom" class="game-wrapper">
+    <div v-if="getNickname && selectedRoom" class="game-wrapper">
       <MinesweeperGame
         :ws-client="wsClient"
-        :nickname="nickname"
+        :nickname="getNickname"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue'
+import { ref, onUnmounted, computed } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 import NicknameModal from '@/components/NicknameModal.vue'
 import MinesweeperGame from '@/components/MinesweeperGame.vue'
 import RoomsList from '@/components/RoomsList.vue'
@@ -48,11 +49,25 @@ import JoinRoomModal from '@/components/JoinRoomModal.vue'
 import { WebSocketClient, type WebSocketMessage, type IWebSocketClient } from '@/api/websocket'
 import { createRoom, type Room } from '@/api/rooms'
 
+const authStore = useAuthStore()
 const nickname = ref('')
 const wsClient = ref<IWebSocketClient | null>(null)
 const selectedRoom = ref<Room | null>(null)
 const selectedRoomForJoin = ref<Room | null>(null)
 const showCreateModal = ref(false)
+
+// Определяем, нужно ли показывать модалку никнейма
+const shouldShowNicknameModal = computed(() => {
+  return selectedRoom.value && !nickname.value && !authStore.isAuthenticated
+})
+
+// Автоматически используем username авторизованного пользователя
+const getNickname = computed(() => {
+  if (authStore.isAuthenticated && authStore.user) {
+    return authStore.user.username
+  }
+  return nickname.value
+})
 
 const handleRoomSelect = (room: Room) => {
   selectedRoomForJoin.value = room
@@ -61,6 +76,12 @@ const handleRoomSelect = (room: Room) => {
 const handleJoinRoom = (room: Room) => {
   selectedRoom.value = room
   selectedRoomForJoin.value = null
+  
+  // Если пользователь авторизован, автоматически подключаемся
+  if (authStore.isAuthenticated && authStore.user) {
+    connectToRoom(authStore.user.username)
+  }
+  // Если гость - показываем модалку для ввода никнейма
 }
 
 const handleCreateRoom = async (data: { name: string; password?: string; rows: number; cols: number; mines: number }) => {
@@ -68,15 +89,24 @@ const handleCreateRoom = async (data: { name: string; password?: string; rows: n
     const room = await createRoom(data)
     selectedRoom.value = room
     showCreateModal.value = false
+    
+    // Если пользователь авторизован, автоматически подключаемся
+    if (authStore.isAuthenticated && authStore.user) {
+      connectToRoom(authStore.user.username)
+    }
+    // Если гость - показываем модалку для ввода никнейма
   } catch (error) {
     console.error('Ошибка создания комнаты:', error)
   }
 }
 
 const handleNicknameSubmit = (submittedNickname: string) => {
-  if (!selectedRoom.value) return
-
   nickname.value = submittedNickname
+  connectToRoom(submittedNickname)
+}
+
+const connectToRoom = (playerNickname: string) => {
+  if (!selectedRoom.value) return
 
   // Создаем WebSocket соединение с room ID
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -98,8 +128,8 @@ const handleNicknameSubmit = (submittedNickname: string) => {
       console.log('WebSocket подключен')
       // Отправляем никнейм после подключения
       if (wsClient.value) {
-        wsClient.value.sendNickname(submittedNickname)
-        console.log('Никнейм отправлен:', submittedNickname)
+        wsClient.value.sendNickname(playerNickname)
+        console.log('Никнейм отправлен:', playerNickname)
       }
     },
     () => {

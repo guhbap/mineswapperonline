@@ -6,9 +6,16 @@
           Главная
         </router-link>
       </div>
-      <div class="nav__right" v-if="authStore.isAuthenticated">
-        <span class="nav__user">{{ authStore.user?.username }}</span>
-        <button @click="handleLogout" class="nav__logout">Выйти</button>
+      <div class="nav__right">
+        <ThemeToggle />
+        <template v-if="authStore.isAuthenticated">
+          <span class="nav__user">{{ authStore.user?.username }}</span>
+          <button @click="handleLogout" class="nav__logout">Выйти</button>
+        </template>
+        <template v-else>
+          <router-link to="/login" class="nav__link nav__link--auth">Войти</router-link>
+          <router-link to="/register" class="nav__link nav__link--auth">Регистрация</router-link>
+        </template>
       </div>
     </nav>
     <router-view class="router-view"></router-view>
@@ -18,6 +25,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import ThemeToggle from '@/components/ThemeToggle.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -96,6 +104,15 @@ const handleLogout = () => {
 
 .nav__link--active {
   color: #667eea;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+}
+
+.nav__link--auth {
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+}
+
+.nav__link--auth:hover {
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
 }
 

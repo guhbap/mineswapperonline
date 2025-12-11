@@ -1,13 +1,11 @@
 <template>
   <div class="app">
-    <ThemeToggle />
     <router-view />
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import ThemeToggle from '@/components/ThemeToggle.vue'
 import { useTheme } from '@/composables/useTheme'
 
 const { initTheme } = useTheme()
