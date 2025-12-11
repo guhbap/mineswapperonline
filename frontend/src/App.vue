@@ -7,8 +7,12 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useTheme } from '@/composables/useTheme'
+import { useUserActivity } from '@/composables/useUserActivity'
 
 const { initTheme } = useTheme()
+
+// Инициализируем отслеживание активности пользователя
+useUserActivity()
 
 onMounted(() => {
   initTheme()

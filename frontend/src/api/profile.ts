@@ -31,3 +31,7 @@ export async function getProfileByUsername(username: string): Promise<UserProfil
   return response.data
 }
 
+export async function updateActivity(): Promise<void> {
+  await axios.post(`${API_BASE}/profile/activity`)
+}
+

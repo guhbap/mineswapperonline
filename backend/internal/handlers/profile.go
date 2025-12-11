@@ -100,6 +100,18 @@ func (h *ProfileHandler) UpdateLastSeen(userID int) error {
 	return err
 }
 
+func (h *ProfileHandler) UpdateActivity(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(int)
+	
+	if err := h.UpdateLastSeen(userID); err != nil {
+		log.Printf("Error updating last seen for user %d: %v", userID, err)
+		utils.JSONError(w, http.StatusInternalServerError, "Failed to update activity")
+		return
+	}
+	
+	utils.JSONResponse(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func (h *ProfileHandler) RecordGameResult(userID int, won bool) error {
 	if won {
 		_, err := h.db.Exec(
