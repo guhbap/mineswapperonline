@@ -1,7 +1,7 @@
 <template>
-  <div class="main-page">
+  <main class="main-page">
     <!-- Выбор комнаты -->
-    <div v-if="!selectedRoom" class="rooms-wrapper">
+    <section v-if="!selectedRoom" class="rooms-wrapper" aria-label="Выбор игровой комнаты">
       <RoomsList
         @create="showCreateModal = true"
         @join="handleRoomSelect"
@@ -19,7 +19,7 @@
         @submit="handleJoinRoom"
         @cancel="selectedRoomForJoin = null"
       />
-    </div>
+    </section>
 
     <!-- Ввод никнейма (только для гостей) -->
     <NicknameModal
@@ -29,13 +29,13 @@
     />
 
     <!-- Игра -->
-    <div v-if="getNickname && selectedRoom" class="game-wrapper">
+    <section v-if="getNickname && selectedRoom" class="game-wrapper" aria-label="Игровое поле Сапера">
       <MinesweeperGame
         :ws-client="wsClient"
         :nickname="getNickname"
       />
-    </div>
-  </div>
+    </section>
+  </main>
 </template>
 
 <script setup lang="ts">

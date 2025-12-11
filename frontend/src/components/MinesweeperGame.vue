@@ -1,6 +1,6 @@
 <template>
-  <div class="minesweeper-container">
-    <div class="game-header">
+  <article class="minesweeper-container" aria-label="Игра Сапер">
+    <header class="game-header" role="banner">
       <div class="game-info">
         <div class="info-item">
           <span class="info-label">Мин:</span>
@@ -14,7 +14,7 @@
       <button @click="handleNewGame" class="new-game-button">
         Новая игра
       </button>
-    </div>
+    </header>
 
     <div v-if="!gameState" class="loading-message">
       <p>Ожидание состояния игры...</p>
@@ -123,7 +123,7 @@
         Новая игра
       </button>
     </div>
-  </div>
+  </article>
 </template>
 
 <script setup lang="ts">

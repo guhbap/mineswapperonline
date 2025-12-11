@@ -1,6 +1,6 @@
 <template>
   <div class="router-page">
-    <nav class="nav">
+    <nav class="nav" aria-label="Главная навигация">
       <div class="nav__left">
         <a 
           @click="handleMainClick" 
