@@ -4,6 +4,7 @@ import (
 	"log"
 	mathrand "math/rand"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -25,6 +26,7 @@ var upgrader = websocket.Upgrader{
 
 type Player struct {
 	ID       string `json:"id"`
+	UserID   int    `json:"userId,omitempty"` // ID пользователя из БД, если авторизован
 	Nickname string `json:"nickname"`
 	Color    string `json:"color"`
 	Conn     *websocket.Conn
@@ -92,7 +94,9 @@ type RoomManager struct {
 }
 
 type Server struct {
-	roomManager *RoomManager
+	roomManager    *RoomManager
+	db             *database.DB
+	profileHandler *handlers.ProfileHandler
 }
 
 var colors = []string{
@@ -120,9 +124,11 @@ func NewRoom(id, name, password string, rows, cols, mines int) *Room {
 	}
 }
 
-func NewServer(roomManager *RoomManager) *Server {
+func NewServer(roomManager *RoomManager, db *database.DB) *Server {
 	return &Server{
-		roomManager: roomManager,
+		roomManager:    roomManager,
+		db:             db,
+		profileHandler: handlers.NewProfileHandler(db),
 	}
 }
 
@@ -247,10 +253,25 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	playerID := utils.GenerateID()
 	color := colors[mathrand.Intn(len(colors))]
 
+	// Пытаемся получить userID из query параметра (если пользователь авторизован)
+	userIDStr := r.URL.Query().Get("userId")
+	var userID int
+	if userIDStr != "" {
+		// Парсим userID, игнорируем ошибку если не число
+		if id, err := strconv.Atoi(userIDStr); err == nil {
+			userID = id
+			// Обновляем last_seen для пользователя
+			if s.profileHandler != nil {
+				s.profileHandler.UpdateLastSeen(userID)
+			}
+		}
+	}
+
 	player := &Player{
-		ID:    playerID,
-		Color: color,
-		Conn:  conn,
+		ID:     playerID,
+		UserID: userID,
+		Color:  color,
+		Conn:   conn,
 	}
 
 	room.mu.Lock()
@@ -430,7 +451,15 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			player.mu.Lock()
 			room.GameState.LoserPlayerID = playerID
 			room.GameState.LoserNickname = player.Nickname
+			userID := player.UserID
 			player.mu.Unlock()
+
+			// Записываем поражение в БД
+			if userID > 0 && s.profileHandler != nil {
+				if err := s.profileHandler.RecordGameResult(userID, false); err != nil {
+					log.Printf("Ошибка записи результата игры: %v", err)
+				}
+			}
 		}
 		room.mu.RUnlock()
 		log.Printf("Игра окончена - подорвалась мина! Игрок: %s (%s)", room.GameState.LoserNickname, playerID)
@@ -446,6 +475,19 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		if room.GameState.Revealed == totalCells-room.GameState.Mines {
 			room.GameState.GameWon = true
 			log.Printf("Победа! Все ячейки открыты!")
+
+			// Записываем победу для всех игроков в комнате, которые не проиграли
+			room.mu.RLock()
+			loserID := room.GameState.LoserPlayerID
+			for _, p := range room.Players {
+				// Записываем победу только для игроков, которые не проиграли
+				if p.ID != loserID && p.UserID > 0 && s.profileHandler != nil {
+					if err := s.profileHandler.RecordGameResult(p.UserID, true); err != nil {
+						log.Printf("Ошибка записи результата игры: %v", err)
+					}
+				}
+			}
+			room.mu.RUnlock()
 		}
 	}
 
@@ -707,8 +749,9 @@ func main() {
 	}
 
 	roomManager := NewRoomManager()
-	server := NewServer(roomManager)
+	server := NewServer(roomManager, db)
 	authHandler := handlers.NewAuthHandler(db)
+	profileHandler := handlers.NewProfileHandler(db)
 	// roomHandler := handlers.NewRoomHandler(roomManager) // Используем старые обработчики для совместимости
 
 	router := mux.NewRouter()
@@ -726,6 +769,7 @@ func main() {
 	protected := router.PathPrefix("/api").Subrouter()
 	protected.Use(middleware.AuthMiddleware)
 	protected.HandleFunc("/auth/me", authHandler.GetMe).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/profile", profileHandler.GetProfile).Methods("GET", "OPTIONS")
 
 	log.Printf("Сервер запущен на :%s", cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, middleware.CORSMiddleware(router)))

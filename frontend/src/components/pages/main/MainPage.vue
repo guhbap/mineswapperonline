@@ -207,7 +207,12 @@ const connectToRoom = (playerNickname: string) => {
   const host = import.meta.env.DEV
     ? 'localhost:8080'
     : window.location.host
-  const wsUrl = `${protocol}//${host}/api/ws?room=${selectedRoom.value.id}`
+
+  // Добавляем userID в URL, если пользователь авторизован
+  let wsUrl = `${protocol}//${host}/api/ws?room=${selectedRoom.value.id}`
+  if (authStore.isAuthenticated && authStore.user?.id) {
+    wsUrl += `&userId=${authStore.user.id}`
+  }
 
   wsClient.value = new WebSocketClient(
     wsUrl,

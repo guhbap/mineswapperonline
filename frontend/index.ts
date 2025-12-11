@@ -7,6 +7,7 @@ import RouterPage from '@/routerPage.vue'
 import MainPage from '@/components/pages/main/MainPage.vue'
 import LoginPage from '@/components/pages/auth/LoginPage.vue'
 import RegisterPage from '@/components/pages/auth/RegisterPage.vue'
+import ProfilePage from '@/components/pages/profile/ProfilePage.vue'
 
 // Типизированный массив маршрутов
 const routes: RouteRecordRaw[] = [
@@ -53,6 +54,16 @@ const routes: RouteRecordRaw[] = [
           description: 'Подключитесь к игровой комнате Сапера',
           keywords: 'комната сапера, подключиться к комнате, играть в сапера'
         }
+      },
+      {
+        path: 'profile',
+        name: 'Profile',
+        component: ProfilePage,
+        meta: {
+          title: 'Профиль - Сапер Онлайн',
+          description: 'Профиль пользователя и статистика игр',
+          keywords: 'профиль, статистика, игры сапера'
+        }
       }
     ]
   }
@@ -72,6 +83,13 @@ router.beforeEach((to, from, next) => {
   // Публичные маршруты (доступны без авторизации)
   const publicRoutes = ['/login', '/register', '/']
   const isPublicRoute = publicRoutes.includes(to.path) || to.path.startsWith('/room/')
+
+  // Защищенные маршруты (требуют авторизации)
+  const protectedRoutes = ['/profile']
+  if (protectedRoutes.includes(to.path) && !isAuthenticated) {
+    next('/login')
+    return
+  }
 
   // Страницы входа/регистрации - перенаправляем на главную, если уже авторизован
   if (isAuthenticated && (to.path === '/login' || to.path === '/register')) {

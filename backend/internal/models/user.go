@@ -28,3 +28,17 @@ type AuthResponse struct {
 	User  User   `json:"user"`
 }
 
+type UserStats struct {
+	UserID      int       `json:"userId"`
+	GamesPlayed int       `json:"gamesPlayed"`
+	GamesWon    int       `json:"gamesWon"`
+	GamesLost   int       `json:"gamesLost"`
+	LastSeen    time.Time `json:"lastSeen"`
+	IsOnline    bool      `json:"isOnline"`
+}
+
+type UserProfile struct {
+	User  User      `json:"user"`
+	Stats UserStats `json:"stats"`
+}
+

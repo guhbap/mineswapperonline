@@ -13,7 +13,9 @@
       <div class="nav__right">
         <ThemeToggle />
         <template v-if="authStore.isAuthenticated">
-          <span class="nav__user">{{ authStore.user?.username }}</span>
+          <router-link to="/profile" class="nav__link nav__link--auth">
+            {{ authStore.user?.username }}
+          </router-link>
           <button @click="handleLogout" class="nav__logout">Выйти</button>
         </template>
         <template v-else>
