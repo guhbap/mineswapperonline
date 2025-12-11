@@ -33,6 +33,33 @@
           class="game-board-wrapper"
           @contextmenu.prevent
         >
+      <!-- Кнопки зума для мобильных -->
+      <div v-if="isMobile" class="zoom-controls">
+        <button
+          @click="zoomOut"
+          class="zoom-button zoom-button--minus"
+          :disabled="zoomLevel <= minZoom"
+          aria-label="Уменьшить"
+        >
+          −
+        </button>
+        <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
+        <button
+          @click="zoomIn"
+          class="zoom-button zoom-button--plus"
+          :disabled="zoomLevel >= maxZoom"
+          aria-label="Увеличить"
+        >
+          +
+        </button>
+      </div>
+      <div
+        class="game-board-container"
+        :style="{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }"
+        @touchstart="handleTouchStart"
+        @touchmove="handleTouchMove"
+        @touchend="handleTouchEnd"
+      >
       <div
         class="game-board"
         :style="{ gridTemplateColumns: `repeat(${gameState?.cols}, 1fr)` }"
@@ -65,6 +92,7 @@
           <span v-else-if="(gameState?.gameOver || gameState?.gameWon) && cell.isMine && !cell.isRevealed" class="cell-mine">💣</span>
           <span v-else-if="cell.isFlagged" class="cell-flag">🚩</span>
         </div>
+      </div>
       </div>
       </div>
 
@@ -193,6 +221,11 @@ const otherCursors = ref<Array<{ playerId: string; x: number; y: number; nicknam
 const cursorTimeout = ref<Map<string, number>>(new Map())
 const isModalTransparent = ref(false)
 
+// Определение мобильного устройства
+const isMobile = computed(() => {
+  return window.innerWidth <= 768
+})
+
 // Используем анимацию курсоров
 const { animatedCursors, updateCursor, removeCursor } = useCursorAnimation()
 
@@ -244,6 +277,56 @@ const handleCellClick = (row: number, col: number, isRightClick: boolean) => {
 const handleNewGame = () => {
   if (!props.wsClient?.isConnected()) return
   props.wsClient.sendNewGame()
+}
+
+// Функциональность зума для мобильных устройств
+const zoomLevel = ref(1)
+const minZoom = 0.5
+const maxZoom = 3
+const zoomStep = 0.1
+
+const zoomIn = () => {
+  if (zoomLevel.value < maxZoom) {
+    zoomLevel.value = Math.min(zoomLevel.value + zoomStep, maxZoom)
+  }
+}
+
+const zoomOut = () => {
+  if (zoomLevel.value > minZoom) {
+    zoomLevel.value = Math.max(zoomLevel.value - zoomStep, minZoom)
+  }
+}
+
+// Pinch-to-zoom для мобильных устройств
+const touchStartDistance = ref(0)
+const touchStartZoom = ref(1)
+
+const getTouchDistance = (touches: TouchList): number => {
+  if (touches.length < 2) return 0
+  const dx = touches[0].clientX - touches[1].clientX
+  const dy = touches[0].clientY - touches[1].clientY
+  return Math.sqrt(dx * dx + dy * dy)
+}
+
+const handleTouchStart = (event: TouchEvent) => {
+  if (event.touches.length === 2) {
+    touchStartDistance.value = getTouchDistance(event.touches)
+    touchStartZoom.value = zoomLevel.value
+  }
+}
+
+const handleTouchMove = (event: TouchEvent) => {
+  if (event.touches.length === 2 && touchStartDistance.value > 0) {
+    event.preventDefault()
+    const currentDistance = getTouchDistance(event.touches)
+    const scale = currentDistance / touchStartDistance.value
+    const newZoom = touchStartZoom.value * scale
+    zoomLevel.value = Math.max(minZoom, Math.min(maxZoom, newZoom))
+  }
+}
+
+const handleTouchEnd = () => {
+  touchStartDistance.value = 0
 }
 
 const handleMessage = (msg: WebSocketMessage) => {
@@ -833,16 +916,76 @@ onUnmounted(() => {
 
   .game-board-wrapper {
     width: 100%;
-    overflow-x: auto;
-    overflow-y: auto;
+    overflow: auto;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y;
+    touch-action: pan-x pan-y pinch-zoom;
     padding: 0.5rem;
     max-height: 60vh;
+    position: relative;
+  }
+
+  .game-board-container {
+    width: fit-content;
+    margin: 0 auto;
   }
 
   .game-board {
     min-width: fit-content;
+  }
+
+  .zoom-controls {
+    position: sticky;
+    top: 1rem;
+    right: 1rem;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--bg-primary);
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 8px var(--shadow);
+    margin-bottom: 0.5rem;
+    justify-content: center;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .zoom-button {
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 2px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border-radius: 50%;
+    font-size: 1.5rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    user-select: none;
+    touch-action: manipulation;
+  }
+
+  .zoom-button:active:not(:disabled) {
+    transform: scale(0.95);
+    background: var(--bg-tertiary);
+  }
+
+  .zoom-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .zoom-level {
+    min-width: 3rem;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--text-primary);
   }
 
   .game-info {
