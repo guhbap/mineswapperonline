@@ -38,22 +38,22 @@
         <button
           @click="zoomOut"
           class="zoom-button zoom-button--minus"
-          :disabled="zoomLevel <= minZoom"
+          :disabled="!canZoomOut"
           aria-label="Уменьшить"
         >
           −
         </button>
-        <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
+        <span class="zoom-level">{{ zoomPercentage }}%</span>
         <button
           @click="zoomIn"
           class="zoom-button zoom-button--plus"
-          :disabled="zoomLevel >= maxZoom"
+          :disabled="!canZoomIn"
           aria-label="Увеличить"
         >
           +
         </button>
         <button
-          v-if="zoomLevel !== 1"
+          v-if="isZoomed"
           @click="resetZoom"
           class="zoom-button zoom-button--reset"
           aria-label="Сбросить зум"
@@ -65,7 +65,7 @@
       <div
         ref="boardContainer"
         class="game-board-container"
-        :style="{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }"
+        :style="containerStyle"
         @touchstart="handleTouchStart"
         @touchmove="handleTouchMove"
         @touchend="handleTouchEnd"
@@ -95,7 +95,7 @@
           @click="handleCellClick(rowIndex, colIndex, false)"
           @contextmenu.prevent="handleCellClick(rowIndex, colIndex, true)"
           @touchstart.stop="handleCellTouchStart"
-          @touchend.stop="handleCellTouchEnd(rowIndex, colIndex, $event)"
+          @touchend.stop="handleCellTouchEnd(rowIndex, colIndex, $event, handleCellClick)"
         >
           <span v-if="cell.isRevealed && !cell.isMine && cell.neighborMines > 0" class="cell-number">
             {{ cell.neighborMines }}
@@ -221,6 +221,8 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import type { WebSocketMessage, Cell, IWebSocketClient } from '@/api/websocket'
 import { useCursorAnimation } from '@/composables/useCursorAnimation'
+import { useGameBoardZoom } from '@/composables/useGameBoardZoom'
+import { useCellTouch } from '@/composables/useCellTouch'
 import Chat from '@/components/Chat.vue'
 
 const props = defineProps<{
@@ -237,6 +239,33 @@ const boardContainer = ref<HTMLElement | null>(null)
 // Определение мобильного устройства
 const isMobile = computed(() => {
   return window.innerWidth <= 768
+})
+
+// Используем composable для зума игрового поля
+const {
+  zoomLevel,
+  zoomPercentage,
+  isZoomed,
+  canZoomIn,
+  canZoomOut,
+  zoomIn,
+  zoomOut,
+  resetZoom,
+  handleTouchStart,
+  handleTouchMove,
+  handleTouchEnd,
+  containerStyle,
+} = useGameBoardZoom({
+  minZoom: 0.5,
+  maxZoom: 3,
+  zoomStep: 0.1,
+  initialZoom: 1,
+})
+
+// Используем composable для обработки touch-событий на ячейках
+const { handleTouchStart: handleCellTouchStart, handleTouchEnd: handleCellTouchEnd } = useCellTouch({
+  clickThreshold: 10,
+  clickDuration: 300,
 })
 
 // Используем анимацию курсоров
@@ -273,7 +302,7 @@ const handleMouseLeave = () => {
   // Можно отправить сообщение об уходе курсора, но для простоты просто очистим через таймаут
 }
 
-const handleCellClick = (row: number, col: number, isRightClick: boolean) => {
+const handleCellClick = (row: number, col: number, isRightClick: boolean = false) => {
   if (!props.wsClient?.isConnected()) {
     return
   }
@@ -290,118 +319,6 @@ const handleCellClick = (row: number, col: number, isRightClick: boolean) => {
 const handleNewGame = () => {
   if (!props.wsClient?.isConnected()) return
   props.wsClient.sendNewGame()
-}
-
-// Функциональность зума для мобильных устройств
-const zoomLevel = ref(1)
-const minZoom = 0.5
-const maxZoom = 3
-const zoomStep = 0.1
-
-const zoomIn = () => {
-  if (zoomLevel.value < maxZoom) {
-    zoomLevel.value = Math.min(zoomLevel.value + zoomStep, maxZoom)
-  }
-}
-
-const zoomOut = () => {
-  if (zoomLevel.value > minZoom) {
-    zoomLevel.value = Math.max(zoomLevel.value - zoomStep, minZoom)
-  }
-}
-
-const resetZoom = () => {
-  zoomLevel.value = 1
-  // Прокручиваем контейнер в центр
-  nextTick(() => {
-    const wrapper = document.querySelector('.game-board-wrapper') as HTMLElement
-    if (wrapper) {
-      wrapper.scrollTo({
-        left: wrapper.scrollWidth / 2 - wrapper.clientWidth / 2,
-        top: wrapper.scrollHeight / 2 - wrapper.clientHeight / 2,
-        behavior: 'smooth'
-      })
-    }
-  })
-}
-
-// Pinch-to-zoom для мобильных устройств
-const touchStartDistance = ref(0)
-const touchStartZoom = ref(1)
-const isPanning = ref(false)
-const panStartX = ref(0)
-const panStartY = ref(0)
-
-const getTouchDistance = (touches: TouchList): number => {
-  if (touches.length < 2) return 0
-  const dx = touches[0].clientX - touches[1].clientX
-  const dy = touches[0].clientY - touches[1].clientY
-  return Math.sqrt(dx * dx + dy * dy)
-}
-
-const handleTouchStart = (event: TouchEvent) => {
-  if (event.touches.length === 2) {
-    // Pinch-to-zoom
-    touchStartDistance.value = getTouchDistance(event.touches)
-    touchStartZoom.value = zoomLevel.value
-    isPanning.value = false
-  } else if (event.touches.length === 1 && zoomLevel.value > 1) {
-    // Панорамирование при увеличенном масштабе
-    isPanning.value = true
-    panStartX.value = event.touches[0].clientX
-    panStartY.value = event.touches[0].clientY
-  }
-}
-
-const handleTouchMove = (event: TouchEvent) => {
-  if (event.touches.length === 2 && touchStartDistance.value > 0) {
-    // Pinch-to-zoom
-    event.preventDefault()
-    const currentDistance = getTouchDistance(event.touches)
-    const scale = currentDistance / touchStartDistance.value
-    const newZoom = touchStartZoom.value * scale
-    zoomLevel.value = Math.max(minZoom, Math.min(maxZoom, newZoom))
-    isPanning.value = false
-  } else if (event.touches.length === 1 && isPanning.value && zoomLevel.value > 1) {
-    // Панорамирование - позволяем браузеру обрабатывать через overflow: auto
-    // Не предотвращаем событие, чтобы скролл работал естественно
-  }
-}
-
-const handleTouchEnd = () => {
-  touchStartDistance.value = 0
-  isPanning.value = false
-}
-
-// Обработка кликов по ячейкам на touch-устройствах
-let cellTouchStartTime = 0
-let cellTouchStartPos = { x: 0, y: 0 }
-
-const handleCellTouchStart = (event: TouchEvent) => {
-  if (event.touches.length === 1) {
-    cellTouchStartTime = Date.now()
-    cellTouchStartPos.x = event.touches[0].clientX
-    cellTouchStartPos.y = event.touches[0].clientY
-  }
-}
-
-const handleCellTouchEnd = (row: number, col: number, event: TouchEvent) => {
-  if (!event.changedTouches || event.changedTouches.length === 0) return
-  
-  const touchEnd = event.changedTouches[0]
-  const touchDuration = Date.now() - cellTouchStartTime
-  const touchDistance = Math.sqrt(
-    Math.pow(touchEnd.clientX - cellTouchStartPos.x, 2) +
-    Math.pow(touchEnd.clientY - cellTouchStartPos.y, 2)
-  )
-
-  // Если это быстрый тап (менее 300ms) и небольшое перемещение (менее 10px), то это клик
-  if (touchDuration < 300 && touchDistance < 10) {
-    // Небольшая задержка, чтобы не конфликтовать с панорамированием
-    setTimeout(() => {
-      handleCellClick(row, col, false)
-    }, 50)
-  }
 }
 
 const handleMessage = (msg: WebSocketMessage) => {
