@@ -1,15 +1,17 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"encoding/json"
 	"log"
 	mathrand "math/rand"
 	"net/http"
-	"os"
 	"sync"
 	"time"
+
+	"minesweeperonline/internal/config"
+	"minesweeperonline/internal/database"
+	"minesweeperonline/internal/handlers"
+	"minesweeperonline/internal/middleware"
+	"minesweeperonline/internal/utils"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -74,7 +76,7 @@ type CellClick struct {
 type Room struct {
 	ID        string             `json:"id"`
 	Name      string             `json:"name"`
-	Password  string             `json:"-"` // Не отправляем пароль клиентам
+	Password  string             `json:"-"`
 	Rows      int                `json:"rows"`
 	Cols      int                `json:"cols"`
 	Mines     int                `json:"mines"`
@@ -118,9 +120,9 @@ func NewRoom(id, name, password string, rows, cols, mines int) *Room {
 	}
 }
 
-func NewServer() *Server {
+func NewServer(roomManager *RoomManager) *Server {
 	return &Server{
-		roomManager: NewRoomManager(),
+		roomManager: roomManager,
 	}
 }
 
@@ -178,7 +180,7 @@ func NewGameState(rows, cols, mines int) *GameState {
 }
 
 func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int) *Room {
-	roomID := generateID()
+	roomID := utils.GenerateID()
 	room := NewRoom(roomID, name, password, rows, cols, mines)
 	rm.mu.Lock()
 	rm.rooms[roomID] = room
@@ -242,7 +244,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	playerID := generateID()
+	playerID := utils.GenerateID()
 	color := colors[mathrand.Intn(len(colors))]
 
 	player := &Player{
@@ -645,47 +647,54 @@ func (s *Server) broadcastPlayerList(room *Room) {
 	}
 }
 
-func generateID() string {
-	b := make([]byte, 8)
-	rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
 func main() {
-	server := NewServer()
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	// Загрузка конфигурации
+	cfg, err := config.ReadConfig()
+	if err != nil {
+		log.Fatalf("Failed to read config: %v", err)
 	}
+
+	// Подключение к базе данных
+	db, err := database.NewDB(cfg.DbHost, cfg.DbPort, cfg.DbUser, cfg.DbPassword, cfg.DbName)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	// Инициализация схемы БД
+	if cfg.NeedMigrate {
+		if err := db.InitSchema(); err != nil {
+			log.Fatalf("Failed to initialize database schema: %v", err)
+		}
+	}
+
+	roomManager := NewRoomManager()
+	server := NewServer(roomManager)
+	authHandler := handlers.NewAuthHandler(db)
+	// roomHandler := handlers.NewRoomHandler(roomManager) // Используем старые обработчики для совместимости
 
 	r := mux.NewRouter()
+
+	// Публичные маршруты
+	r.HandleFunc("/api/auth/register", authHandler.Register).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/auth/login", authHandler.Login).Methods("POST", "OPTIONS")
 	r.HandleFunc("/api/ws", server.handleWebSocket)
-	r.HandleFunc("/api/rooms", server.handleGetRooms).Methods("GET")
-	r.HandleFunc("/api/rooms", server.handleCreateRoom).Methods("POST")
-	r.HandleFunc("/api/rooms/join", server.handleJoinRoom).Methods("POST")
-	// r.PathPrefix("/").Handler(http.FileServer(http.Dir("../frontend/dist/")))
+	r.HandleFunc("/api/rooms", server.handleGetRooms).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/rooms", server.handleCreateRoom).Methods("POST", "OPTIONS")
+	r.HandleFunc("/api/rooms/join", server.handleJoinRoom).Methods("POST", "OPTIONS")
 
-	// CORS middleware
-	corsMiddleware := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-			if r.Method == "OPTIONS" {
-				w.WriteHeader(http.StatusOK)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
+	// Защищенные маршруты
+	protected := r.PathPrefix("/api").Subrouter()
+	protected.Use(middleware.AuthMiddleware)
+	protected.HandleFunc("/auth/me", authHandler.GetMe).Methods("GET", "OPTIONS")
 
-	log.Printf("Сервер запущен на :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, corsMiddleware(r)))
+	log.Printf("Сервер запущен на :%s", cfg.Port)
+	log.Fatal(http.ListenAndServe(":"+cfg.Port, middleware.CORSMiddleware(r)))
 }
 
 func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		utils.JSONError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
@@ -697,30 +706,18 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		Mines    int    `json:"mines"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if err := utils.DecodeJSON(r, &req); err != nil {
+		utils.JSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	// Валидация
-	if req.Name == "" {
-		http.Error(w, "Room name required", http.StatusBadRequest)
-		return
-	}
-	if req.Rows < 5 || req.Rows > 30 || req.Cols < 5 || req.Cols > 30 {
-		http.Error(w, "Rows and cols must be between 5 and 30", http.StatusBadRequest)
-		return
-	}
-	maxMines := (req.Rows * req.Cols) - 1
-	if req.Mines < 1 || req.Mines > maxMines {
-		http.Error(w, "Mines must be between 1 and (rows*cols-1)", http.StatusBadRequest)
+	if err := utils.ValidateRoomParams(req.Name, req.Rows, req.Cols, req.Mines); err != nil {
+		utils.JSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	room := s.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	utils.JSONResponse(w, http.StatusOK, map[string]interface{}{
 		"id":          room.ID,
 		"name":        room.Name,
 		"hasPassword": room.Password != "",
@@ -732,13 +729,12 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetRooms(w http.ResponseWriter, r *http.Request) {
 	rooms := s.roomManager.GetRoomsList()
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(rooms)
+	utils.JSONResponse(w, http.StatusOK, rooms)
 }
 
 func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		utils.JSONError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
@@ -747,24 +743,23 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if err := utils.DecodeJSON(r, &req); err != nil {
+		utils.JSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	room := s.roomManager.GetRoom(req.RoomID)
 	if room == nil {
-		http.Error(w, "Room not found", http.StatusNotFound)
+		utils.JSONError(w, http.StatusNotFound, "Room not found")
 		return
 	}
 
 	if room.Password != "" && room.Password != req.Password {
-		http.Error(w, "Invalid password", http.StatusUnauthorized)
+		utils.JSONError(w, http.StatusUnauthorized, "Invalid password")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	utils.JSONResponse(w, http.StatusOK, map[string]interface{}{
 		"id":    room.ID,
 		"name":  room.Name,
 		"rows":  room.Rows,

@@ -1,15 +1,32 @@
 <template>
   <div class="router-page">
     <nav class="nav">
-      <router-link to="/main" class="nav__link" active-class="nav__link--active">
-        Главная
-      </router-link>
+      <div class="nav__left">
+        <router-link to="/main" class="nav__link" active-class="nav__link--active">
+          Главная
+        </router-link>
+      </div>
+      <div class="nav__right" v-if="authStore.isAuthenticated">
+        <span class="nav__user">{{ authStore.user?.username }}</span>
+        <button @click="handleLogout" class="nav__logout">Выйти</button>
+      </div>
     </nav>
     <router-view class="router-view"></router-view>
   </div>
 </template>
 
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+const handleLogout = () => {
+  authStore.logout()
+  router.push('/login')
+}
+</script>
 
 <style scoped>
 .router-page {
@@ -23,9 +40,43 @@
   padding: 1rem 2rem;
   box-shadow: 0 2px 4px var(--shadow);
   display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 1rem;
   border-bottom: 2px solid var(--border-color);
   transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.nav__left {
+  display: flex;
+  gap: 1rem;
+}
+
+.nav__right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.nav__user {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.nav__logout {
+  padding: 0.5rem 1rem;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease-in-out;
+}
+
+.nav__logout:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
 }
 
 .nav__link {

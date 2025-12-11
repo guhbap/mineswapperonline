@@ -26,42 +26,41 @@ axios.interceptors.response.use(
   }
 )
 
-export interface Room {
-  id: string
-  name: string
-  hasPassword: boolean
-  rows: number
-  cols: number
-  mines: number
-  players: number
+export interface User {
+  id: number
+  username: string
+  email: string
   createdAt: string
 }
 
-export interface CreateRoomRequest {
-  name: string
-  password?: string
-  rows: number
-  cols: number
-  mines: number
+export interface RegisterRequest {
+  username: string
+  email: string
+  password: string
 }
 
-export interface JoinRoomRequest {
-  roomId: string
-  password?: string
+export interface LoginRequest {
+  username: string
+  password: string
 }
 
-export async function getRooms(): Promise<Room[]> {
-  const response = await axios.get<Room[]>(`${API_BASE}/rooms`)
+export interface AuthResponse {
+  token: string
+  user: User
+}
+
+export async function register(data: RegisterRequest): Promise<AuthResponse> {
+  const response = await axios.post<AuthResponse>(`${API_BASE}/auth/register`, data)
   return response.data
 }
 
-export async function createRoom(data: CreateRoomRequest): Promise<Room> {
-  const response = await axios.post<Room>(`${API_BASE}/rooms`, data)
+export async function login(data: LoginRequest): Promise<AuthResponse> {
+  const response = await axios.post<AuthResponse>(`${API_BASE}/auth/login`, data)
   return response.data
 }
 
-export async function joinRoom(data: JoinRoomRequest): Promise<Room> {
-  const response = await axios.post<Room>(`${API_BASE}/rooms/join`, data)
+export async function getMe(): Promise<User> {
+  const response = await axios.get<User>(`${API_BASE}/auth/me`)
   return response.data
 }
 

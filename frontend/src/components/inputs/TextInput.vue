@@ -6,7 +6,7 @@
       v-model="inputValue"
       :name="name"
       class="input__target"
-      type="text"
+      :type="type"
       :placeholder="placeholder"
       :disabled="disabled"
     />
@@ -48,6 +48,10 @@ const props = defineProps({
   multiline: {
     type: Boolean,
     default: false
+  },
+  type: {
+    type: String,
+    default: 'text'
   }
 })
 const emit = defineEmits(['update:modelValue'])
