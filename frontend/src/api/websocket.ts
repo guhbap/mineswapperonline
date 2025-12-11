@@ -83,6 +83,9 @@ export class WebSocketClient implements IWebSocketClient {
   ) {}
 
   connect() {
+    // Сбрасываем флаг намеренного отключения при попытке подключения
+    this.isIntentionallyDisconnected = false
+
     try {
       this.ws = new WebSocket(this.url)
 
@@ -136,16 +139,27 @@ export class WebSocketClient implements IWebSocketClient {
       }
     } catch (error) {
       console.error('Ошибка подключения WebSocket:', error)
-      this.attemptReconnect()
+      // Переподключаемся только если отключение было не намеренным
+      if (!this.isIntentionallyDisconnected) {
+        this.attemptReconnect()
+      }
     }
   }
 
   private attemptReconnect() {
+    // Не переподключаемся, если отключение было намеренным
+    if (this.isIntentionallyDisconnected) {
+      return
+    }
+
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++
       setTimeout(() => {
-        console.log(`Попытка переподключения ${this.reconnectAttempts}...`)
-        this.connect()
+        // Проверяем флаг еще раз перед переподключением
+        if (!this.isIntentionallyDisconnected) {
+          console.log(`Попытка переподключения ${this.reconnectAttempts}...`)
+          this.connect()
+        }
       }, this.reconnectDelay * this.reconnectAttempts)
     }
   }
