@@ -92,7 +92,13 @@
             stroke-width="1.5"
           />
         </svg>
-        <div class="cursor-label">{{ cursor.nickname || 'Игрок' }}</div>
+        <router-link
+          :to="`/profile/${cursor.nickname}`"
+          class="cursor-label cursor-label--link"
+          @click.stop
+        >
+          {{ cursor.nickname || 'Игрок' }}
+        </router-link>
       </div>
       </div>
 
@@ -107,7 +113,12 @@
     <div v-if="gameState?.gameOver" class="game-message game-message--over">
       <h2>Игра окончена!</h2>
       <p v-if="gameState.loserNickname">
-        <strong>{{ gameState.loserNickname }}</strong> подорвался на мине 💣
+        <router-link
+          :to="`/profile/${gameState.loserNickname}`"
+          class="loser-link"
+        >
+          <strong>{{ gameState.loserNickname }}</strong>
+        </router-link> подорвался на мине 💣
       </p>
       <p v-else>
         Вы подорвались на мине 💣
@@ -515,6 +526,25 @@ onUnmounted(() => {
   font-weight: 600;
   white-space: nowrap;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  text-decoration: none;
+  display: inline-block;
+  transition: opacity 0.2s;
+  pointer-events: auto;
+}
+
+.cursor-label--link:hover {
+  opacity: 0.8;
+}
+
+.loser-link {
+  color: inherit;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.loser-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
 }
 
 .game-message {

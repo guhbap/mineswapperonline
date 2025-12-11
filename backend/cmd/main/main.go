@@ -771,6 +771,9 @@ func main() {
 	protected.HandleFunc("/auth/me", authHandler.GetMe).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/profile", profileHandler.GetProfile).Methods("GET", "OPTIONS")
 
+	// Публичный маршрут для просмотра профиля по username
+	r.HandleFunc("/profile", profileHandler.GetProfileByUsername).Methods("GET", "OPTIONS").Queries("username", "{username}")
+
 	log.Printf("Сервер запущен на :%s", cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, middleware.CORSMiddleware(router)))
 }

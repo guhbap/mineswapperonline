@@ -64,6 +64,16 @@ const routes: RouteRecordRaw[] = [
           description: 'Профиль пользователя и статистика игр',
           keywords: 'профиль, статистика, игры сапера'
         }
+      },
+      {
+        path: 'profile/:username',
+        name: 'UserProfile',
+        component: ProfilePage,
+        meta: {
+          title: 'Профиль пользователя - Сапер Онлайн',
+          description: 'Профиль пользователя и статистика игр',
+          keywords: 'профиль, статистика, игры сапера'
+        }
       }
     ]
   }

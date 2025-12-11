@@ -26,3 +26,8 @@ export async function getProfile(): Promise<UserProfile> {
   return response.data
 }
 
+export async function getProfileByUsername(username: string): Promise<UserProfile> {
+  const response = await axios.get<UserProfile>(`${API_BASE}/profile?username=${encodeURIComponent(username)}`)
+  return response.data
+}
+

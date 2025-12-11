@@ -52,6 +52,43 @@ func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	utils.JSONResponse(w, http.StatusOK, profile)
 }
 
+func (h *ProfileHandler) GetProfileByUsername(w http.ResponseWriter, r *http.Request) {
+	username := r.URL.Query().Get("username")
+	if username == "" {
+		utils.JSONError(w, http.StatusBadRequest, "Username parameter is required")
+		return
+	}
+
+	// Получаем информацию о пользователе по username
+	user, err := h.findUserByUsername(username)
+	if err != nil {
+		utils.JSONError(w, http.StatusNotFound, "User not found")
+		return
+	}
+
+	// Получаем статистику пользователя
+	stats, err := h.getUserStats(user.ID)
+	if err != nil {
+		// Если статистики нет, создаем запись
+		stats, err = h.createUserStats(user.ID)
+		if err != nil {
+			log.Printf("Error creating user stats: %v", err)
+			utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+	}
+
+	// Проверяем онлайн статус (последний раз был онлайн менее 5 минут назад)
+	stats.IsOnline = time.Since(stats.LastSeen) < 5*time.Minute
+
+	profile := models.UserProfile{
+		User:  user,
+		Stats: stats,
+	}
+
+	utils.JSONResponse(w, http.StatusOK, profile)
+}
+
 func (h *ProfileHandler) UpdateLastSeen(userID int) error {
 	_, err := h.db.Exec(
 		`INSERT INTO user_stats (user_id, last_seen, updated_at) 
@@ -96,6 +133,19 @@ func (h *ProfileHandler) findUserByID(id int) (models.User, error) {
 	err := h.db.QueryRow(
 		"SELECT id, username, email, created_at FROM users WHERE id = $1",
 		id,
+	).Scan(&user.ID, &user.Username, &user.Email, &user.CreatedAt)
+
+	if err == sql.ErrNoRows {
+		return models.User{}, err
+	}
+	return user, err
+}
+
+func (h *ProfileHandler) findUserByUsername(username string) (models.User, error) {
+	var user models.User
+	err := h.db.QueryRow(
+		"SELECT id, username, email, created_at FROM users WHERE username = $1",
+		username,
 	).Scan(&user.ID, &user.Username, &user.Email, &user.CreatedAt)
 
 	if err == sql.ErrNoRows {

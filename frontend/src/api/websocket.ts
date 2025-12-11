@@ -77,7 +77,7 @@ export class WebSocketClient implements IWebSocketClient {
   connect() {
     try {
       this.ws = new WebSocket(this.url)
-      
+
       this.ws.onopen = () => {
         this.reconnectAttempts = 0
         this.lastPongTime = Date.now()
@@ -93,9 +93,9 @@ export class WebSocketClient implements IWebSocketClient {
             // Это может быть pong от сервера (бинарное сообщение)
             return
           }
-          
+
           const msg: WebSocketMessage = JSON.parse(event.data)
-          
+
           // Обрабатываем pong сообщение
           if (msg.type === 'pong') {
             this.lastPongTime = Date.now()
@@ -105,7 +105,7 @@ export class WebSocketClient implements IWebSocketClient {
             }
             return
           }
-          
+
           this.onMessage(msg)
         } catch (error) {
           // Если не JSON, возможно это бинарное сообщение (ping/pong)
@@ -150,7 +150,7 @@ export class WebSocketClient implements IWebSocketClient {
 
   sendCursor(x: number, y: number) {
     const now = Date.now()
-    
+
     // Сохраняем последнюю позицию
     this.pendingCursorPosition = { x, y }
 
@@ -179,13 +179,13 @@ export class WebSocketClient implements IWebSocketClient {
         if (this.pendingCursorPosition) {
           this.lastCursorPosition = { ...this.pendingCursorPosition }
           this.lastCursorSendTime = Date.now()
-          this.send({ 
-            type: 'cursor', 
-            cursor: { 
-              playerId: '', 
-              x: this.pendingCursorPosition.x, 
-              y: this.pendingCursorPosition.y 
-            } 
+          this.send({
+            type: 'cursor',
+            cursor: {
+              playerId: '',
+              x: this.pendingCursorPosition.x,
+              y: this.pendingCursorPosition.y
+            }
           })
           this.pendingCursorPosition = null
         }
@@ -204,17 +204,17 @@ export class WebSocketClient implements IWebSocketClient {
 
   private startPingInterval() {
     this.stopPingInterval()
-    
+
     this.pingInterval = setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         // Отправляем ping сообщение
         this.send({ type: 'ping' })
-        
+
         // Устанавливаем таймаут для ожидания pong
         if (this.pongTimeout) {
           clearTimeout(this.pongTimeout)
         }
-        
+
         this.pongTimeout = setTimeout(() => {
           // Если не получили pong в течение 10 секунд, считаем соединение разорванным
           const timeSinceLastPong = Date.now() - this.lastPongTime

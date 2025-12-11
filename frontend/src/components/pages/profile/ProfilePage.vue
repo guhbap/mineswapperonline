@@ -8,14 +8,14 @@
     </div>
     <div v-else-if="profile" class="profile-content">
       <div class="profile-header">
-        <h1 class="profile-title">Профиль пользователя</h1>
+        <h1 class="profile-title">{{ isOwnProfile ? 'Мой профиль' : 'Профиль пользователя' }}</h1>
         <div class="profile-user-info">
           <div class="user-avatar">
             <span class="avatar-text">{{ profile.user.username[0].toUpperCase() }}</span>
           </div>
           <div class="user-details">
             <h2 class="username">{{ profile.user.username }}</h2>
-            <p class="email">{{ profile.user.email }}</p>
+            <p v-if="isOwnProfile" class="email">{{ profile.user.email }}</p>
             <div class="status-badge" :class="{ 'status-online': profile.stats.isOnline, 'status-offline': !profile.stats.isOnline }">
               <span class="status-dot"></span>
               <span>{{ profile.stats.isOnline ? 'В сети' : 'Не в сети' }}</span>
@@ -55,18 +55,27 @@
           <span class="info-label">Последний раз в сети:</span>
           <span class="info-value">{{ formatDate(profile.stats.lastSeen) }}</span>
         </div>
+        <div v-if="!isOwnProfile" class="info-item">
+          <span class="info-label">Email:</span>
+          <span class="info-value info-value--private">Скрыто</span>
+        </div>
       </div>
     </div>
   </main>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { getProfile, type UserProfile } from '@/api/profile'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { getProfile, getProfileByUsername, type UserProfile } from '@/api/profile'
 
+const route = useRoute()
+const authStore = useAuthStore()
 const profile = ref<UserProfile | null>(null)
 const loading = ref(true)
 const error = ref('')
+const isOwnProfile = ref(true)
 
 const winRate = computed(() => {
   if (!profile.value || profile.value.stats.gamesPlayed === 0) {
@@ -90,7 +99,18 @@ const loadProfile = async () => {
   try {
     loading.value = true
     error.value = ''
-    profile.value = await getProfile()
+    
+    // Проверяем, есть ли username в параметрах роута
+    const username = route.params.username as string
+    if (username) {
+      // Загружаем профиль другого пользователя
+      isOwnProfile.value = false
+      profile.value = await getProfileByUsername(username)
+    } else {
+      // Загружаем свой профиль
+      isOwnProfile.value = true
+      profile.value = await getProfile()
+    }
   } catch (err: any) {
     error.value = err.response?.data || 'Ошибка загрузки профиля'
     console.error('Ошибка загрузки профиля:', err)
@@ -98,6 +118,11 @@ const loadProfile = async () => {
     loading.value = false
   }
 }
+
+// Отслеживаем изменения роута
+watch(() => route.params.username, () => {
+  loadProfile()
+})
 
 onMounted(() => {
   loadProfile()
@@ -290,6 +315,11 @@ onMounted(() => {
 
 .info-value {
   color: var(--text-primary);
+}
+
+.info-value--private {
+  color: var(--text-secondary);
+  font-style: italic;
 }
 
 @media (max-width: 768px) {
