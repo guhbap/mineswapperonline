@@ -22,9 +22,17 @@
       <p v-else class="info">WebSocket подключен, ожидание данных...</p>
     </div>
     <template v-else>
-      <div
-        class="game-board-wrapper"
-      >
+      <div class="game-content-wrapper">
+        <!-- Левый рекламный блок -->
+        <div class="ad-block ad-block--left">
+          <div id="yandex_rtb_R-A-17973092-1"></div>
+        </div>
+
+        <!-- Игровое поле -->
+        <div
+          class="game-board-wrapper"
+          @contextmenu.prevent
+        >
       <div
         class="game-board"
         :style="{ gridTemplateColumns: `repeat(${gameState.cols}, 1fr)` }"
@@ -87,6 +95,12 @@
         <div class="cursor-label">{{ cursor.nickname || 'Игрок' }}</div>
       </div>
       </div>
+
+        <!-- Правый рекламный блок -->
+        <div class="ad-block ad-block--right">
+          <div id="yandex_rtb_R-A-17973092-2"></div>
+        </div>
+      </div>
     </template>
 
     <!-- Сообщения о состоянии игры -->
@@ -130,17 +144,20 @@ const cursorTimeout = ref<Map<string, number>>(new Map())
 const { animatedCursors, updateCursor, removeCursor } = useCursorAnimation()
 
 // Вычисляемое свойство для отображения курсоров с плавной анимацией
+// Фильтруем свой собственный курсор
 const displayCursors = computed(() => {
-  return Array.from(animatedCursors.value.entries()).map(([playerId, pos]) => {
-    const cursorInfo = otherCursors.value.find(c => c.playerId === playerId)
-    return {
-      playerId,
-      x: pos.x,
-      y: pos.y,
-      nickname: cursorInfo?.nickname || 'Игрок',
-      color: cursorInfo?.color || '#667eea'
-    }
-  })
+  return Array.from(animatedCursors.value.entries())
+    .map(([playerId, pos]) => {
+      const cursorInfo = otherCursors.value.find(c => c.playerId === playerId)
+      return {
+        playerId,
+        x: pos.x,
+        y: pos.y,
+        nickname: cursorInfo?.nickname || 'Игрок',
+        color: cursorInfo?.color || '#667eea'
+      }
+    })
+    .filter(cursor => cursor.nickname !== props.nickname) // Фильтруем свой курсор
 })
 
 const handleMouseMove = (event: MouseEvent) => {
@@ -230,19 +247,80 @@ const messageHandler = (event: Event) => {
   }
 }
 
-onMounted(() => {
-  // Слушаем события WebSocket сообщений
-  window.addEventListener('ws-message', messageHandler)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('ws-message', messageHandler)
+// Очистка курсоров
+const clearCursors = () => {
   cursorTimeout.value.forEach(timeout => clearTimeout(timeout))
   cursorTimeout.value.clear()
-  // Очищаем все курсоры при размонтировании
   otherCursors.value.forEach(cursor => {
     removeCursor(cursor.playerId)
   })
+  otherCursors.value = []
+}
+
+// Слушаем событие для очистки игры
+const handleResetGame = () => {
+  clearCursors()
+}
+
+onMounted(() => {
+  // Слушаем события WebSocket сообщений
+  window.addEventListener('ws-message', messageHandler)
+  // Слушаем событие для очистки игры
+  window.addEventListener('reset-game', handleResetGame)
+
+  // Инициализация рекламы Яндекса
+  loadYandexAds()
+})
+
+const loadYandexAds = () => {
+  const win = window as any
+
+  // Инициализируем контекстную рекламу
+  win.yaContextCb = win.yaContextCb || []
+
+  // Функция для рендеринга рекламы
+  const renderAds = () => {
+    if (win.Ya && win.Ya.Context && win.Ya.Context.AdvManager) {
+      // Левый блок
+      win.Ya.Context.AdvManager.render({
+        blockId: 'R-A-17973092-1',
+        renderTo: 'yandex_rtb_R-A-17973092-1'
+      })
+
+      // Правый блок
+      win.Ya.Context.AdvManager.render({
+        blockId: 'R-A-17973092-1',
+        renderTo: 'yandex_rtb_R-A-17973092-2'
+      })
+    }
+  }
+
+  // Если скрипт уже загружен, рендерим сразу
+  if (win.Ya && win.Ya.Context) {
+    renderAds()
+    return
+  }
+
+  // Загружаем скрипт контекстной рекламы, если его еще нет
+  if (!document.querySelector('script[src="https://yandex.ru/ads/system/context.js"]')) {
+    const script = document.createElement('script')
+    script.src = 'https://yandex.ru/ads/system/context.js'
+    script.async = true
+    script.onload = () => {
+      // Ждем немного, чтобы Ya.Context был готов
+      setTimeout(renderAds, 100)
+    }
+    document.head.appendChild(script)
+  }
+
+  // Добавляем в очередь на случай, если скрипт уже загружается
+  win.yaContextCb.push(renderAds)
+}
+
+onUnmounted(() => {
+  window.removeEventListener('ws-message', messageHandler)
+  window.removeEventListener('reset-game', handleResetGame)
+  clearCursors()
 })
 </script>
 
@@ -253,6 +331,37 @@ onUnmounted(() => {
   align-items: center;
   padding: 2rem;
   position: relative;
+  width: 100%;
+}
+
+.game-content-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2rem;
+  width: 100%;
+  max-width: 1400px;
+}
+
+.ad-block {
+  flex-shrink: 0;
+  width: 240px;
+  min-height: 400px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.ad-block--left {
+  order: 1;
+}
+
+.ad-block--right {
+  order: 3;
+}
+
+.game-board-wrapper {
+  order: 2;
 }
 
 .game-header {
@@ -493,6 +602,44 @@ onUnmounted(() => {
 .loading-message .info {
   color: #16a34a;
   margin-top: 0.5rem;
+}
+
+@media (max-width: 1200px) {
+  .ad-block {
+    width: 200px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .game-content-wrapper {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .ad-block {
+    width: 100%;
+    max-width: 728px;
+    min-height: 90px;
+    order: 3;
+  }
+
+  .ad-block--left {
+    order: 1;
+  }
+
+  .ad-block--right {
+    order: 2;
+  }
+
+  .game-board-wrapper {
+    order: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .ad-block {
+    display: none;
+  }
 }
 
 </style>

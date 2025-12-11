@@ -110,6 +110,8 @@ const handleMainClick = () => {
   border-radius: 0.5rem;
   transition: all 0.2s ease-in-out;
   position: relative;
+  user-select: none;
+  cursor: pointer;
 }
 
 .nav__link:hover {
