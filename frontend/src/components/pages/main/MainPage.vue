@@ -39,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted, computed } from 'vue'
+import { ref, onUnmounted, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import NicknameModal from '@/components/NicknameModal.vue'
 import MinesweeperGame from '@/components/MinesweeperGame.vue'
@@ -55,6 +55,38 @@ const wsClient = ref<IWebSocketClient | null>(null)
 const selectedRoom = ref<Room | null>(null)
 const selectedRoomForJoin = ref<Room | null>(null)
 const showCreateModal = ref(false)
+
+// Функция для сброса состояния игры и возврата к выбору комнаты
+const resetToRoomSelection = () => {
+  // Отключаем WebSocket
+  if (wsClient.value) {
+    wsClient.value.disconnect()
+    wsClient.value = null
+  }
+
+  // Сбрасываем выбранную комнату
+  selectedRoom.value = null
+  selectedRoomForJoin.value = null
+
+  // Сбрасываем никнейм только для гостей
+  if (!authStore.isAuthenticated) {
+    nickname.value = ''
+  }
+}
+
+// Слушаем событие для сброса игры
+const handleResetGame = () => {
+  resetToRoomSelection()
+}
+
+onMounted(() => {
+  window.addEventListener('reset-game', handleResetGame)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('reset-game', handleResetGame)
+  wsClient.value?.disconnect()
+})
 
 // Определяем, нужно ли показывать модалку никнейма
 const shouldShowNicknameModal = computed(() => {
@@ -138,10 +170,6 @@ const connectToRoom = (playerNickname: string) => {
 
   wsClient.value.connect()
 }
-
-onUnmounted(() => {
-  wsClient.value?.disconnect()
-})
 </script>
 
 <style scoped>

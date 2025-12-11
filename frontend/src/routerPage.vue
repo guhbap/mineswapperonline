@@ -2,9 +2,13 @@
   <div class="router-page">
     <nav class="nav">
       <div class="nav__left">
-        <router-link to="/main" class="nav__link" active-class="nav__link--active">
+        <a 
+          @click="handleMainClick" 
+          class="nav__link" 
+          :class="{ 'nav__link--active': $route.path === '/main' }"
+        >
           Главная
-        </router-link>
+        </a>
       </div>
       <div class="nav__right">
         <ThemeToggle />
@@ -23,16 +27,27 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
 const handleLogout = () => {
   authStore.logout()
   router.push('/login')
+}
+
+const handleMainClick = () => {
+  // Если мы уже на главной странице - отправляем событие для сброса игры
+  if (route.path === '/main') {
+    window.dispatchEvent(new CustomEvent('reset-game'))
+  } else {
+    // Иначе просто переходим на главную
+    router.push('/main')
+  }
 }
 </script>
 
