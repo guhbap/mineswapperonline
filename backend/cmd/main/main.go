@@ -733,19 +733,26 @@ func (s *Server) sendGameStateToPlayer(room *Room, player *Player) {
 	gameStateCopy.Board = boardCopy
 	room.GameState.mu.RUnlock()
 
-	msg := Message{
-		Type:      "gameState",
-		GameState: &gameStateCopy,
-	}
-
 	player.mu.Lock()
 	defer player.mu.Unlock()
-	log.Printf("Отправка gameState: Rows=%d, Cols=%d, Mines=%d, Revealed=%d, Board size=%d",
-		gameStateCopy.Rows, gameStateCopy.Cols, gameStateCopy.Mines, gameStateCopy.Revealed, len(gameStateCopy.Board))
-	if err := player.Conn.WriteJSON(msg); err != nil {
+
+	// Кодируем gameState в бинарный формат
+	binaryData, err := encodeGameStateBinary(&gameStateCopy)
+	if err != nil {
+		log.Printf("Ошибка кодирования gameState: %v", err)
+		return
+	}
+
+	// Отправляем бинарные данные с префиксом типа сообщения
+	// Первый байт: тип сообщения (0 = gameState binary)
+	message := append([]byte{0}, binaryData...)
+	
+	log.Printf("Отправка gameState (binary): Rows=%d, Cols=%d, Mines=%d, Revealed=%d, Size=%d bytes",
+		gameStateCopy.Rows, gameStateCopy.Cols, gameStateCopy.Mines, gameStateCopy.Revealed, len(message))
+	if err := player.Conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
 		log.Printf("Ошибка отправки состояния игры: %v", err)
 	} else {
-		log.Printf("Состояние игры успешно отправлено")
+		log.Printf("Состояние игры успешно отправлено (binary)")
 	}
 }
 
@@ -770,13 +777,18 @@ func (s *Server) broadcastGameState(room *Room) {
 	gameStateCopy.Board = boardCopy
 	room.GameState.mu.RUnlock()
 
-	msg := Message{
-		Type:      "gameState",
-		GameState: &gameStateCopy,
+	// Кодируем gameState в бинарный формат
+	binaryData, err := encodeGameStateBinary(&gameStateCopy)
+	if err != nil {
+		log.Printf("Ошибка кодирования gameState: %v", err)
+		return
 	}
 
-	log.Printf("Broadcast gameState: Rows=%d, Cols=%d, Revealed=%d, GameOver=%v, GameWon=%v",
-		gameStateCopy.Rows, gameStateCopy.Cols, gameStateCopy.Revealed, gameStateCopy.GameOver, gameStateCopy.GameWon)
+	// Отправляем бинарные данные с префиксом типа сообщения
+	message := append([]byte{0}, binaryData...)
+
+	log.Printf("Broadcast gameState (binary): Rows=%d, Cols=%d, Revealed=%d, GameOver=%v, GameWon=%v, Size=%d bytes",
+		gameStateCopy.Rows, gameStateCopy.Cols, gameStateCopy.Revealed, gameStateCopy.GameOver, gameStateCopy.GameWon, len(message))
 
 	room.mu.RLock()
 	playersCount := len(room.Players)
@@ -788,10 +800,10 @@ func (s *Server) broadcastGameState(room *Room) {
 	defer room.mu.RUnlock()
 	for id, player := range room.Players {
 		player.mu.Lock()
-		if err := player.Conn.WriteJSON(msg); err != nil {
+		if err := player.Conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
 			log.Printf("Ошибка отправки состояния игры игроку %s: %v", id, err)
 		} else {
-			log.Printf("Состояние игры отправлено игроку %s", id)
+			log.Printf("Состояние игры отправлено игроку %s (binary)", id)
 		}
 		player.mu.Unlock()
 	}

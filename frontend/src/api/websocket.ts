@@ -97,12 +97,41 @@ export class WebSocketClient implements IWebSocketClient {
         this.onOpen?.()
       }
 
-      this.ws.onmessage = (event) => {
+      this.ws.onmessage = async (event) => {
         try {
-          // Проверяем, является ли это pong сообщением (бинарные данные от сервера)
-          // или JSON сообщением
+          // Проверяем, является ли это бинарным сообщением
+          if (event.data instanceof ArrayBuffer) {
+            const buffer = event.data
+            const messageType = new Uint8Array(buffer)[0]
+            
+            // Тип 0 = gameState binary
+            if (messageType === 0) {
+              const { decodeGameStateBinary } = await import('../utils/gamestateBinary')
+              const gameState = decodeGameStateBinary(buffer.slice(1)) // Пропускаем первый байт (тип)
+              this.onMessage({
+                type: 'gameState',
+                gameState
+              } as WebSocketMessage)
+              return
+            }
+            // Другие бинарные сообщения (например, pong) игнорируем
+            return
+          }
+
+          // Обрабатываем JSON сообщения
           if (event.data instanceof Blob) {
-            // Это может быть pong от сервера (бинарное сообщение)
+            // Blob может быть бинарным сообщением
+            const arrayBuffer = await event.data.arrayBuffer()
+            const messageType = new Uint8Array(arrayBuffer)[0]
+            
+            if (messageType === 0) {
+              const { decodeGameStateBinary } = await import('../utils/gamestateBinary')
+              const gameState = decodeGameStateBinary(arrayBuffer.slice(1))
+              this.onMessage({
+                type: 'gameState',
+                gameState
+              } as WebSocketMessage)
+            }
             return
           }
 
@@ -120,8 +149,9 @@ export class WebSocketClient implements IWebSocketClient {
 
           this.onMessage(msg)
         } catch (error) {
-          // Если не JSON, возможно это бинарное сообщение (ping/pong)
+          // Если не JSON, возможно это бинарное сообщение
           // Игнорируем ошибку парсинга для бинарных сообщений
+          console.warn('Ошибка обработки сообщения:', error)
         }
       }
 
