@@ -1,7 +1,7 @@
 <template>
   <div class="main-page">
     <!-- Выбор комнаты -->
-    <div v-if="!selectedRoom && !getNickname" class="rooms-wrapper">
+    <div v-if="!selectedRoom" class="rooms-wrapper">
       <RoomsList
         @create="showCreateModal = true"
         @join="handleRoomSelect"
