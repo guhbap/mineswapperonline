@@ -216,10 +216,13 @@ onUnmounted(() => {
   padding: 1rem;
   border-top: 2px solid var(--border-color);
   background: var(--bg-secondary);
+  flex-shrink: 0;
+  min-width: 0;
 }
 
 .chat-input {
   flex: 1;
+  min-width: 0;
   padding: 0.75rem;
   font-size: 0.875rem;
   border: 2px solid var(--border-color);
@@ -240,7 +243,7 @@ onUnmounted(() => {
 }
 
 .chat-send-button {
-  padding: 0.75rem 1.5rem;
+  padding: 0.75rem 1rem;
   font-size: 0.875rem;
   font-weight: 600;
   color: white;
@@ -249,6 +252,8 @@ onUnmounted(() => {
   border-radius: 0.5rem;
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .chat-send-button:hover:not(:disabled) {

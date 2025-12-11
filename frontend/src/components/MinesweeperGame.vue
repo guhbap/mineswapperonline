@@ -616,10 +616,11 @@ onUnmounted(() => {
   border-radius: 1rem;
   box-shadow: 0 20px 60px var(--shadow);
   text-align: center;
-  z-index: 200;
+  z-index: 10000;
   animation: fadeIn 0.3s ease-out;
   transition: background 0.3s ease, opacity 0.2s ease;
-  position: relative;
+  min-width: 300px;
+  max-width: 90vw;
 }
 
 .game-message--transparent {
@@ -694,7 +695,7 @@ onUnmounted(() => {
   font-size: 1.25rem;
   transition: all 0.2s ease;
   user-select: none;
-  z-index: 10;
+  z-index: 10001;
 }
 
 .game-message__transparency-button:hover {
