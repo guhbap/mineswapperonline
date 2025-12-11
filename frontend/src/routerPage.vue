@@ -142,13 +142,24 @@ const handleMainClick = () => {
 
 @media (max-width: 768px) {
   .nav {
-    padding: 1rem;
+    padding: 0.75rem 1rem;
     flex-wrap: wrap;
+    gap: 0.5rem;
   }
 
   .nav__link {
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 0.75rem;
     font-size: 0.875rem;
+  }
+
+  .nav__link--auth {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.8rem;
+  }
+
+  .nav__logout {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
   }
 }
 </style>

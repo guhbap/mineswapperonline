@@ -248,5 +248,12 @@ const connectToRoom = (playerNickname: string) => {
 .game-wrapper {
   width: 100%;
   min-height: 100vh;
+  overflow-x: hidden;
+}
+
+@media (max-width: 768px) {
+  .game-wrapper {
+    min-height: auto;
+  }
 }
 </style>

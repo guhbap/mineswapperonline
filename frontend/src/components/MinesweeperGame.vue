@@ -385,6 +385,14 @@ onUnmounted(() => {
   padding: 2rem;
   position: relative;
   width: 100%;
+  min-height: 100vh;
+}
+
+@media (max-width: 768px) {
+  .minesweeper-container {
+    padding: 1rem;
+    min-height: auto;
+  }
 }
 
 .game-content-wrapper {
@@ -394,6 +402,15 @@ onUnmounted(() => {
   gap: 2rem;
   width: 100%;
   max-width: 1600px;
+}
+
+@media (max-width: 768px) {
+  .game-content-wrapper {
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+    max-width: 100%;
+  }
 }
 
 .ad-block {
@@ -426,6 +443,14 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
+@media (max-width: 768px) {
+  .chat-wrapper {
+    width: 100%;
+    height: 300px;
+    order: 1;
+  }
+}
+
 .game-header {
   display: flex;
   justify-content: space-between;
@@ -438,6 +463,17 @@ onUnmounted(() => {
   border-radius: 0.5rem;
   box-shadow: 0 2px 8px var(--shadow);
   transition: background 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  .game-header {
+    flex-direction: column;
+    gap: 1rem;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+    width: 100%;
+    max-width: 100%;
+  }
 }
 
 .game-info {
@@ -495,6 +531,14 @@ onUnmounted(() => {
   padding: 2px;
   border-radius: 0.5rem;
   position: relative;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .game-board {
+    gap: 1px;
+    padding: 1px;
+  }
 }
 
 .cell {
@@ -510,6 +554,24 @@ onUnmounted(() => {
   font-size: 0.875rem;
   transition: background-color 0.1s, border-color 0.3s ease;
   user-select: none;
+  touch-action: manipulation;
+}
+
+@media (max-width: 768px) {
+  .cell {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+    border-width: 1px;
+  }
+}
+
+@media (max-width: 480px) {
+  .cell {
+    width: 24px;
+    height: 24px;
+    font-size: 0.7rem;
+  }
 }
 
 .cell:hover:not(.cell--revealed):not(.cell--flagged) {
@@ -767,6 +829,91 @@ onUnmounted(() => {
 @media (max-width: 768px) {
   .ad-block {
     display: none;
+  }
+
+  .game-board-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+    padding: 0.5rem;
+    max-height: 60vh;
+  }
+
+  .game-board {
+    min-width: fit-content;
+  }
+
+  .game-info {
+    gap: 1rem;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .info-item {
+    flex: 1;
+  }
+
+  .info-value {
+    font-size: 1.2rem;
+  }
+
+  .new-game-button {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .game-message {
+    padding: 1.5rem 1rem;
+    max-width: 90vw;
+    margin: 0 1rem;
+  }
+
+  .game-message h2 {
+    font-size: 1.5rem;
+  }
+
+  .game-message p {
+    font-size: 1rem;
+  }
+
+  .game-message__button {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    width: 100%;
+  }
+
+  .game-message__transparency-button {
+    width: 2rem;
+    height: 2rem;
+    font-size: 1rem;
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .minesweeper-container {
+    padding: 0.5rem;
+  }
+
+  .game-header {
+    padding: 0.5rem;
+  }
+
+  .info-value {
+    font-size: 1rem;
+  }
+
+  .info-label {
+    font-size: 0.75rem;
+  }
+
+  .game-board-wrapper {
+    max-height: 50vh;
+    padding: 0.25rem;
   }
 }
 

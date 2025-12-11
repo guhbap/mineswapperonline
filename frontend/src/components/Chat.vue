@@ -283,5 +283,44 @@ onUnmounted(() => {
 .chat-messages::-webkit-scrollbar-thumb:hover {
   background: var(--text-secondary);
 }
+
+@media (max-width: 768px) {
+  .chat-container {
+    height: 100%;
+  }
+
+  .chat-header {
+    padding: 0.75rem;
+  }
+
+  .chat-title {
+    font-size: 1rem;
+  }
+
+  .chat-messages {
+    padding: 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .chat-message {
+    font-size: 0.8rem;
+    padding: 0.4rem;
+  }
+
+  .chat-input-wrapper {
+    padding: 0.75rem;
+    gap: 0.4rem;
+  }
+
+  .chat-input {
+    padding: 0.6rem;
+    font-size: 0.8rem;
+  }
+
+  .chat-send-button {
+    padding: 0.6rem 0.75rem;
+    font-size: 0.8rem;
+  }
+}
 </style>
 
