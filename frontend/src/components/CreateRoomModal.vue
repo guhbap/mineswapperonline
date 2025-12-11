@@ -25,7 +25,7 @@
                 type="number"
                 class="form-input"
                 min="5"
-                max="30"
+                max="50"
               />
             </div>
             <div class="form-col">
@@ -35,7 +35,7 @@
                 type="number"
                 class="form-input"
                 min="5"
-                max="30"
+                max="50"
               />
             </div>
           </div>

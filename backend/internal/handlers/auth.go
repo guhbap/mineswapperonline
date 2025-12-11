@@ -3,7 +3,9 @@ package handlers
 import (
 	"database/sql"
 	"log"
+	"math/rand"
 	"net/http"
+	"time"
 
 	"minesweeperonline/internal/auth"
 	"minesweeperonline/internal/database"
@@ -133,10 +135,22 @@ func (h *AuthHandler) createUser(username, email, password string) (models.User,
 		return models.User{}, err
 	}
 
+	// Цвета по умолчанию для новых пользователей
+	defaultColors := []string{
+		"#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8",
+		"#F7DC6F", "#BB8FCE", "#85C1E2", "#F8B739", "#52BE80",
+		"#E74C3C", "#3498DB", "#9B59B6", "#1ABC9C", "#F39C12",
+		"#E67E22", "#95A5A6", "#34495E", "#16A085", "#27AE60",
+	}
+
+	// Выбираем случайный цвет из списка
+	rand.Seed(time.Now().UnixNano())
+	defaultColor := defaultColors[rand.Intn(len(defaultColors))]
+
 	var user models.User
 	err = h.db.QueryRow(
-		"INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, color, created_at",
-		username, email, passwordHash,
+		"INSERT INTO users (username, email, password_hash, color) VALUES ($1, $2, $3, $4) RETURNING id, username, email, color, created_at",
+		username, email, passwordHash, defaultColor,
 	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.CreatedAt)
 
 	return user, err
