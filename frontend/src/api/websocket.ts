@@ -177,13 +177,17 @@ export class WebSocketClient implements IWebSocketClient {
   sendCursor(x: number, y: number) {
     const now = Date.now()
 
-    // Сохраняем последнюю позицию
-    this.pendingCursorPosition = { x, y }
+    // Округляем координаты до 2 знаков после запятой для оптимизации
+    const roundedX = Math.round(x * 100) / 100
+    const roundedY = Math.round(y * 100) / 100
+
+    // Сохраняем последнюю позицию (округленную)
+    this.pendingCursorPosition = { x: roundedX, y: roundedY }
 
     // Проверяем, изменилась ли позиция значительно (минимум 3px)
     if (this.lastCursorPosition) {
-      const dx = Math.abs(x - this.lastCursorPosition.x)
-      const dy = Math.abs(y - this.lastCursorPosition.y)
+      const dx = Math.abs(roundedX - this.lastCursorPosition.x)
+      const dy = Math.abs(roundedY - this.lastCursorPosition.y)
       if (dx < 3 && dy < 3 && (now - this.lastCursorSendTime) < this.cursorThrottleDelay) {
         return // Позиция не изменилась значительно и не прошло достаточно времени
       }
@@ -191,9 +195,9 @@ export class WebSocketClient implements IWebSocketClient {
 
     // Если прошло достаточно времени с последней отправки, отправляем сразу
     if (now - this.lastCursorSendTime >= this.cursorThrottleDelay) {
-      this.lastCursorPosition = { x, y }
+      this.lastCursorPosition = { x: roundedX, y: roundedY }
       this.lastCursorSendTime = now
-      this.send({ type: 'cursor', cursor: { playerId: '', x, y } })
+      this.send({ type: 'cursor', cursor: { playerId: '', x: roundedX, y: roundedY } })
       this.pendingCursorPosition = null
       return
     }
