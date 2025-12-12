@@ -56,6 +56,7 @@ type GameState struct {
 	GameOver      bool            `json:"go"`
 	GameWon       bool            `json:"gw"`
 	Revealed      int             `json:"rv"`
+	HintsUsed     int             `json:"hu"` // Количество использованных подсказок (глобально для комнаты)
 	LoserPlayerID string          `json:"lpid,omitempty"`
 	LoserNickname string          `json:"ln,omitempty"`
 	flagSetInfo   map[int]FlagInfo // Информация об установке флага для каждой ячейки (ключ: row*cols + col)
@@ -177,6 +178,7 @@ func NewGameState(rows, cols, mines int) *GameState {
 		GameOver:      false,
 		GameWon:       false,
 		Revealed:      0,
+		HintsUsed:     0,
 		LoserPlayerID: "",
 		LoserNickname: "",
 		Board:         make([][]Cell, rows),
@@ -863,6 +865,13 @@ func (s *Server) handleHint(room *Room, playerID string, hint *Hint) {
 		return
 	}
 
+	// Проверяем лимит подсказок (3 подсказки глобально для комнаты)
+	if room.GameState.HintsUsed >= 3 {
+		log.Printf("Лимит подсказок исчерпан (использовано: %d)", room.GameState.HintsUsed)
+		room.GameState.mu.Unlock()
+		return
+	}
+
 	row, col := hint.Row, hint.Col
 	if row < 0 || row >= room.GameState.Rows || col < 0 || col >= room.GameState.Cols {
 		log.Printf("Некорректные координаты подсказки: row=%d, col=%d", row, col)
@@ -897,7 +906,8 @@ func (s *Server) handleHint(room *Room, playerID string, hint *Hint) {
 		// Ставим флаг
 		cell.IsFlagged = true
 		cell.FlagColor = playerColor
-		log.Printf("Подсказка: поставлен флаг на мине row=%d, col=%d", row, col)
+		room.GameState.HintsUsed++
+		log.Printf("Подсказка: поставлен флаг на мине row=%d, col=%d (использовано подсказок: %d)", row, col, room.GameState.HintsUsed)
 		room.GameState.mu.Unlock()
 		s.broadcastGameState(room)
 
@@ -922,7 +932,8 @@ func (s *Server) handleHint(room *Room, playerID string, hint *Hint) {
 		// Открываем ячейку
 		cell.IsRevealed = true
 		room.GameState.Revealed++
-		log.Printf("Подсказка: открыта ячейка row=%d, col=%d, neighborMines=%d", row, col, cell.NeighborMines)
+		room.GameState.HintsUsed++
+		log.Printf("Подсказка: открыта ячейка row=%d, col=%d, neighborMines=%d (использовано подсказок: %d)", row, col, cell.NeighborMines, room.GameState.HintsUsed)
 
 		// Автоматическое открытие соседних пустых ячеек
 		if cell.NeighborMines == 0 {
@@ -997,6 +1008,7 @@ func (s *Server) sendGameStateToPlayer(room *Room, player *Player) {
 		GameOver:      room.GameState.GameOver,
 		GameWon:       room.GameState.GameWon,
 		Revealed:      room.GameState.Revealed,
+		HintsUsed:     room.GameState.HintsUsed,
 		LoserPlayerID: loserPlayerID,
 		LoserNickname: room.GameState.LoserNickname,
 	}
@@ -1041,6 +1053,7 @@ func (s *Server) broadcastGameState(room *Room) {
 		GameOver:      room.GameState.GameOver,
 		GameWon:       room.GameState.GameWon,
 		Revealed:      room.GameState.Revealed,
+		HintsUsed:     room.GameState.HintsUsed,
 		LoserPlayerID: loserPlayerID,
 		LoserNickname: room.GameState.LoserNickname,
 	}

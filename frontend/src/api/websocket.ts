@@ -27,6 +27,7 @@ export interface WebSocketMessage {
     go: boolean // gameOver
     gw: boolean // gameWon
     rv: number // revealed
+    hu: number // hintsUsed
     lpid?: string // loserPlayerId
     ln?: string // loserNickname
   }

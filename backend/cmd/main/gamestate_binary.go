@@ -11,6 +11,7 @@ import (
 // - 2 байта: Cols (uint16)
 // - 2 байта: Mines (uint16)
 // - 2 байта: Revealed (uint16)
+// - 1 байт: HintsUsed (количество использованных подсказок, 0-3)
 // - 1 байт: Флаги (бит 0: GameOver, бит 1: GameWon)
 // - 1 байт: Длина LoserPlayerID (0-5)
 // - 5 байт: LoserPlayerID (ASCII)
@@ -30,6 +31,13 @@ func encodeGameStateBinary(gs *GameState) ([]byte, error) {
 	binary.Write(buf, binary.LittleEndian, uint16(gs.Cols))
 	binary.Write(buf, binary.LittleEndian, uint16(gs.Mines))
 	binary.Write(buf, binary.LittleEndian, uint16(gs.Revealed))
+
+	// HintsUsed (1 байт, максимум 3)
+	hintsUsed := byte(gs.HintsUsed)
+	if hintsUsed > 3 {
+		hintsUsed = 3
+	}
+	buf.WriteByte(hintsUsed)
 
 	// Флаги (1 байт)
 	flags := byte(0)
@@ -158,6 +166,10 @@ func decodeGameStateBinary(data []byte) (*GameState, error) {
 	gs.Cols = int(cols)
 	gs.Mines = int(mines)
 	gs.Revealed = int(revealed)
+
+	// Читаем HintsUsed
+	hintsUsed, _ := buf.ReadByte()
+	gs.HintsUsed = int(hintsUsed)
 
 	// Читаем флаги
 	flags, _ := buf.ReadByte()

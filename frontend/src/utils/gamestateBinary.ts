@@ -5,6 +5,7 @@
  * - 2 байта: Cols (uint16, little-endian)
  * - 2 байта: Mines (uint16, little-endian)
  * - 2 байта: Revealed (uint16, little-endian)
+ * - 1 байт: HintsUsed (количество использованных подсказок, 0-3)
  * - 1 байт: Флаги (бит 0: GameOver, бит 1: GameWon)
  * - 1 байт: Длина LoserPlayerID (0-5)
  * - 5 байт: LoserPlayerID (ASCII)
@@ -22,6 +23,7 @@ export function decodeGameStateBinary(data: ArrayBuffer): {
   go: boolean // gameOver
   gw: boolean // gameWon
   rv: number // revealed
+  hu: number // hintsUsed
   lpid?: string // loserPlayerId
   ln?: string // loserNickname
 } {
@@ -37,6 +39,10 @@ export function decodeGameStateBinary(data: ArrayBuffer): {
   offset += 2
   const revealed = view.getUint16(offset, true)
   offset += 2
+
+  // Читаем HintsUsed
+  const hintsUsed = view.getUint8(offset)
+  offset += 1
 
   // Читаем флаги
   const flags = view.getUint8(offset)
@@ -122,6 +128,7 @@ export function decodeGameStateBinary(data: ArrayBuffer): {
     go: gameOver,
     gw: gameWon,
     rv: revealed,
+    hu: hintsUsed,
     lpid: loserPlayerID,
     ln: loserNickname
   }

@@ -15,10 +15,10 @@
         <button
           @click="handleHint"
           class="hint-button"
-          :disabled="hintsUsed >= 3 || !gameState || gameState.go || gameState.gw || !hasClosedCells"
-          :title="hintsUsed >= 3 ? 'Подсказки закончились' : `Подсказки: ${3 - hintsUsed}/3`"
+          :disabled="(gameState?.hu ?? 0) >= 3 || !gameState || gameState.go || gameState.gw || !hasClosedCells"
+          :title="(gameState?.hu ?? 0) >= 3 ? 'Подсказки закончились' : `Подсказки: ${3 - (gameState?.hu ?? 0)}/3`"
         >
-          💡 Подсказка ({{ 3 - hintsUsed }})
+          💡 Подсказка ({{ 3 - (gameState?.hu ?? 0) }})
         </button>
         <button @click="handleNewGame" class="new-game-button">
           Новая игра
@@ -320,9 +320,6 @@ const authStore = useAuthStore()
 const gameStartTime = ref<number | null>(null)
 const ratingChange = ref<number | null>(null)
 
-// Отслеживание подсказок
-const hintsUsed = ref(0)
-
 // Список игроков в комнате
 const playersList = ref<Array<{ id: string; nickname: string; color: string }>>([])
 
@@ -426,7 +423,7 @@ const hasClosedCells = computed(() => {
 
 const handleHint = () => {
   if (!props.wsClient?.isConnected()) return
-  if (hintsUsed.value >= 3) return
+  if ((gameState.value?.hu ?? 0) >= 3) return
   if (gameState.value?.go || gameState.value?.gw) return
   if (!hasClosedCells.value) return
 
@@ -449,18 +446,17 @@ const handleHint = () => {
   const randomIndex = Math.floor(Math.random() * closedCells.length)
   const selectedCell = closedCells[randomIndex]
 
-  // Отправляем запрос на подсказку
+  // Отправляем запрос на подсказку (счетчик увеличивается на сервере)
   props.wsClient.sendHint(selectedCell.row, selectedCell.col)
-  hintsUsed.value++
 }
 
 const handleNewGame = () => {
   if (!props.wsClient?.isConnected()) return
   props.wsClient.sendNewGame()
-  // Сбрасываем время начала игры, изменение рейтинга и подсказки
+  // Сбрасываем время начала игры и изменение рейтинга
+  // Подсказки сбрасываются на сервере при создании новой игры
   gameStartTime.value = null
   ratingChange.value = null
-  hintsUsed.value = 0
   // Список игроков не сбрасываем, так как они остаются в комнате
 }
 
@@ -490,10 +486,10 @@ const handleMessage = (msg: WebSocketMessage) => {
     }
 
     // Сбрасываем время начала игры при новой игре
+    // Подсказки сбрасываются на сервере при создании новой игры
     if (!msg.gameState.gw && !msg.gameState.go && gameState.value.rv === 0) {
       gameStartTime.value = null
       ratingChange.value = null
-      hintsUsed.value = 0
     }
   } else if (msg.type === 'cursor' && msg.cursor) {
     // playerId может быть на верхнем уровне или внутри cursor (pid)
