@@ -10,6 +10,7 @@ import (
 	"minesweeperonline/internal/models"
 	"minesweeperonline/internal/rating"
 	"minesweeperonline/internal/utils"
+
 	"gorm.io/gorm"
 )
 
@@ -94,21 +95,21 @@ func (h *ProfileHandler) GetProfileByUsername(w http.ResponseWriter, r *http.Req
 func (h *ProfileHandler) UpdateLastSeen(userID int) error {
 	now := time.Now()
 	stats := models.UserStats{
-		UserID:   userID,
-		LastSeen: now,
+		UserID:    userID,
+		LastSeen:  now,
 		UpdatedAt: now,
 	}
-	
+
 	err := h.db.Where("user_id = ?", userID).FirstOrCreate(&stats, models.UserStats{UserID: userID}).Error
 	if err != nil {
 		return err
 	}
-	
+
 	// Обновляем last_seen и updated_at
 	return h.db.Model(&models.UserStats{}).
 		Where("user_id = ?", userID).
 		Updates(map[string]interface{}{
-			"last_seen": now,
+			"last_seen":  now,
 			"updated_at": now,
 		}).Error
 }
@@ -147,7 +148,7 @@ func (h *ProfileHandler) UpdateColor(w http.ResponseWriter, r *http.Request) {
 	if req.Color != "" {
 		colorPtr = &req.Color
 	}
-	
+
 	err := h.db.Model(&models.User{}).
 		Where("id = ?", userID).
 		Update("color", colorPtr).Error
@@ -239,7 +240,7 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 		// Упрощенная система рейтинга: просто добавляем сложность к рейтингу
 		ratingGain := difficulty
 		newRating := currentRating + ratingGain
-		
+
 		// Ensure rating doesn't go below a minimum (e.g., 0)
 		if newRating < 0 {
 			newRating = 0
@@ -258,17 +259,12 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 
 		// Сохраняем игру в историю
 		gameHistory := models.UserGameHistory{
-			UserID:        userID,
-			Width:         width,
-			Height:        height,
-			Mines:         mines,
-			GameTime:      gameTime,
-			RatingGain:    ratingGain,
-			RatingBefore:  currentRating,
-			RatingAfter:   newRating,
-			Complexity:    difficulty,
-			AttemptPoints: 0.0,
-			CreatedAt:     time.Now(),
+			UserID:    userID,
+			Width:     width,
+			Height:    height,
+			Mines:     mines,
+			GameTime:  gameTime,
+			CreatedAt: time.Now(),
 		}
 		err = h.db.Create(&gameHistory).Error
 		if err != nil {
@@ -294,45 +290,6 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 			}
 		}
 
-		// Обновляем best_time
-		var bestResult models.UserBestResult
-		err = h.db.Where("user_id = ? AND width = ? AND height = ? AND mines = ?", 
-			userID, width, height, mines).First(&bestResult).Error
-		
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Создаем новую запись
-			bestResult = models.UserBestResult{
-				UserID:    userID,
-				Width:     width,
-				Height:    height,
-				Mines:     mines,
-				BestTime:  gameTime,
-				Complexity: difficulty,
-				BestP:     0.0,
-				UpdatedAt: time.Now(),
-			}
-			err = h.db.Create(&bestResult).Error
-		} else if err == nil {
-			// Обновляем существующую запись, если новое время лучше
-			if gameTime < bestResult.BestTime {
-				err = h.db.Model(&bestResult).
-					Updates(map[string]interface{}{
-						"best_time": gameTime,
-						"complexity": difficulty,
-						"updated_at": time.Now(),
-					}).Error
-			} else {
-				// Обновляем только complexity и updated_at
-				err = h.db.Model(&bestResult).
-					Updates(map[string]interface{}{
-						"complexity": difficulty,
-						"updated_at": time.Now(),
-					}).Error
-			}
-		}
-		if err != nil {
-			log.Printf("Error updating best result: %v", err)
-		}
 	} else {
 		// For lost games, don't update rating or best results
 		log.Printf("Game lost - no rating update")
@@ -350,8 +307,8 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 			Where("user_id = ?", userID).
 			Updates(map[string]interface{}{
 				"games_played": gorm.Expr("games_played + ?", 1),
-				"games_won": gorm.Expr("games_won + ?", 1),
-				"updated_at": now,
+				"games_won":    gorm.Expr("games_won + ?", 1),
+				"updated_at":   now,
 			}).Error
 		return err
 	} else {
@@ -364,8 +321,8 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 			Where("user_id = ?", userID).
 			Updates(map[string]interface{}{
 				"games_played": gorm.Expr("games_played + ?", 1),
-				"games_lost": gorm.Expr("games_lost + ?", 1),
-				"updated_at": now,
+				"games_lost":   gorm.Expr("games_lost + ?", 1),
+				"updated_at":   now,
 			}).Error
 		return err
 	}
@@ -523,17 +480,12 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 	var games []GameHistory
 	for _, record := range historyRecords {
 		games = append(games, GameHistory{
-			ID:            record.ID,
-			Width:         record.Width,
-			Height:        record.Height,
-			Mines:         record.Mines,
-			GameTime:      record.GameTime,
-			RatingGain:    record.RatingGain,
-			RatingBefore:  record.RatingBefore,
-			RatingAfter:   record.RatingAfter,
-			Complexity:    record.Complexity,
-			AttemptPoints: record.AttemptPoints,
-			CreatedAt:     record.CreatedAt.Format(time.RFC3339),
+			ID:        record.ID,
+			Width:     record.Width,
+			Height:    record.Height,
+			Mines:     record.Mines,
+			GameTime:  record.GameTime,
+			CreatedAt: record.CreatedAt.Format(time.RFC3339),
 		})
 	}
 
@@ -573,18 +525,13 @@ func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) 
 	}
 
 	type RecentGame struct {
-		ID            int                 `json:"id"`
-		Width         int                 `json:"width"`
-		Height        int                 `json:"height"`
-		Mines         int                 `json:"mines"`
-		GameTime      float64             `json:"gameTime"`
-		RatingGain    float64             `json:"ratingGain"`
-		RatingBefore  float64             `json:"ratingBefore"`
-		RatingAfter   float64             `json:"ratingAfter"`
-		Complexity    float64             `json:"complexity"`
-		AttemptPoints float64             `json:"attemptPoints"`
-		CreatedAt     string              `json:"createdAt"`
-		Participants  []GameParticipantInfo `json:"participants"`
+		ID           int                   `json:"id"`
+		Width        int                   `json:"width"`
+		Height       int                   `json:"height"`
+		Mines        int                   `json:"mines"`
+		GameTime     float64               `json:"gameTime"`
+		CreatedAt    string                `json:"createdAt"`
+		Participants []GameParticipantInfo `json:"participants"`
 	}
 
 	var historyRecords []models.UserGameHistory
@@ -602,18 +549,13 @@ func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) 
 	var games []RecentGame
 	for _, record := range historyRecords {
 		game := RecentGame{
-			ID:            record.ID,
-			Width:         record.Width,
-			Height:        record.Height,
-			Mines:         record.Mines,
-			GameTime:      record.GameTime,
-			RatingGain:    record.RatingGain,
-			RatingBefore:  record.RatingBefore,
-			RatingAfter:   record.RatingAfter,
-			Complexity:    record.Complexity,
-			AttemptPoints: record.AttemptPoints,
-			CreatedAt:     record.CreatedAt.Format(time.RFC3339),
-			Participants:  []GameParticipantInfo{},
+			ID:           record.ID,
+			Width:        record.Width,
+			Height:       record.Height,
+			Mines:        record.Mines,
+			GameTime:     record.GameTime,
+			CreatedAt:    record.CreatedAt.Format(time.RFC3339),
+			Participants: []GameParticipantInfo{},
 		}
 
 		// Получаем участников игры

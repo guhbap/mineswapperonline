@@ -53,34 +53,14 @@ type UserProfile struct {
 	Stats UserStats `json:"stats"`
 }
 
-type UserBestResult struct {
-	UserID     int       `gorm:"primaryKey;column:user_id" json:"userId"`
-	Width      int       `gorm:"primaryKey;not null" json:"width"`
-	Height     int       `gorm:"primaryKey;not null" json:"height"`
-	Mines      int       `gorm:"primaryKey;not null" json:"mines"`
-	BestTime   float64   `gorm:"type:double precision;not null;column:best_time" json:"bestTime"`
-	Complexity float64   `gorm:"type:double precision;not null" json:"complexity"`
-	BestP      float64   `gorm:"type:double precision;default:0.0;column:best_p" json:"bestP"`
-	UpdatedAt  time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`
-}
-
-func (UserBestResult) TableName() string {
-	return "user_best_results"
-}
-
 type UserGameHistory struct {
-	ID            int       `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID        int       `gorm:"not null;column:user_id;index:idx_user_game_history_user_id_rating_gain" json:"userId"`
-	Width         int       `gorm:"not null" json:"width"`
-	Height        int       `gorm:"not null" json:"height"`
-	Mines         int       `gorm:"not null" json:"mines"`
-	GameTime      float64   `gorm:"type:double precision;not null;column:game_time" json:"gameTime"`
-	RatingGain    float64   `gorm:"type:double precision;default:0.0;column:rating_gain;index:idx_user_game_history_user_id_rating_gain" json:"ratingGain"`
-	RatingBefore  float64   `gorm:"type:double precision;not null;column:rating_before" json:"ratingBefore"`
-	RatingAfter   float64   `gorm:"type:double precision;not null;column:rating_after" json:"ratingAfter"`
-	Complexity    float64   `gorm:"type:double precision;not null" json:"complexity"`
-	AttemptPoints float64   `gorm:"type:double precision;not null;column:attempt_points" json:"attemptPoints"`
-	CreatedAt     time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
+	ID        int       `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID    int       `gorm:"not null;column:user_id;index:idx_user_game_history_user_id_rating_gain" json:"userId"`
+	Width     int       `gorm:"not null" json:"width"`
+	Height    int       `gorm:"not null" json:"height"`
+	Mines     int       `gorm:"not null" json:"mines"`
+	GameTime  float64   `gorm:"type:double precision;not null;column:game_time" json:"gameTime"`
+	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
 }
 
 func (UserGameHistory) TableName() string {

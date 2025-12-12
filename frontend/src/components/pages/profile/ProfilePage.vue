@@ -124,12 +124,6 @@
                 <div class="game-date">{{ formatDate(game.createdAt) }}</div>
               </div>
             </div>
-            <div class="game-rating">
-              <div class="rating-gain">+{{ Math.round(game.ratingGain) }}</div>
-              <div class="rating-change">
-                {{ Math.round(game.ratingBefore) }} → {{ Math.round(game.ratingAfter) }}
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -174,12 +168,6 @@
                 >
                   {{ participant.nickname }}
                 </span>
-              </div>
-            </div>
-            <div v-if="game.ratingGain > 0" class="game-rating-info">
-              <div class="rating-gain">+{{ Math.round(game.ratingGain) }}</div>
-              <div class="rating-change">
-                {{ Math.round(game.ratingBefore) }} → {{ Math.round(game.ratingAfter) }}
               </div>
             </div>
           </div>

@@ -85,7 +85,6 @@ func (db *DB) InitSchema() error {
 	// Используем отдельные вызовы для лучшего контроля ошибок
 	tables := []interface{}{
 		&models.UserStats{},
-		&models.UserBestResult{},
 		&models.UserGameHistory{},
 		&models.GameParticipant{},
 		&models.Room{},
