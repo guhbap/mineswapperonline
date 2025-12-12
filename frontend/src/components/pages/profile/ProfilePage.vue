@@ -104,7 +104,7 @@
         <h3 class="top-games-title">Топ-10 лучших игр</h3>
         <div v-if="topGamesLoading" class="top-games-loading">Загрузка...</div>
         <div v-else-if="topGamesError" class="top-games-error">{{ topGamesError }}</div>
-        <div v-else-if="topGames.length === 0" class="top-games-empty">
+        <div v-else-if="!topGames || topGames.length === 0" class="top-games-empty">
           Пока нет игр с начисленным рейтингом
         </div>
         <div v-else class="top-games-list">
@@ -223,9 +223,11 @@ const loadTopGames = async (username?: string) => {
   try {
     topGamesLoading.value = true
     topGamesError.value = ''
-    topGames.value = await getTopGames(username)
+    const games = await getTopGames(username)
+    topGames.value = games || []
   } catch (err: any) {
     topGamesError.value = err.response?.data || 'Ошибка загрузки игр'
+    topGames.value = [] // Убеждаемся, что это всегда массив
     console.error('Ошибка загрузки топ-10 игр:', err)
   } finally {
     topGamesLoading.value = false
