@@ -2,6 +2,37 @@
   <main class="main-page">
     <!-- Выбор комнаты -->
     <section v-if="!selectedRoom" class="rooms-wrapper" aria-label="Выбор игровой комнаты">
+      <!-- Описание игры -->
+      <div class="game-description">
+        <h1 class="game-description__title">🎮 Сапер Онлайн</h1>
+        <p class="game-description__text">
+          Классическая игра Сапер в многопользовательском режиме! Играйте вместе с друзьями в реальном времени,
+          соревнуйтесь за лучший результат и получайте рейтинг за успешные игры.
+        </p>
+        <div class="game-description__features">
+          <div class="feature-item">
+            <span class="feature-icon">👥</span>
+            <span class="feature-text">Играйте с друзьями в реальном времени</span>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">🏆</span>
+            <span class="feature-text">Получайте рейтинг за успешные игры</span>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">💬</span>
+            <span class="feature-text">Общайтесь в чате во время игры</span>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">⚙️</span>
+            <span class="feature-text">Настраивайте размер поля и сложность</span>
+          </div>
+        </div>
+        <div class="game-description__actions">
+          <router-link to="/faq" class="game-description__link">
+            📖 Часто задаваемые вопросы
+          </router-link>
+        </div>
+      </div>
       <RoomsList
         @create="showCreateModal = true"
         @join="handleRoomSelect"
@@ -252,9 +283,110 @@ const connectToRoom = (playerNickname: string) => {
   overflow-x: hidden;
 }
 
+.game-description {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  background: var(--bg-secondary);
+  border-radius: 1rem;
+  box-shadow: 0 4px 12px var(--shadow);
+  margin-bottom: 2rem;
+}
+
+.game-description__title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 1rem 0;
+  text-align: center;
+}
+
+.game-description__text {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+  text-align: center;
+  margin: 0 0 1.5rem 0;
+  line-height: 1.6;
+}
+
+.game-description__features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: var(--bg-primary);
+  border-radius: 0.5rem;
+  transition: transform 0.2s;
+}
+
+.feature-item:hover {
+  transform: translateY(-2px);
+}
+
+.feature-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.feature-text {
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.game-description__actions {
+  text-align: center;
+}
+
+.game-description__link {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+  border: 2px solid transparent;
+}
+
+.game-description__link:hover {
+  color: #764ba2;
+  border-color: #667eea;
+  background: rgba(102, 126, 234, 0.1);
+}
+
 @media (max-width: 768px) {
   .game-wrapper {
     min-height: auto;
+  }
+
+  .game-description {
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .game-description__title {
+    font-size: 2rem;
+  }
+
+  .game-description__text {
+    font-size: 1rem;
+  }
+
+  .game-description__features {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .feature-item {
+    padding: 0.625rem;
   }
 }
 </style>

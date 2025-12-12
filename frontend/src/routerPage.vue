@@ -12,6 +12,9 @@
         <router-link to="/rating" class="nav__link" :class="{ 'nav__link--active': $route.path === '/rating' }">
           Рейтинг
         </router-link>
+        <router-link to="/faq" class="nav__link" :class="{ 'nav__link--active': $route.path === '/faq' }">
+          FAQ
+        </router-link>
       </div>
       <div class="nav__right">
         <ThemeToggle />
