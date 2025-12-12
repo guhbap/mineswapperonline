@@ -563,7 +563,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		// Обновляем deadline при получении сообщения
 		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 
-		log.Printf("Получено сообщение от игрока %s: тип=%s", playerID, msg.Type)
+		log.Printf("Получено сообщение от игрока %s: тип=%s, полное сообщение: %+v", playerID, msg.Type, msg)
 
 		switch msg.Type {
 		case "ping":
@@ -630,10 +630,18 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			}
 
 		case "cellClick":
+			log.Printf("Обработка cellClick: msg.CellClick=%+v", msg.CellClick)
 			if msg.CellClick != nil {
 				log.Printf("Обработка клика: row=%d, col=%d, flag=%v", msg.CellClick.Row, msg.CellClick.Col, msg.CellClick.Flag)
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("ПАНИКА в handleCellClick: %v", r)
+					}
+				}()
 				s.handleCellClick(room, playerID, msg.CellClick)
 				log.Printf("Клик обработан, состояние игры обновлено")
+			} else {
+				log.Printf("ОШИБКА: msg.CellClick == nil для сообщения типа cellClick")
 			}
 
 		case "hint":
