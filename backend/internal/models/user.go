@@ -55,7 +55,7 @@ type UserProfile struct {
 
 type UserGameHistory struct {
 	ID        int       `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID    int       `gorm:"not null;column:user_id;index:idx_user_game_history_user_id_rating_gain" json:"userId"`
+	UserID    int       `gorm:"not null;column:user_id" json:"userId"`
 	Width     int       `gorm:"not null" json:"width"`
 	Height    int       `gorm:"not null" json:"height"`
 	Mines     int       `gorm:"not null" json:"mines"`

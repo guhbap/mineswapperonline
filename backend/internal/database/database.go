@@ -105,16 +105,7 @@ func (db *DB) InitSchema() error {
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
 	`)
 
-	// Создаем индексы вручную, так как GORM не всегда корректно их создает
 	err := db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_user_game_history_user_id_rating_gain 
-		ON user_game_history(user_id, rating_gain DESC);
-	`).Error
-	if err != nil {
-		log.Printf("Warning: failed to create index idx_user_game_history_user_id_rating_gain: %v", err)
-	}
-
-	err = db.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_game_participants_game_history_id 
 		ON game_participants(game_history_id);
 	`).Error

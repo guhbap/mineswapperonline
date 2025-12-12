@@ -466,8 +466,7 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var historyRecords []models.UserGameHistory
-	err = h.db.Where("user_id = ? AND rating_gain > ?", userID, 0).
-		Order("rating_gain DESC").
+	err = h.db.Where("user_id = ?", userID).
 		Limit(10).
 		Find(&historyRecords).Error
 
