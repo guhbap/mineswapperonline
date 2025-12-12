@@ -149,7 +149,7 @@ func (h *AuthHandler) createUser(username, email, password string) (models.User,
 
 	var user models.User
 	err = h.db.QueryRow(
-		"INSERT INTO users (username, email, password_hash, color) VALUES ($1, $2, $3, $4) RETURNING id, username, email, color, COALESCE(rating, 1500.0), created_at",
+		"INSERT INTO users (username, email, password_hash, color) VALUES ($1, $2, $3, $4) RETURNING id, username, email, color, COALESCE(rating, 0.0), created_at",
 		username, email, passwordHash, defaultColor,
 	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.Rating, &user.CreatedAt)
 
@@ -172,7 +172,7 @@ func (h *AuthHandler) findUserByUsername(username string) (models.User, error) {
 func (h *AuthHandler) findUserByID(id int) (models.User, error) {
 	var user models.User
 	err := h.db.QueryRow(
-		"SELECT id, username, email, color, COALESCE(rating, 1500.0), created_at FROM users WHERE id = $1",
+		"SELECT id, username, email, color, COALESCE(rating, 0.0), created_at FROM users WHERE id = $1",
 		id,
 	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.Rating, &user.CreatedAt)
 

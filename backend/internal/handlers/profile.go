@@ -103,34 +103,34 @@ func (h *ProfileHandler) UpdateLastSeen(userID int) error {
 
 func (h *ProfileHandler) UpdateActivity(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value("userID").(int)
-	
+
 	if err := h.UpdateLastSeen(userID); err != nil {
 		log.Printf("Error updating last seen for user %d: %v", userID, err)
 		utils.JSONError(w, http.StatusInternalServerError, "Failed to update activity")
 		return
 	}
-	
+
 	utils.JSONResponse(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (h *ProfileHandler) UpdateColor(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value("userID").(int)
-	
+
 	var req struct {
 		Color string `json:"color"`
 	}
-	
+
 	if err := utils.DecodeJSON(r, &req); err != nil {
 		utils.JSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	
+
 	// Валидация цвета (hex формат)
 	if req.Color != "" && !isValidHexColor(req.Color) {
 		utils.JSONError(w, http.StatusBadRequest, "Invalid color format. Expected hex color (e.g., #FF5733)")
 		return
 	}
-	
+
 	_, err := h.db.Exec(
 		"UPDATE users SET color = $1 WHERE id = $2",
 		req.Color, userID,
@@ -140,7 +140,7 @@ func (h *ProfileHandler) UpdateColor(w http.ResponseWriter, r *http.Request) {
 		utils.JSONError(w, http.StatusInternalServerError, "Failed to update color")
 		return
 	}
-	
+
 	utils.JSONResponse(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -180,9 +180,10 @@ func isValidHexColor(color string) bool {
 // Rating is updated if:
 // 1. Player won AND
 // 2. One of the following:
-//    - First game ever (no previous results)
-//    - Playing more complex field than any previous
-//    - Improving or worsening time on already played field
+//   - First game ever (no previous results)
+//   - Playing more complex field than any previous
+//   - Improving or worsening time on already played field
+//
 // Rating increases for:
 // - First game ever
 // - Playing more complex fields
@@ -196,12 +197,12 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 	// Get current player rating
 	var currentRating float64
 	err := h.db.QueryRow(
-		"SELECT COALESCE(rating, 1500.0) FROM users WHERE id = $1",
+		"SELECT COALESCE(rating, 0.0) FROM users WHERE id = $1",
 		userID,
 	).Scan(&currentRating)
 	if err != nil {
 		log.Printf("Error getting player rating: %v", err)
-		currentRating = 1500.0 // Default rating
+		currentRating = 0.0 // Default rating
 	}
 
 	// Compute complexity of current field
@@ -210,7 +211,7 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 
 	// Check if field complexity is sufficient for rating (prevents farming on very easy fields)
 	if !rating.IsComplexitySufficient(float64(width), float64(height), float64(mines), Dref) {
-		log.Printf("Field %dx%d with %d mines (complexity %.2f) is too simple - no rating", 
+		log.Printf("Field %dx%d with %d mines (complexity %.2f) is too simple - no rating",
 			width, height, mines, currentComplexity)
 		// Still update statistics but not rating
 		if won {
@@ -356,7 +357,7 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 func (h *ProfileHandler) findUserByID(id int) (models.User, error) {
 	var user models.User
 	err := h.db.QueryRow(
-		"SELECT id, username, email, color, COALESCE(rating, 1500.0), created_at FROM users WHERE id = $1",
+		"SELECT id, username, email, color, COALESCE(rating, 0.0), created_at FROM users WHERE id = $1",
 		id,
 	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.Rating, &user.CreatedAt)
 
@@ -369,7 +370,7 @@ func (h *ProfileHandler) findUserByID(id int) (models.User, error) {
 func (h *ProfileHandler) findUserByUsername(username string) (models.User, error) {
 	var user models.User
 	err := h.db.QueryRow(
-		"SELECT id, username, email, color, COALESCE(rating, 1500.0), created_at FROM users WHERE username = $1",
+		"SELECT id, username, email, color, COALESCE(rating, 0.0), created_at FROM users WHERE username = $1",
 		username,
 	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.Rating, &user.CreatedAt)
 
@@ -413,13 +414,13 @@ func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) 
 			u.id,
 			u.username,
 			u.color,
-			COALESCE(u.rating, 1500.0) as rating,
+			COALESCE(u.rating, 0.0) as rating,
 			COALESCE(us.games_played, 0) as games_played,
 			COALESCE(us.games_won, 0) as games_won,
 			COALESCE(us.games_lost, 0) as games_lost
 		FROM users u
 		LEFT JOIN user_stats us ON u.id = us.user_id
-		ORDER BY COALESCE(u.rating, 1500.0) DESC, u.username ASC
+		ORDER BY COALESCE(u.rating, 0.0) DESC, u.username ASC
 	`)
 	if err != nil {
 		log.Printf("Error getting leaderboard: %v", err)
@@ -469,4 +470,3 @@ func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) 
 
 	utils.JSONResponse(w, http.StatusOK, leaderboard)
 }
-

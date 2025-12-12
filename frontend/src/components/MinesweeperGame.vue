@@ -12,8 +12,8 @@
         </div>
       </div>
       <div class="game-actions">
-        <button 
-          @click="handleHint" 
+        <button
+          @click="handleHint"
           class="hint-button"
           :disabled="hintsUsed >= 3 || !gameState || gameState.go || gameState.gw || !hasClosedCells"
           :title="hintsUsed >= 3 ? 'Подсказки закончились' : `Подсказки: ${3 - hintsUsed}/3`"
@@ -429,12 +429,12 @@ const handleMessage = (msg: WebSocketMessage) => {
   if (msg.type === 'gameState' && msg.gameState) {
     const prevGameWon = gameState.value?.gw
     gameState.value = msg.gameState
-    
+
     // Если игра только что завершилась победой, рассчитываем изменение рейтинга
     if (msg.gameState.gw && !prevGameWon && gameStartTime.value !== null && gameState.value) {
       const gameTime = (Date.now() - gameStartTime.value) / 1000 // время в секундах
-      const currentRating = authStore.user?.rating || 1500.0
-      
+      const currentRating = authStore.user?.rating || 0.0
+
       // Проверяем, достаточно ли сложности поля для получения рейтинга
       if (isComplexitySufficient(gameState.value.c, gameState.value.r, gameState.value.m)) {
         const result = calculateRatingChange(
@@ -449,7 +449,7 @@ const handleMessage = (msg: WebSocketMessage) => {
         ratingChange.value = null // Поле слишком простое
       }
     }
-    
+
     // Сбрасываем время начала игры при новой игре
     if (!msg.gameState.gw && !msg.gameState.go && gameState.value.rv === 0) {
       gameStartTime.value = null

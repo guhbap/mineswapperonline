@@ -38,11 +38,11 @@ func (db *DB) InitSchema() error {
 			email VARCHAR(100) UNIQUE NOT NULL,
 			password_hash VARCHAR(255) NOT NULL,
 			color VARCHAR(7) DEFAULT NULL,
-			rating DOUBLE PRECISION DEFAULT 1500.0,
+			rating DOUBLE PRECISION DEFAULT 0.0,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		);`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS color VARCHAR(7) DEFAULT NULL;`,
-		`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating DOUBLE PRECISION DEFAULT 1500.0;`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating DOUBLE PRECISION DEFAULT 0.0;`,
 		`CREATE TABLE IF NOT EXISTS user_stats (
 			user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
 			games_played INTEGER DEFAULT 0,
@@ -82,4 +82,3 @@ func (db *DB) InitSchema() error {
 	log.Println("Database schema initialized successfully")
 	return nil
 }
-
