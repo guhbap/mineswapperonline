@@ -372,6 +372,19 @@ func (lm *LabelMap) ResetCache() {
 	}
 }
 
+// GetBoundaryIndex возвращает индекс в boundary для ячейки, или -1 если не на границе
+func (lm *LabelMap) GetBoundaryIndex(row, col int) int {
+	if row < 0 || row >= lm.height || col < 0 || col >= lm.width {
+		return -1
+	}
+	return lm.boundaryGrid[row][col]
+}
+
+// GetBoundary возвращает список ячеек на границе
+func (lm *LabelMap) GetBoundary() []CellPos {
+	return lm.boundary
+}
+
 // Recalc пересчитывает границу и кэш
 func (lm *LabelMap) Recalc() {
 	lm.recalc()
@@ -630,6 +643,167 @@ func (s *Solver) HasSafeCells() bool {
 		}
 	}
 	return false
+}
+
+// HasNonDeadlyCells проверяет, есть ли не смертельные ячейки (могут быть безопасными)
+func (s *Solver) HasNonDeadlyCells() bool {
+	for i := 0; i < s.numMines; i++ {
+		if s.canBeSafe[i] {
+			return true
+		}
+	}
+	return false
+}
+
+// OutsideIsSafe проверяет, безопасна ли область вне границы
+func (s *Solver) OutsideIsSafe() bool {
+	return s.numMines >= s.maxMines &&
+		s.sat.SolveWith(func() {
+			s.sat.AssertCounterAtMost(s.counter, s.maxMines-s.numCachedTrue-1)
+		}) == nil
+}
+
+// OutsideCanBeSafe проверяет, может ли область вне границы быть безопасной
+func (s *Solver) OutsideCanBeSafe() bool {
+	if s.minMines < 0 {
+		return true
+	}
+	return s.sat.SolveWith(func() {
+		s.sat.AssertCounterAtLeast(s.counter, s.minMines-s.numCachedTrue+1)
+	}) != nil
+}
+
+// AnySafeShape возвращает форму с безопасной ячейкой по индексу
+func (s *Solver) AnySafeShape(idx int) *MineShape {
+	solution := s.sat.SolveWith(func() {
+		s.sat.Assert([]int{-(idx + 1)})
+	})
+	return s.shape(solution)
+}
+
+// AnyDangerousShape возвращает форму с опасной ячейкой по индексу
+func (s *Solver) AnyDangerousShape(idx int) *MineShape {
+	solution := s.sat.SolveWith(func() {
+		s.sat.Assert([]int{idx + 1})
+	})
+	return s.shape(solution)
+}
+
+// AnyShapeWithOneEmpty возвращает форму с одной пустой ячейкой вне границы
+func (s *Solver) AnyShapeWithOneEmpty() *MineShape {
+	solution := s.sat.SolveWith(func() {
+		s.sat.AssertCounterAtLeast(s.counter, s.minMines-s.numCachedTrue+1)
+	})
+	return s.shape(solution)
+}
+
+// AnyShapeWithRemaining возвращает форму с оставшимися минами
+func (s *Solver) AnyShapeWithRemaining() *MineShape {
+	solution := s.sat.SolveWith(func() {
+		s.sat.AssertCounterAtMost(s.counter, s.maxMines-s.numCachedTrue-1)
+	})
+	return s.shape(solution)
+}
+
+// AnyShape возвращает любую форму (решение SAT)
+func (s *Solver) AnyShape() *MineShape {
+	solution := s.sat.Solve()
+	return s.shape(solution)
+}
+
+// shape создает MineShape из решения SAT
+func (s *Solver) shape(solution *[]bool) *MineShape {
+	if solution == nil {
+		return nil
+	}
+	mines := make([]bool, s.numMines)
+	sum := 0
+	for i := 0; i < s.numMines; i++ {
+		if i+1 < len(*solution) {
+			mines[i] = (*solution)[i+1]
+			if mines[i] {
+				sum++
+			}
+		}
+	}
+	return NewMineShape(s.map_, mines, s.maxMines-sum)
+}
+
+// MineShape представляет возможное расположение мин
+type MineShape struct {
+	map_      *LabelMap
+	mines     []bool // Мины на границе
+	remaining int    // Количество мин вне границы
+}
+
+func NewMineShape(lm *LabelMap, mines []bool, remaining int) *MineShape {
+	return &MineShape{
+		map_:      lm,
+		mines:     mines,
+		remaining: remaining,
+	}
+}
+
+// MineGrid возвращает полную сетку мин
+func (ms *MineShape) MineGrid() [][]bool {
+	return ms.mineGridWithCell(-1, -1, false)
+}
+
+// MineGridWithMine возвращает сетку мин с миной в указанной позиции
+func (ms *MineShape) MineGridWithMine(row, col int) [][]bool {
+	return ms.mineGridWithCell(row, col, true)
+}
+
+// MineGridWithEmpty возвращает сетку мин с пустой ячейкой в указанной позиции
+func (ms *MineShape) MineGridWithEmpty(row, col int) [][]bool {
+	return ms.mineGridWithCell(row, col, false)
+}
+
+func (ms *MineShape) mineGridWithCell(exceptRow, exceptCol int, exceptIsMine bool) [][]bool {
+	mineGrid := make([][]bool, ms.map_.height)
+	for i := 0; i < ms.map_.height; i++ {
+		mineGrid[i] = make([]bool, ms.map_.width)
+	}
+
+	// Размещаем мины на границе
+	for i, pos := range ms.map_.boundary {
+		if i < len(ms.mines) && ms.mines[i] {
+			mineGrid[pos.Row][pos.Col] = true
+		}
+	}
+
+	// Размещаем оставшиеся мины вне границы
+	if ms.remaining > 0 {
+		toSelect := make([]CellPos, 0)
+		for i := 0; i < ms.map_.height; i++ {
+			for j := 0; j < ms.map_.width; j++ {
+				if ms.map_.labels[i][j] == -1 && ms.map_.boundaryGrid[i][j] == -1 {
+					if !(i == exceptRow && j == exceptCol) {
+						toSelect = append(toSelect, CellPos{Row: i, Col: j})
+					}
+				}
+			}
+		}
+
+		// Перемешиваем
+		rand.Shuffle(len(toSelect), func(i, j int) {
+			toSelect[i], toSelect[j] = toSelect[j], toSelect[i]
+		})
+
+		remaining := ms.remaining
+		if exceptRow >= 0 && exceptCol >= 0 && exceptIsMine {
+			// Если исключаемая ячейка должна быть миной, уменьшаем remaining
+			remaining--
+			mineGrid[exceptRow][exceptCol] = true
+		}
+
+		for i := 0; i < remaining && i < len(toSelect); i++ {
+			pos := toSelect[i]
+			mineGrid[pos.Row][pos.Col] = true
+		}
+	}
+
+	return mineGrid
 }
 
 // MakeSolver создает решатель для текущего состояния карты

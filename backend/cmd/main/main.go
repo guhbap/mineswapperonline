@@ -201,33 +201,9 @@ func NewGameState(rows, cols, mines int, fairMode bool) *GameState {
 		gs.Board[i] = make([]Cell, cols)
 	}
 
-	// Если режим без угадываний, используем алгоритм kaboom для генерации решаемого поля
-	if fairMode {
-		maxAttempts := 100
-		mineBoard, success := game.GenerateSolvableBoard(rows, cols, mines, maxAttempts)
-		if success {
-			// Копируем мины из сгенерированного поля
-			for i := 0; i < rows; i++ {
-				for j := 0; j < cols; j++ {
-					gs.Board[i][j].IsMine = mineBoard[i][j]
-				}
-			}
-		} else {
-			// Если не удалось сгенерировать решаемое поле, используем обычную генерацию
-			log.Printf("Не удалось сгенерировать решаемое поле за %d попыток, используем обычную генерацию", maxAttempts)
-			mathrand.Seed(time.Now().UnixNano())
-			minesPlaced := 0
-			for minesPlaced < mines {
-				row := mathrand.Intn(rows)
-				col := mathrand.Intn(cols)
-				if !gs.Board[row][col].IsMine {
-					gs.Board[row][col].IsMine = true
-					minesPlaced++
-				}
-			}
-		}
-	} else {
-		// Обычная генерация для не-fairMode
+	// В fairMode мины НЕ размещаются заранее - они определяются динамически при клике
+	// В обычном режиме размещаем мины случайно
+	if !fairMode {
 		mathrand.Seed(time.Now().UnixNano())
 		minesPlaced := 0
 		for minesPlaced < mines {
@@ -238,27 +214,28 @@ func NewGameState(rows, cols, mines int, fairMode bool) *GameState {
 				minesPlaced++
 			}
 		}
-	}
 
-	// Подсчет соседних мин
-	for i := 0; i < rows; i++ {
-		for j := 0; j < cols; j++ {
-			if !gs.Board[i][j].IsMine {
-				count := 0
-				for di := -1; di <= 1; di++ {
-					for dj := -1; dj <= 1; dj++ {
-						ni, nj := i+di, j+dj
-						if ni >= 0 && ni < rows && nj >= 0 && nj < cols {
-							if gs.Board[ni][nj].IsMine {
-								count++
+		// Подсчет соседних мин для обычного режима
+		for i := 0; i < rows; i++ {
+			for j := 0; j < cols; j++ {
+				if !gs.Board[i][j].IsMine {
+					count := 0
+					for di := -1; di <= 1; di++ {
+						for dj := -1; dj <= 1; dj++ {
+							ni, nj := i+di, j+dj
+							if ni >= 0 && ni < rows && nj >= 0 && nj < cols {
+								if gs.Board[ni][nj].IsMine {
+									count++
+								}
 							}
 						}
 					}
+					gs.Board[i][j].NeighborMines = count
 				}
-				gs.Board[i][j].NeighborMines = count
 			}
 		}
 	}
+	// В fairMode подсчет соседних мин будет происходить динамически при размещении мин
 
 	return gs
 }
@@ -749,13 +726,7 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 
 		room.GameState.mu.Unlock()
 
-		// В режиме без угадываний пересчитываем безопасные клетки после установки/снятия флага
-		room.mu.RLock()
-		fairMode := room.FairMode
-		room.mu.RUnlock()
-		if fairMode {
-			s.updateSafeCells(room)
-		}
+		// В fairMode мины размещаются динамически при клике, флаги не влияют на размещение
 
 		s.broadcastGameState(room)
 
@@ -790,47 +761,58 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		return
 	}
 
-	// Проверка для режима без угадываний: можно открывать только безопасные ячейки
+	// Проверяем режим игры
 	room.mu.RLock()
 	fairMode := room.FairMode
 	room.mu.RUnlock()
 
-	if fairMode && len(room.GameState.SafeCells) > 0 {
-		// Проверяем, есть ли открытые ячейки (если нет - это первый клик)
-		hasRevealedCells := room.GameState.Revealed > 0
-
-		// Проверяем, является ли эта ячейка безопасной
-		isSafe := false
-		for _, safeCell := range room.GameState.SafeCells {
-			if safeCell.Row == row && safeCell.Col == col {
-				isSafe = true
-				break
-			}
-		}
-
-		// Если это не первый клик и ячейка не безопасна - блокируем
-		if hasRevealedCells && !isSafe {
-			log.Printf("В режиме без угадываний нельзя открыть непомеченную ячейку: row=%d, col=%d", row, col)
-			room.GameState.mu.Unlock()
-			return
-		}
-	}
-
-	// Если это первое открытие, убеждаемся, что ячейка безопасна (0)
+	// Если это первое открытие, устанавливаем время начала игры
 	isFirstClick := room.GameState.Revealed == 0
 	if isFirstClick {
-		// Если первая ячейка содержит мину или имеет соседние мины, перемещаем мины
-		if cell.IsMine || cell.NeighborMines > 0 {
-			log.Printf("Первое открытие небезопасно, перемещаем мины: row=%d, col=%d", row, col)
-			s.ensureFirstClickSafe(room, row, col)
-			// Обновляем ссылку на ячейку после перемещения мин
-			cell = &room.GameState.Board[row][col]
-		}
-		// Устанавливаем время начала игры при первом клике
 		room.mu.Lock()
 		now := time.Now()
 		room.StartTime = &now
 		room.mu.Unlock()
+	}
+
+	// В fairMode мины размещаются динамически при клике
+	if fairMode {
+		// Разблокируем для вычисления безопасных ячеек
+		room.GameState.mu.Unlock()
+		mineGrid := s.determineMinePlacement(room, row, col)
+		room.GameState.mu.Lock()
+
+		// Применяем размещение мин
+		for i := 0; i < room.GameState.Rows; i++ {
+			for j := 0; j < room.GameState.Cols; j++ {
+				if !room.GameState.Board[i][j].IsRevealed {
+					room.GameState.Board[i][j].IsMine = mineGrid[i][j]
+				}
+			}
+		}
+
+		// Пересчитываем соседние мины для всех ячеек
+		for i := 0; i < room.GameState.Rows; i++ {
+			for j := 0; j < room.GameState.Cols; j++ {
+				if !room.GameState.Board[i][j].IsMine {
+					count := 0
+					for di := -1; di <= 1; di++ {
+						for dj := -1; dj <= 1; dj++ {
+							ni, nj := i+di, j+dj
+							if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
+								if room.GameState.Board[ni][nj].IsMine {
+									count++
+								}
+							}
+						}
+					}
+					room.GameState.Board[i][j].NeighborMines = count
+				}
+			}
+		}
+
+		// Обновляем ссылку на ячейку
+		cell = &room.GameState.Board[row][col]
 	}
 
 	cell.IsRevealed = true
@@ -908,16 +890,7 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			s.revealNeighbors(room, row, col)
 		}
 
-		// В режиме без угадываний пересчитываем безопасные клетки после каждого открытия
-		room.mu.RLock()
-		fairMode := room.FairMode
-		room.mu.RUnlock()
-
-		// Разблокируем GameState перед вызовом updateSafeCells (она сама заблокирует)
-		room.GameState.mu.Unlock()
-		if fairMode {
-			s.updateSafeCells(room)
-		}
+		// В fairMode мины уже размещены динамически при клике выше
 
 		// Отправляем сервисное сообщение об открытии поля
 		if nickname != "" {
@@ -1433,6 +1406,80 @@ func (s *Server) updateSafeCells(room *Room) {
 	}
 
 	log.Printf("Обновлены безопасные ячейки: %d ячеек", len(room.GameState.SafeCells))
+}
+
+// determineMinePlacement определяет размещение мин при клике в fairMode
+func (s *Server) determineMinePlacement(room *Room, clickRow, clickCol int) [][]bool {
+	// Создаем LabelMap на основе открытых ячеек
+	lm := game.NewLabelMap(room.GameState.Cols, room.GameState.Rows)
+
+	for i := 0; i < room.GameState.Rows; i++ {
+		for j := 0; j < room.GameState.Cols; j++ {
+			if room.GameState.Board[i][j].IsRevealed {
+				lm.SetLabel(i, j, room.GameState.Board[i][j].NeighborMines)
+			}
+		}
+	}
+
+	// Создаем решатель
+	solver := game.MakeSolver(lm, room.GameState.Mines)
+
+	// Проверяем, на границе ли клик
+	boundaryIdx := -1
+	if clickRow >= 0 && clickRow < room.GameState.Rows && clickCol >= 0 && clickCol < room.GameState.Cols {
+		boundaryIdx = lm.GetBoundaryIndex(clickRow, clickCol)
+	}
+
+	hasSafeCells := solver.HasSafeCells()
+
+	var shape *game.MineShape
+
+	if boundaryIdx == -1 {
+		// Клик вне границы
+		outsideIsSafe := len(lm.GetBoundary()) == 0 || solver.OutsideIsSafe() || (!hasSafeCells && solver.OutsideCanBeSafe())
+
+		if outsideIsSafe {
+			// Размещаем пустую ячейку
+			shape = solver.AnyShapeWithOneEmpty()
+			if shape != nil {
+				return shape.MineGridWithEmpty(clickRow, clickCol)
+			}
+		} else {
+			// Размещаем мину (худший сценарий)
+			shape = solver.AnyShapeWithRemaining()
+			if shape != nil {
+				return shape.MineGridWithMine(clickRow, clickCol)
+			}
+		}
+	} else {
+		// Клик на границе
+		canBeSafe := solver.CanBeSafe(boundaryIdx)
+		canBeDangerous := solver.CanBeDangerous(boundaryIdx)
+
+		if canBeSafe && (!canBeDangerous || !hasSafeCells) {
+			// Размещаем пустую ячейку
+			shape = solver.AnySafeShape(boundaryIdx)
+		} else {
+			// Размещаем мину (худший сценарий)
+			shape = solver.AnyDangerousShape(boundaryIdx)
+		}
+	}
+
+	// Если не удалось получить форму, используем любую форму
+	if shape == nil {
+		shape = solver.AnyShape()
+	}
+
+	if shape != nil {
+		return shape.MineGrid()
+	}
+
+	// Fallback: создаем пустую сетку (не должно происходить)
+	mineGrid := make([][]bool, room.GameState.Rows)
+	for i := 0; i < room.GameState.Rows; i++ {
+		mineGrid[i] = make([]bool, room.GameState.Cols)
+	}
+	return mineGrid
 }
 
 func (s *Server) broadcastPlayerList(room *Room) {
