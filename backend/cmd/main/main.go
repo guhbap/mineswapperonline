@@ -731,9 +731,15 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		cell.IsFlagged = !cell.IsFlagged
 		log.Printf("Флаг переключен: row=%d, col=%d, flagged=%v", row, col, cell.IsFlagged)
 
-		room.GameState.mu.Unlock()
+		// В fairMode пересчитываем подсказки после установки/снятия флага
+		room.mu.RLock()
+		fairMode := room.FairMode
+		room.mu.RUnlock()
 
-		// В fairMode мины размещаются динамически при клике, флаги не влияют на размещение
+		room.GameState.mu.Unlock()
+		if fairMode {
+			s.calculateCellHints(room)
+		}
 
 		s.broadcastGameState(room)
 
@@ -873,16 +879,6 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		}
 		log.Printf("Игра окончена - подорвалась мина! Игрок: %s (%s)", room.GameState.LoserNickname, playerID)
 
-		// В fairMode вычисляем подсказки для всех ячеек на границе
-		room.mu.RLock()
-		fairMode := room.FairMode
-		room.mu.RUnlock()
-		if fairMode {
-			room.GameState.mu.Unlock()
-			s.calculateCellHints(room)
-			room.GameState.mu.Lock()
-		}
-
 		// Отправляем сервисное сообщение о взрыве
 		if nickname != "" {
 			chatMsg := Message{
@@ -907,7 +903,15 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			s.revealNeighbors(room, row, col)
 		}
 
-		// В fairMode мины уже размещены динамически при клике выше
+		// В fairMode пересчитываем подсказки после каждого открытия
+		room.mu.RLock()
+		fairMode := room.FairMode
+		room.mu.RUnlock()
+		if fairMode {
+			room.GameState.mu.Unlock()
+			s.calculateCellHints(room)
+			room.GameState.mu.Lock()
+		}
 
 		// Отправляем сервисное сообщение об открытии поля
 		if nickname != "" {
@@ -1428,7 +1432,7 @@ func (s *Server) updateSafeCells(room *Room) {
 	log.Printf("Обновлены безопасные ячейки: %d ячеек", len(room.GameState.SafeCells))
 }
 
-// calculateCellHints вычисляет подсказки для всех закрытых ячеек (показываются при проигрыше)
+// calculateCellHints вычисляет подсказки только для ячеек на границе (показываются всегда)
 func (s *Server) calculateCellHints(room *Room) {
 	room.GameState.mu.Lock()
 	defer room.GameState.mu.Unlock()
@@ -1447,11 +1451,10 @@ func (s *Server) calculateCellHints(room *Room) {
 	// Создаем решатель
 	solver := game.MakeSolver(lm, room.GameState.Mines)
 
-	// Вычисляем подсказки для всех закрытых ячеек
+	// Вычисляем подсказки только для ячеек на границе
 	hints := make([]CellHint, 0)
-
-	// Обрабатываем ячейки на границе
 	boundary := lm.GetBoundary()
+
 	for i, pos := range boundary {
 		canBeDangerous := solver.CanBeDangerous(i)
 		canBeSafe := solver.CanBeSafe(i)
@@ -1475,43 +1478,8 @@ func (s *Server) calculateCellHints(room *Room) {
 		})
 	}
 
-	// Обрабатываем ячейки вне границы (все остальные закрытые ячейки)
-	for i := 0; i < room.GameState.Rows; i++ {
-		for j := 0; j < room.GameState.Cols; j++ {
-			// Пропускаем открытые ячейки и ячейки на границе (уже обработаны)
-			if room.GameState.Board[i][j].IsRevealed {
-				continue
-			}
-			if lm.GetBoundaryIndex(i, j) != -1 {
-				continue // Уже обработана как граница
-			}
-
-			// Проверяем, может ли область вне границы быть безопасной или опасной
-			outsideCanBeSafe := solver.OutsideCanBeSafe()
-			outsideIsSafe := solver.OutsideIsSafe()
-
-			var hintType string
-			if outsideIsSafe {
-				// Если область вне границы гарантированно безопасна
-				hintType = "SAFE"
-			} else if !outsideCanBeSafe {
-				// Если область вне границы не может быть безопасной (все мины)
-				hintType = "MINE"
-			} else {
-				// Может быть и миной, и безопасной
-				hintType = "UNKNOWN"
-			}
-
-			hints = append(hints, CellHint{
-				Row:  i,
-				Col:  j,
-				Type: hintType,
-			})
-		}
-	}
-
 	room.GameState.CellHints = hints
-	log.Printf("Вычислены подсказки для %d ячеек (граница: %d, вне границы: %d)", len(hints), len(boundary), len(hints)-len(boundary))
+	log.Printf("Вычислены подсказки для %d ячеек на границе", len(hints))
 }
 
 // determineMinePlacement определяет размещение мин при клике в fairMode

@@ -103,9 +103,9 @@
               'cell--flagged': cellData.cell.f,
               'cell--show-mine': (gameState?.go || gameState?.gw) && cellData.cell.m && !cellData.cell.r,
               'cell--blocked': isCellBlocked(cellData.rowIndex, cellData.colIndex),
-              'hint hint-mine': gameState?.go && room?.fairMode && !cellData.cell.r && getCellHint(cellData.rowIndex, cellData.colIndex) === 'MINE',
-              'hint hint-safe': gameState?.go && room?.fairMode && !cellData.cell.r && getCellHint(cellData.rowIndex, cellData.colIndex) === 'SAFE',
-              'hint hint-unknown': gameState?.go && room?.fairMode && !cellData.cell.r && getCellHint(cellData.rowIndex, cellData.colIndex) === 'UNKNOWN',
+              'hint hint-mine': room?.fairMode && !cellData.cell.r && !cellData.cell.f && getCellHint(cellData.rowIndex, cellData.colIndex) === 'MINE',
+              'hint hint-safe': room?.fairMode && !cellData.cell.r && !cellData.cell.f && getCellHint(cellData.rowIndex, cellData.colIndex) === 'SAFE',
+              'hint hint-unknown': room?.fairMode && !cellData.cell.r && !cellData.cell.f && getCellHint(cellData.rowIndex, cellData.colIndex) === 'UNKNOWN',
             }
           ]"
           @click="handleCellClick(cellData.rowIndex, cellData.colIndex, false)"
@@ -509,9 +509,9 @@ const isSafeCell = (row: number, col: number): boolean => {
   return gameState.value.sc.some(cell => cell.r === row && cell.c === col)
 }
 
-// Получаем тип подсказки для ячейки (показывается при проигрыше в fairMode)
+// Получаем тип подсказки для ячейки (показывается всегда в fairMode)
 const getCellHint = (row: number, col: number): string | null => {
-  if (!gameState.value?.hints || !gameState.value.go) return null
+  if (!gameState.value?.hints) return null
   const hint = gameState.value.hints.find((h: { r: number; c: number; t: string }) => h.r === row && h.c === col)
   return hint ? hint.t : null
 }
