@@ -177,15 +177,18 @@ func isValidHexColor(color string) bool {
 // width, height, mines - dimensions of the game field
 // gameTime - time taken to complete the game in seconds
 // won - whether the player won
-// Rating is only updated if:
+// Rating is updated if:
 // 1. Player won AND
 // 2. Either this is a new field (no previous best result for this exact field) OR
 //    the field is more complex than any previous field the player has played OR
-//    the player improved their time on this exact field
-// This prevents farming rating on easy fields by requiring either:
-// - Playing new fields
-// - Playing progressively more complex fields
-// - Improving performance on already played fields
+//    the player improved or worsened their time on this exact field
+// Rating increases for:
+// - First time playing a field
+// - Playing more complex fields
+// - Improving time on a field
+// Rating decreases for:
+// - Worsening time on a field (compared to best result)
+// This prevents farming rating on easy fields and penalizes worse performance
 func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool) error {
 	// Get current player rating
 	var currentRating float64
@@ -203,7 +206,6 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 
 	// Check if we should update rating
 	shouldUpdateRating := false
-	var newRating float64 = currentRating
 
 	if won {
 		// Get best result for this exact field
@@ -224,12 +226,17 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 		} else {
 			// We have a previous result for this field
 			if bestTime.Valid && bestComplexity.Valid {
-				// Check if this is an improvement (better time)
+				// Check if this is an improvement (better time) or degradation (worse time)
 				if gameTime < bestTime.Float64 {
 					shouldUpdateRating = true
-					log.Printf("Improved time on field %dx%d with %d mines: %.2f -> %.2f", width, height, mines, bestTime.Float64, gameTime)
+					log.Printf("Improved time on field %dx%d with %d mines: %.2f -> %.2f (rating increase)", width, height, mines, bestTime.Float64, gameTime)
+				} else if gameTime > bestTime.Float64 {
+					// Worse time - rating should decrease
+					shouldUpdateRating = true
+					log.Printf("Worse time on field %dx%d with %d mines: %.2f -> %.2f (rating decrease)", width, height, mines, bestTime.Float64, gameTime)
 				} else {
-					log.Printf("No improvement on field %dx%d with %d mines: %.2f >= %.2f (no rating)", width, height, mines, gameTime, bestTime.Float64)
+					// Same time - no rating change
+					log.Printf("Same time on field %dx%d with %d mines: %.2f (no rating change)", width, height, mines, gameTime)
 				}
 			}
 		}
@@ -258,11 +265,27 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 		// Update rating if conditions are met
 		if shouldUpdateRating {
 			Dref := rating.ComputeDref()
-			newRating, _ = rating.UpdatePlayerRating(
+			
+			// Calculate rating change using current game time
+			// The formula automatically gives:
+			// - Positive delta for better performance (faster time = higher S)
+			// - Negative delta for worse performance (slower time = lower S)
+			newRating, delta := rating.UpdatePlayerRating(
 				float64(width), float64(height), float64(mines),
 				gameTime, currentRating, Dref,
 			)
-
+			
+			// Ensure rating doesn't go below a minimum (e.g., 0)
+			if newRating < 0 {
+				newRating = 0
+			}
+			
+			if delta > 0 {
+				log.Printf("Rating increased by %.2f (new rating: %.2f)", delta, newRating)
+			} else if delta < 0 {
+				log.Printf("Rating decreased by %.2f (new rating: %.2f)", -delta, newRating)
+			}
+			
 			// Update user rating in database
 			_, err = h.db.Exec(
 				"UPDATE users SET rating = $1 WHERE id = $2",
