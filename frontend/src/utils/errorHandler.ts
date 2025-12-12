@@ -74,7 +74,7 @@ function translateError(message: string): string {
     'Username parameter is required': 'Требуется параметр имени пользователя',
     'room name required': 'Требуется название комнаты',
     'rows and cols must be between 5 and 50': 'Количество строк и столбцов должно быть от 5 до 50',
-    'mines must be between 1 and (rows*cols-1)': 'Количество мин должно быть от 1 до (строки × столбцы - 1)',
+    'mines must be between 1 and (rows*cols-15)': 'Количество мин должно быть от 1 до (строки × столбцы - 15)',
     'username and password are required': 'Требуются имя пользователя и пароль',
     'password must be at least 6 characters': 'Пароль должен содержать минимум 6 символов',
     

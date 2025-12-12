@@ -8,7 +8,7 @@ func ValidateRoomParams(name string, rows, cols, mines int) error {
 	if rows < 5 || rows > 50 || cols < 5 || cols > 50 {
 		return ErrInvalidDimensions
 	}
-	maxMines := (rows * cols) - 1
+	maxMines := (rows * cols) - 15
 	if mines < 1 || mines > maxMines {
 		return ErrInvalidMinesCount
 	}

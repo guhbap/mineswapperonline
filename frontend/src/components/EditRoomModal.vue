@@ -172,7 +172,7 @@ watch(() => props.show, (isShowing) => {
 })
 
 const maxMines = computed(() => {
-  return form.value.rows * form.value.cols - 1
+  return form.value.rows * form.value.cols - 15
 })
 
 const difficulty = computed(() => {
