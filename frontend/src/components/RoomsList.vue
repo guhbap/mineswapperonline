@@ -58,6 +58,7 @@ let refreshInterval: number | null = null
 const loadRooms = async () => {
   try {
     rooms.value = await getRooms()
+    rooms.value.sort((a, b) => b.players - a.players || a.name.localeCompare(b.name))
   } catch (error) {
     console.error('Ошибка загрузки комнат:', error)
   } finally {
