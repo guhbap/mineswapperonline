@@ -201,14 +201,14 @@ const loadProfile = async () => {
       // Загружаем профиль другого пользователя
       isOwnProfile.value = false
       profile.value = await getProfileByUsername(username)
-      // Загружаем топ-10 игр для этого пользователя
+      // Загружаем топ-10 игр для этого пользователя (публичный запрос с username)
       await loadTopGames(username)
     } else {
       // Загружаем свой профиль
       isOwnProfile.value = true
       profile.value = await getProfile()
       selectedColor.value = profile.value?.user.color || ''
-      // Загружаем топ-10 игр для себя
+      // Загружаем топ-10 игр для себя (защищенный запрос без username)
       await loadTopGames()
     }
   } catch (err: any) {

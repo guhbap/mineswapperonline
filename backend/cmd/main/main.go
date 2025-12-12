@@ -1242,9 +1242,9 @@ func main() {
 	r.HandleFunc("/profile", profileHandler.GetProfileByUsername).Methods("GET", "OPTIONS").Queries("username", "{username}")
 	// Публичный маршрут для получения рейтинга
 	r.HandleFunc("/leaderboard", profileHandler.GetLeaderboard).Methods("GET", "OPTIONS")
-	// Публичный маршрут для получения топ-10 лучших игр (может принимать username как параметр)
-	r.HandleFunc("/profile/top-games", profileHandler.GetTopGames).Methods("GET", "OPTIONS")
-	// Защищенный маршрут для получения своих топ-10 игр
+	// Публичный маршрут для получения топ-10 лучших игр по username (только с параметром username)
+	r.HandleFunc("/profile/top-games", profileHandler.GetTopGames).Methods("GET", "OPTIONS").Queries("username", "{username}")
+	// Защищенный маршрут для получения своих топ-10 игр (без параметра username)
 	protected.HandleFunc("/profile/top-games", profileHandler.GetTopGames).Methods("GET", "OPTIONS")
 
 	log.Printf("Сервер запущен на :%s", cfg.Port)
