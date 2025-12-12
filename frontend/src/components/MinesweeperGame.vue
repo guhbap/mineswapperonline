@@ -511,7 +511,7 @@ const isSafeCell = (row: number, col: number): boolean => {
 
 // Получаем тип подсказки для ячейки (показывается при проигрыше в fairMode)
 const getCellHint = (row: number, col: number): string | null => {
-  if (!gameState.value?.hints) return null
+  if (!gameState.value?.hints || !gameState.value.go) return null
   const hint = gameState.value.hints.find((h: { r: number; c: number; t: string }) => h.r === row && h.c === col)
   return hint ? hint.t : null
 }

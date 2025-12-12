@@ -16,6 +16,8 @@
  * - Для каждого флага: 2 байта cellKey (uint16), 1 байт длина цвета, N байт цвет
  * - 2 байта: Количество SafeCells (uint16)
  * - Для каждой SafeCell: 2 байта row (uint16), 2 байта col (uint16)
+ * - 2 байта: Количество CellHints (uint16)
+ * - Для каждой CellHint: 2 байта row (uint16), 2 байта col (uint16), 1 байт type (0=MINE, 1=SAFE, 2=UNKNOWN)
  */
 export function decodeGameStateBinary(data: ArrayBuffer): {
   b: Array<Array<{ m: boolean; r: boolean; f: boolean; n: number; fc?: string }>> // board
@@ -142,6 +144,40 @@ export function decodeGameStateBinary(data: ArrayBuffer): {
     }
   }
 
+  // Читаем CellHints (если есть данные)
+  let cellHints: Array<{ r: number; c: number; t: string }> | undefined
+  if (offset < data.byteLength) {
+    const hintsCount = view.getUint16(offset, true)
+    offset += 2
+    
+    if (hintsCount > 0) {
+      cellHints = []
+      for (let i = 0; i < hintsCount && offset + 5 <= data.byteLength; i++) {
+        const row = view.getUint16(offset, true)
+        offset += 2
+        const col = view.getUint16(offset, true)
+        offset += 2
+        const hintTypeByte = view.getUint8(offset)
+        offset += 1
+        let hintType: string
+        switch (hintTypeByte) {
+          case 0:
+            hintType = 'MINE'
+            break
+          case 1:
+            hintType = 'SAFE'
+            break
+          case 2:
+            hintType = 'UNKNOWN'
+            break
+          default:
+            hintType = 'UNKNOWN'
+        }
+        cellHints.push({ r: row, c: col, t: hintType })
+      }
+    }
+  }
+
   return {
     b: board,
     r: rows,
@@ -152,6 +188,7 @@ export function decodeGameStateBinary(data: ArrayBuffer): {
     rv: revealed,
     hu: hintsUsed,
     sc: safeCells,
+    hints: cellHints,
     lpid: loserPlayerID,
     ln: loserNickname
   }

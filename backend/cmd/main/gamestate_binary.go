@@ -158,6 +158,31 @@ func encodeGameStateBinary(gs *GameState) ([]byte, error) {
 		binary.Write(buf, binary.LittleEndian, uint16(cell.Col))
 	}
 
+	// Записываем CellHints (подсказки для ячеек, показываются при проигрыше в fairMode)
+	hintsCount := uint16(len(gs.CellHints))
+	if hintsCount > 65535 {
+		hintsCount = 65535
+	}
+	binary.Write(buf, binary.LittleEndian, hintsCount)
+	for i := 0; i < int(hintsCount); i++ {
+		hint := gs.CellHints[i]
+		binary.Write(buf, binary.LittleEndian, uint16(hint.Row))
+		binary.Write(buf, binary.LittleEndian, uint16(hint.Col))
+		// Записываем тип подсказки (1 байт: 0=MINE, 1=SAFE, 2=UNKNOWN)
+		var hintType byte
+		switch hint.Type {
+		case "MINE":
+			hintType = 0
+		case "SAFE":
+			hintType = 1
+		case "UNKNOWN":
+			hintType = 2
+		default:
+			hintType = 2 // По умолчанию UNKNOWN
+		}
+		buf.WriteByte(hintType)
+	}
+
 	return buf.Bytes(), nil
 }
 
@@ -269,6 +294,39 @@ func decodeGameStateBinary(data []byte) (*GameState, error) {
 					break
 				}
 				gs.SafeCells[i] = SafeCell{Row: int(row), Col: int(col)}
+			}
+		}
+	}
+
+	// Читаем CellHints (если есть данные)
+	if buf.Len() > 0 {
+		var hintsCount uint16
+		if err := binary.Read(buf, binary.LittleEndian, &hintsCount); err == nil && hintsCount > 0 {
+			gs.CellHints = make([]CellHint, hintsCount)
+			for i := 0; i < int(hintsCount); i++ {
+				var row, col uint16
+				if err := binary.Read(buf, binary.LittleEndian, &row); err != nil {
+					break
+				}
+				if err := binary.Read(buf, binary.LittleEndian, &col); err != nil {
+					break
+				}
+				hintTypeByte, err := buf.ReadByte()
+				if err != nil {
+					break
+				}
+				var hintType string
+				switch hintTypeByte {
+				case 0:
+					hintType = "MINE"
+				case 1:
+					hintType = "SAFE"
+				case 2:
+					hintType = "UNKNOWN"
+				default:
+					hintType = "UNKNOWN"
+				}
+				gs.CellHints[i] = CellHint{Row: int(row), Col: int(col), Type: hintType}
 			}
 		}
 	}
