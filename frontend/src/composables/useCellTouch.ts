@@ -61,6 +61,8 @@ export function useCellTouch(options: UseCellTouchOptions = {}): UseCellTouchRet
 
     // Если это быстрый тап с небольшим перемещением, то это клик
     if (touchDuration < clickDuration && touchDistance < clickThreshold) {
+      // Предотвращаем стандартное поведение, чтобы не конфликтовать с панорамированием
+      event.preventDefault()
       // Небольшая задержка, чтобы не конфликтовать с панорамированием
       setTimeout(() => {
         onClick(row, col)

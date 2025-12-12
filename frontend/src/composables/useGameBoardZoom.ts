@@ -20,7 +20,7 @@ export interface UseGameBoardZoomReturn {
   setZoom: (level: number) => void
   handleTouchStart: (event: TouchEvent) => void
   handleTouchMove: (event: TouchEvent) => void
-  handleTouchEnd: () => void
+  handleTouchEnd: (event?: TouchEvent) => void
   containerStyle: Ref<{ transform: string; transformOrigin: string }>
 }
 
@@ -161,9 +161,9 @@ export function useGameBoardZoom(
   /**
    * Обработчик окончания касания
    */
-  const handleTouchEnd = (event: TouchEvent) => {
+  const handleTouchEnd = (event?: TouchEvent) => {
     // Если остался один палец после pinch-to-zoom, сбрасываем состояние
-    if (event.touches.length === 0 || event.touches.length === 1) {
+    if (!event || event.touches.length === 0 || event.touches.length === 1) {
       touchStartDistance.value = 0
       isPanning.value = false
     }

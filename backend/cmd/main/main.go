@@ -957,7 +957,8 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 	}
 
 	log.Printf("Отправка обновленного состояния игры после клика")
-	// GameState уже разблокирован выше (перед updateSafeCells или в конце блока else)
+	// Разблокируем мьютекс перед отправкой состояния игры
+	room.GameState.mu.Unlock()
 	s.broadcastGameState(room)
 }
 
