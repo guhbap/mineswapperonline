@@ -1400,20 +1400,33 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		Name     string `json:"name"`
-		Password string `json:"password"`
-		Rows     int    `json:"rows"`
-		Cols     int    `json:"cols"`
-		Mines    int    `json:"mines"`
-	}
-
-	if err := utils.DecodeJSON(r, &req); err != nil {
+	// Используем map для проверки, было ли поле password передано
+	var reqMap map[string]interface{}
+	if err := utils.DecodeJSON(r, &reqMap); err != nil {
 		utils.JSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	if err := utils.ValidateRoomParams(req.Name, req.Rows, req.Cols, req.Mines); err != nil {
+	// Извлекаем значения из map
+	name, _ := reqMap["name"].(string)
+	rowsFloat, _ := reqMap["rows"].(float64)
+	colsFloat, _ := reqMap["cols"].(float64)
+	minesFloat, _ := reqMap["mines"].(float64)
+	rows := int(rowsFloat)
+	cols := int(colsFloat)
+	mines := int(minesFloat)
+	
+	// Проверяем, было ли передано поле password
+	passwordProvided := false
+	var password string
+	if pwd, exists := reqMap["password"]; exists {
+		passwordProvided = true
+		if pwdStr, ok := pwd.(string); ok {
+			password = pwdStr
+		}
+	}
+
+	if err := utils.ValidateRoomParams(name, rows, cols, mines); err != nil {
 		utils.JSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -1434,22 +1447,18 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Обрабатываем пароль: если передан указатель, используем его значение (может быть пустой строкой для удаления)
-	// Если указатель nil, не меняем пароль
-	var password string
-	if req.Password != nil {
-		password = *req.Password
-	} else {
-		// Если пароль не передан, сохраняем текущий пароль
+	// Обрабатываем пароль
+	if !passwordProvided {
+		// Если пароль не передан, сохраняем текущий пароль (используем специальное значение)
 		room.mu.RLock()
 		password = room.Password
 		room.mu.RUnlock()
-		// Используем специальное значение для "не менять"
 		password = "__KEEP__"
 	}
+	// Если passwordProvided == true, используем переданное значение (может быть пустой строкой для удаления)
 
 	// Обновляем комнату
-	if err := s.roomManager.UpdateRoom(roomID, req.Name, password, req.Rows, req.Cols, req.Mines); err != nil {
+	if err := s.roomManager.UpdateRoom(roomID, name, password, rows, cols, mines); err != nil {
 		utils.JSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
