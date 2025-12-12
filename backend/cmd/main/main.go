@@ -70,7 +70,7 @@ type GameState struct {
 	Revealed      int              `json:"rv"`
 	HintsUsed     int              `json:"hu"`              // Количество использованных подсказок (глобально для комнаты)
 	SafeCells     []SafeCell       `json:"sc,omitempty"`    // Безопасные ячейки для режима без угадываний
-	CellHints     []CellHint       `json:"hints,omitempty"` // Подсказки для ячеек (показываются при проигрыше в fairMode)
+	CellHints     []CellHint       `json:"hints,omitempty"` // Подсказки для ячеек (показываются в training всегда, в fair при проигрыше)
 	LoserPlayerID string           `json:"lpid,omitempty"`
 	LoserNickname string           `json:"ln,omitempty"`
 	flagSetInfo   map[int]FlagInfo // Информация об установке флага для каждой ячейки (ключ: row*cols + col)
@@ -123,7 +123,7 @@ type Room struct {
 	Rows          int                `json:"rows"`
 	Cols          int                `json:"cols"`
 	Mines         int                `json:"mines"`
-	FairMode      bool               `json:"fairMode"`  // Режим без угадываний
+	GameMode      string             `json:"gameMode"`  // Режим игры: "classic", "training", "fair"
 	CreatorID     int                `json:"creatorId"` // ID создателя комнаты (0 для гостей)
 	Players       map[string]*Player `json:"-"`
 	GameState     *GameState         `json:"-"`
@@ -161,7 +161,11 @@ func (rm *RoomManager) SetServer(server *Server) {
 	rm.server = server
 }
 
-func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, fairMode bool) *Room {
+func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, gameMode string) *Room {
+	// По умолчанию classic, если не указан
+	if gameMode == "" {
+		gameMode = "classic"
+	}
 	return &Room{
 		ID:        id,
 		Name:      name,
@@ -169,10 +173,10 @@ func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, fa
 		Rows:      rows,
 		Cols:      cols,
 		Mines:     mines,
-		FairMode:  fairMode,
+		GameMode:  gameMode,
 		CreatorID: creatorID,
 		Players:   make(map[string]*Player),
-		GameState: NewGameState(rows, cols, mines, fairMode),
+		GameState: NewGameState(rows, cols, mines, gameMode),
 		CreatedAt: time.Now(),
 	}
 }
@@ -188,7 +192,11 @@ func NewServer(roomManager *RoomManager, db *database.DB) *Server {
 	return server
 }
 
-func NewGameState(rows, cols, mines int, fairMode bool) *GameState {
+func NewGameState(rows, cols, mines int, gameMode string) *GameState {
+	// По умолчанию classic
+	if gameMode == "" {
+		gameMode = "classic"
+	}
 	gs := &GameState{
 		Rows:          rows,
 		Cols:          cols,
@@ -208,9 +216,9 @@ func NewGameState(rows, cols, mines int, fairMode bool) *GameState {
 		gs.Board[i] = make([]Cell, cols)
 	}
 
-	// В fairMode мины НЕ размещаются заранее - они определяются динамически при клике
-	// В обычном режиме размещаем мины случайно
-	if !fairMode {
+	// В режимах training и fair мины НЕ размещаются заранее - они определяются динамически при клике
+	// В классическом режиме размещаем мины случайно
+	if gameMode == "classic" {
 		mathrand.Seed(time.Now().UnixNano())
 		minesPlaced := 0
 		for minesPlaced < mines {
@@ -242,7 +250,7 @@ func NewGameState(rows, cols, mines int, fairMode bool) *GameState {
 			}
 		}
 	}
-	// В fairMode подсчет соседних мин будет происходить динамически при размещении мин
+	// В режимах training и fair подсчет соседних мин будет происходить динамически при размещении мин
 
 	return gs
 }
@@ -318,17 +326,17 @@ func neighbors(rows, cols, i, j int) [][2]int {
 	return out
 }
 
-func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int, fairMode bool) *Room {
+func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int, gameMode string) *Room {
 	roomID := utils.GenerateID()
-	room := NewRoom(roomID, name, password, rows, cols, mines, creatorID, fairMode)
+	room := NewRoom(roomID, name, password, rows, cols, mines, creatorID, gameMode)
 	rm.mu.Lock()
 	rm.rooms[roomID] = room
 	rm.mu.Unlock()
-	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, FairMode: %v)", name, roomID, creatorID, fairMode)
+	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, GameMode: %s)", name, roomID, creatorID, gameMode)
 	return room
 }
 
-func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, cols, mines int, fairMode bool) error {
+func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, cols, mines int, gameMode string) error {
 	rm.mu.RLock()
 	room, exists := rm.rooms[roomID]
 	rm.mu.RUnlock()
@@ -351,13 +359,13 @@ func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, co
 	room.Rows = rows
 	room.Cols = cols
 	room.Mines = mines
-	room.FairMode = fairMode
+	room.GameMode = gameMode
 
 	// Пересоздаем игровое поле с новыми параметрами
-	room.GameState = NewGameState(rows, cols, mines, fairMode)
+	room.GameState = NewGameState(rows, cols, mines, gameMode)
 	room.StartTime = nil // Сбрасываем время начала игры
 
-	log.Printf("Комната обновлена: %s (ID: %s, FairMode: %v)", name, roomID, fairMode)
+	log.Printf("Комната обновлена: %s (ID: %s, GameMode: %s)", name, roomID, gameMode)
 	return nil
 }
 
@@ -382,7 +390,7 @@ func (rm *RoomManager) GetRoomsList() []map[string]interface{} {
 			"rows":        room.Rows,
 			"cols":        room.Cols,
 			"mines":       room.Mines,
-			"fairMode":    room.FairMode,
+			"gameMode":    room.GameMode,
 			"players":     playerCount,
 			"createdAt":   room.CreatedAt,
 			"creatorId":   room.CreatorID,
@@ -634,7 +642,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		case "newGame":
 			room.mu.Lock()
-			room.GameState = NewGameState(room.Rows, room.Cols, room.Mines, room.FairMode)
+			room.GameState = NewGameState(room.Rows, room.Cols, room.Mines, room.GameMode)
 			room.StartTime = nil // Сбрасываем время начала игры
 			room.mu.Unlock()
 			log.Printf("Новая игра начата")
@@ -731,13 +739,13 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		cell.IsFlagged = !cell.IsFlagged
 		log.Printf("Флаг переключен: row=%d, col=%d, flagged=%v", row, col, cell.IsFlagged)
 
-		// В fairMode пересчитываем подсказки после установки/снятия флага
+		// В режиме training пересчитываем подсказки после установки/снятия флага (в fair подсказки только при проигрыше)
 		room.mu.RLock()
-		fairMode := room.FairMode
+		gameMode := room.GameMode
 		room.mu.RUnlock()
 
 		room.GameState.mu.Unlock()
-		if fairMode {
+		if gameMode == "training" {
 			s.calculateCellHints(room)
 		}
 
@@ -776,7 +784,7 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 
 	// Проверяем режим игры
 	room.mu.RLock()
-	fairMode := room.FairMode
+	gameMode := room.GameMode
 	room.mu.RUnlock()
 
 	// Если это первое открытие, устанавливаем время начала игры
@@ -788,8 +796,8 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		room.mu.Unlock()
 	}
 
-	// В fairMode мины размещаются динамически при клике
-	if fairMode {
+	// В режимах training и fair мины размещаются динамически при клике
+	if gameMode == "training" || gameMode == "fair" {
 		// Разблокируем для вычисления безопасных ячеек
 		room.GameState.mu.Unlock()
 		mineGrid := s.determineMinePlacement(room, row, col)
@@ -879,6 +887,16 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		}
 		log.Printf("Игра окончена - подорвалась мина! Игрок: %s (%s)", room.GameState.LoserNickname, playerID)
 
+		// В режиме fair вычисляем подсказки при проигрыше
+		room.mu.RLock()
+		gameMode := room.GameMode
+		room.mu.RUnlock()
+		if gameMode == "fair" {
+			room.GameState.mu.Unlock()
+			s.calculateCellHints(room)
+			room.GameState.mu.Lock()
+		}
+
 		// Отправляем сервисное сообщение о взрыве
 		if nickname != "" {
 			chatMsg := Message{
@@ -903,11 +921,11 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			s.revealNeighbors(room, row, col)
 		}
 
-		// В fairMode пересчитываем подсказки после каждого открытия
+		// В режимах training и fair пересчитываем подсказки после каждого открытия
 		room.mu.RLock()
-		fairMode := room.FairMode
+		gameMode := room.GameMode
 		room.mu.RUnlock()
-		if fairMode {
+		if gameMode == "training" || gameMode == "fair" {
 			room.GameState.mu.Unlock()
 			s.calculateCellHints(room)
 			room.GameState.mu.Lock()
@@ -1432,7 +1450,7 @@ func (s *Server) updateSafeCells(room *Room) {
 	log.Printf("Обновлены безопасные ячейки: %d ячеек", len(room.GameState.SafeCells))
 }
 
-// calculateCellHints вычисляет подсказки только для ячеек на границе (показываются всегда)
+// calculateCellHints вычисляет подсказки только для ячеек на границе (в training всегда, в fair при проигрыше)
 func (s *Server) calculateCellHints(room *Room) {
 	room.GameState.mu.Lock()
 	defer room.GameState.mu.Unlock()
@@ -1482,7 +1500,7 @@ func (s *Server) calculateCellHints(room *Room) {
 	log.Printf("Вычислены подсказки для %d ячеек на границе", len(hints))
 }
 
-// determineMinePlacement определяет размещение мин при клике в fairMode
+// determineMinePlacement определяет размещение мин при клике в режимах training и fair
 func (s *Server) determineMinePlacement(room *Room, clickRow, clickCol int) [][]bool {
 	// Создаем LabelMap на основе открытых ячеек
 	lm := game.NewLabelMap(room.GameState.Cols, room.GameState.Rows)
@@ -1663,7 +1681,7 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		Rows     int    `json:"rows"`
 		Cols     int    `json:"cols"`
 		Mines    int    `json:"mines"`
-		FairMode bool   `json:"fairMode"`
+		GameMode string `json:"gameMode"`
 	}
 
 	if err := utils.DecodeJSON(r, &req); err != nil {
@@ -1684,7 +1702,12 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	room := s.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID, req.FairMode)
+	// Валидация gameMode
+	gameMode := req.GameMode
+	if gameMode != "classic" && gameMode != "training" && gameMode != "fair" {
+		gameMode = "classic" // По умолчанию
+	}
+	room := s.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID, gameMode)
 	utils.JSONResponse(w, http.StatusOK, map[string]interface{}{
 		"id":          room.ID,
 		"name":        room.Name,
@@ -1692,7 +1715,7 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		"rows":        room.Rows,
 		"cols":        room.Cols,
 		"mines":       room.Mines,
-		"fairMode":    room.FairMode,
+		"gameMode":    room.GameMode,
 		"creatorId":   room.CreatorID,
 	})
 }
@@ -1737,7 +1760,7 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 		"rows":        room.Rows,
 		"cols":        room.Cols,
 		"mines":       room.Mines,
-		"fairMode":    room.FairMode,
+		"gameMode":    room.GameMode,
 		"creatorId":   room.CreatorID,
 	}
 	room.mu.RUnlock()
@@ -1781,10 +1804,13 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 	rows := int(rowsFloat)
 	cols := int(colsFloat)
 	mines := int(minesFloat)
-	fairMode := false
-	if fairMode, exists := reqMap["fairMode"]; exists {
-		if fairModeBool, ok := fairMode.(bool); ok {
-			fairMode = fairModeBool
+	gameMode := "classic"
+	if gameModeVal, exists := reqMap["gameMode"]; exists {
+		if gameModeStr, ok := gameModeVal.(string); ok {
+			// Валидация gameMode
+			if gameModeStr == "classic" || gameModeStr == "training" || gameModeStr == "fair" {
+				gameMode = gameModeStr
+			}
 		}
 	}
 
@@ -1830,7 +1856,7 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 	// Если passwordProvided == true, используем переданное значение (может быть пустой строкой для удаления)
 
 	// Обновляем комнату
-	if err := s.roomManager.UpdateRoom(roomID, name, password, rows, cols, mines, fairMode); err != nil {
+	if err := s.roomManager.UpdateRoom(roomID, name, password, rows, cols, mines, gameMode); err != nil {
 		utils.JSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1845,7 +1871,7 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 		"rows":        room.Rows,
 		"cols":        room.Cols,
 		"mines":       room.Mines,
-		"fairMode":    room.FairMode,
+		"gameMode":    room.GameMode,
 		"creatorId":   room.CreatorID,
 	}
 	room.mu.RUnlock()

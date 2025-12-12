@@ -13,7 +13,7 @@
       </div>
       <div class="game-actions">
         <button
-          v-if="!room?.fairMode"
+          v-if="room?.gameMode === 'classic'"
           @click="handleHint"
           class="hint-button"
           :disabled="(gameState?.hu ?? 0) >= 3 || !gameState || gameState.go || gameState.gw || !hasClosedCells"
@@ -103,9 +103,9 @@
               'cell--flagged': cellData.cell.f,
               'cell--show-mine': (gameState?.go || gameState?.gw) && cellData.cell.m && !cellData.cell.r,
               'cell--blocked': isCellBlocked(cellData.rowIndex, cellData.colIndex),
-              'hint hint-mine': room?.fairMode && !cellData.cell.r && !cellData.cell.f && getCellHint(cellData.rowIndex, cellData.colIndex) === 'MINE',
-              'hint hint-safe': room?.fairMode && !cellData.cell.r && !cellData.cell.f && getCellHint(cellData.rowIndex, cellData.colIndex) === 'SAFE',
-              'hint hint-unknown': room?.fairMode && !cellData.cell.r && !cellData.cell.f && getCellHint(cellData.rowIndex, cellData.colIndex) === 'UNKNOWN',
+              'hint hint-mine': (room?.gameMode === 'training' || (room?.gameMode === 'fair' && gameState?.go)) && !cellData.cell.r && !cellData.cell.f && getCellHint(cellData.rowIndex, cellData.colIndex) === 'MINE',
+              'hint hint-safe': (room?.gameMode === 'training' || (room?.gameMode === 'fair' && gameState?.go)) && !cellData.cell.r && !cellData.cell.f && getCellHint(cellData.rowIndex, cellData.colIndex) === 'SAFE',
+              'hint hint-unknown': (room?.gameMode === 'training' || (room?.gameMode === 'fair' && gameState?.go)) && !cellData.cell.r && !cellData.cell.f && getCellHint(cellData.rowIndex, cellData.colIndex) === 'UNKNOWN',
             }
           ]"
           @click="handleCellClick(cellData.rowIndex, cellData.colIndex, false)"
@@ -314,7 +314,7 @@ import Chat from '@/components/Chat.vue'
 const props = defineProps<{
   wsClient: IWebSocketClient | null
   nickname: string
-  room?: { id: string; creatorId?: number; fairMode?: boolean } | null
+  room?: { id: string; creatorId?: number; gameMode?: string } | null
 }>()
 
 const emit = defineEmits<{

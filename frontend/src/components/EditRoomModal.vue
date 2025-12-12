@@ -111,16 +111,44 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">
-            <input
-              v-model="form.fairMode"
-              type="checkbox"
-              class="form-checkbox"
-            />
-            Режим справедливости
-          </label>
-          <div class="form-hint">
-            В этом режиме поле генерируется так, чтобы все ячейки можно было открыть логически, без необходимости угадывать
+          <label class="form-label">Режим игры</label>
+          <div class="game-mode-selector">
+            <label class="game-mode-option" :class="{ 'game-mode-option--active': form.gameMode === 'classic' }">
+              <input
+                v-model="form.gameMode"
+                type="radio"
+                value="classic"
+                class="game-mode-radio"
+              />
+              <div class="game-mode-content">
+                <div class="game-mode-title">Классический</div>
+                <div class="game-mode-description">Обычный режим сапера с заранее размещенными минами</div>
+              </div>
+            </label>
+            <label class="game-mode-option" :class="{ 'game-mode-option--active': form.gameMode === 'training' }">
+              <input
+                v-model="form.gameMode"
+                type="radio"
+                value="training"
+                class="game-mode-radio"
+              />
+              <div class="game-mode-content">
+                <div class="game-mode-title">Обучение</div>
+                <div class="game-mode-description">Режим с подсказками на границе для изучения логики игры</div>
+              </div>
+            </label>
+            <label class="game-mode-option" :class="{ 'game-mode-option--active': form.gameMode === 'fair' }">
+              <input
+                v-model="form.gameMode"
+                type="radio"
+                value="fair"
+                class="game-mode-radio"
+              />
+              <div class="game-mode-content">
+                <div class="game-mode-title">Справедливый</div>
+                <div class="game-mode-description">Мины размещаются динамически, игра всегда выбирает худший сценарий</div>
+              </div>
+            </label>
           </div>
         </div>
 
@@ -164,7 +192,7 @@ const form = ref({
   cols: 16,
   mines: 40,
   password: '',
-  fairMode: false,
+  gameMode: 'classic' as 'classic' | 'training' | 'fair',
 })
 
 const hasPassword = ref(false)
@@ -181,7 +209,7 @@ watch(() => props.show, (isShowing) => {
       cols: props.room.cols,
       mines: props.room.mines,
       password: '',
-      fairMode: props.room.fairMode ?? false,
+      gameMode: (props.room.gameMode ?? 'classic') as 'classic' | 'training' | 'fair',
     }
     hasPassword.value = props.room.hasPassword
   }
@@ -239,7 +267,7 @@ const handleSubmit = async () => {
       rows: form.value.rows,
       cols: form.value.cols,
       mines: form.value.mines,
-      fairMode: form.value.fairMode,
+      gameMode: form.value.gameMode,
     }
 
     // Обрабатываем пароль:

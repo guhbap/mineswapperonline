@@ -111,16 +111,44 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">
-            <input
-              v-model="form.fairMode"
-              type="checkbox"
-              class="form-checkbox"
-            />
-            Режим справедливости
-          </label>
-          <div class="form-hint">
-            В этом режиме поле генерируется так, чтобы все ячейки можно было открыть логически, без необходимости угадывать
+          <label class="form-label">Режим игры</label>
+          <div class="game-mode-selector">
+            <label class="game-mode-option" :class="{ 'game-mode-option--active': form.gameMode === 'classic' }">
+              <input
+                v-model="form.gameMode"
+                type="radio"
+                value="classic"
+                class="game-mode-radio"
+              />
+              <div class="game-mode-content">
+                <div class="game-mode-title">Классический</div>
+                <div class="game-mode-description">Обычный режим сапера с заранее размещенными минами</div>
+              </div>
+            </label>
+            <label class="game-mode-option" :class="{ 'game-mode-option--active': form.gameMode === 'training' }">
+              <input
+                v-model="form.gameMode"
+                type="radio"
+                value="training"
+                class="game-mode-radio"
+              />
+              <div class="game-mode-content">
+                <div class="game-mode-title">Обучение</div>
+                <div class="game-mode-description">Режим с подсказками на границе для изучения логики игры</div>
+              </div>
+            </label>
+            <label class="game-mode-option" :class="{ 'game-mode-option--active': form.gameMode === 'fair' }">
+              <input
+                v-model="form.gameMode"
+                type="radio"
+                value="fair"
+                class="game-mode-radio"
+              />
+              <div class="game-mode-content">
+                <div class="game-mode-title">Справедливый</div>
+                <div class="game-mode-description">Мины размещаются динамически, игра всегда выбирает худший сценарий</div>
+              </div>
+            </label>
           </div>
         </div>
 
@@ -148,7 +176,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  submit: [data: { name: string; password?: string; rows: number; cols: number; mines: number; fairMode: boolean }]
+  submit: [data: { name: string; password?: string; rows: number; cols: number; mines: number; gameMode: string }]
   cancel: []
 }>()
 
@@ -158,7 +186,7 @@ const form = ref({
   cols: 16,
   mines: 40,
   password: '',
-  fairMode: false,
+  gameMode: 'classic' as 'classic' | 'training' | 'fair',
 })
 
 const hasPassword = ref(false)
@@ -229,7 +257,7 @@ const handleSubmit = () => {
     rows: form.value.rows,
     cols: form.value.cols,
     mines: form.value.mines,
-    fairMode: form.value.fairMode,
+    gameMode: form.value.gameMode,
     ...(hasPassword.value && form.value.password ? { password: form.value.password } : {}),
   }
 
@@ -250,7 +278,7 @@ const handleCancel = () => {
     cols: 16,
     mines: 40,
     password: '',
-    fairMode: false,
+    gameMode: 'classic' as 'classic' | 'training' | 'fair',
   }
   hasPassword.value = false
 }
@@ -414,6 +442,57 @@ const handleOverlayClick = () => {
 
 .form-checkbox {
   margin-right: 0.5rem;
+}
+
+.game-mode-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.game-mode-option {
+  display: flex;
+  align-items: flex-start;
+  padding: 1rem;
+  border: 2px solid var(--border-color);
+  border-radius: 0.75rem;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  gap: 0.75rem;
+}
+
+.game-mode-option:hover {
+  border-color: #667eea;
+  background: var(--bg-tertiary);
+}
+
+.game-mode-option--active {
+  border-color: #667eea;
+  background: var(--bg-tertiary);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.game-mode-radio {
+  margin-top: 0.125rem;
+  cursor: pointer;
+}
+
+.game-mode-content {
+  flex: 1;
+}
+
+.game-mode-title {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.game-mode-description {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
 }
 
 .form-hint {

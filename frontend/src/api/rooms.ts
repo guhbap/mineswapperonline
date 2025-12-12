@@ -44,7 +44,7 @@ export interface Room {
   rows: number
   cols: number
   mines: number
-  fairMode?: boolean
+  gameMode?: string
   players: number
   createdAt: string
   creatorId?: number
@@ -56,7 +56,7 @@ export interface CreateRoomRequest {
   rows: number
   cols: number
   mines: number
-  fairMode: boolean
+  gameMode: string
 }
 
 export interface JoinRoomRequest {
@@ -85,7 +85,7 @@ export interface UpdateRoomRequest {
   rows: number
   cols: number
   mines: number
-  fairMode?: boolean
+  gameMode?: string
 }
 
 export async function updateRoom(roomId: string, data: UpdateRoomRequest): Promise<Room> {
