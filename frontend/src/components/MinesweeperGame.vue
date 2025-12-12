@@ -174,12 +174,47 @@
       </div>
       </div>
 
-        <!-- Чат -->
-        <div class="chat-wrapper">
-          <Chat
-            :ws-client="wsClient"
-            :own-nickname="nickname"
-          />
+        <!-- Список игроков и Чат -->
+        <div class="sidebar-wrapper">
+          <!-- Список игроков -->
+          <div class="players-list-wrapper">
+            <div class="players-list-header">
+              <h3 class="players-list-title">Игроки ({{ playersList.length }})</h3>
+            </div>
+            <div class="players-list">
+              <div v-if="playersList.length === 0" class="players-list-empty">
+                <p>Нет игроков в комнате</p>
+              </div>
+              <div
+                v-for="player in playersList"
+                :key="player.id"
+                class="player-item"
+                :class="{ 'player-item--own': player.nickname === nickname }"
+              >
+                <router-link
+                  :to="`/profile/${player.nickname}`"
+                  class="player-link"
+                >
+                  <div
+                    class="player-avatar"
+                    :style="player.color ? { background: player.color } : {}"
+                  >
+                    <span class="avatar-text">{{ player.nickname[0].toUpperCase() }}</span>
+                  </div>
+                  <span class="player-name">{{ player.nickname }}</span>
+                  <span v-if="player.nickname === nickname" class="player-badge">Вы</span>
+                </router-link>
+              </div>
+            </div>
+          </div>
+
+          <!-- Чат -->
+          <div class="chat-wrapper">
+            <Chat
+              :ws-client="wsClient"
+              :own-nickname="nickname"
+            />
+          </div>
         </div>
 
       </div>
@@ -287,6 +322,9 @@ const ratingChange = ref<number | null>(null)
 
 // Отслеживание подсказок
 const hintsUsed = ref(0)
+
+// Список игроков в комнате
+const playersList = ref<Array<{ id: string; nickname: string; color: string }>>([])
 
 // Определение мобильного устройства
 const isMobile = computed(() => {
@@ -423,6 +461,7 @@ const handleNewGame = () => {
   gameStartTime.value = null
   ratingChange.value = null
   hintsUsed.value = 0
+  // Список игроков не сбрасываем, так как они остаются в комнате
 }
 
 const handleMessage = (msg: WebSocketMessage) => {
@@ -497,6 +536,13 @@ const handleMessage = (msg: WebSocketMessage) => {
       clearTimeout(oldTimeout)
     }
     cursorTimeout.value.set(playerId, timeoutId as unknown as number)
+  } else if (msg.type === 'players' && msg.players) {
+    // Обновляем список игроков
+    playersList.value = msg.players.map((p: any) => ({
+      id: p.id || p.playerId || '',
+      nickname: p.nickname || 'Игрок',
+      color: p.color || '#667eea'
+    }))
   }
 }
 
@@ -593,20 +639,134 @@ onUnmounted(() => {
   order: 2;
 }
 
-.chat-wrapper {
+.sidebar-wrapper {
   order: 3;
   flex-shrink: 0;
   width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.players-list-wrapper {
+  background: var(--bg-primary);
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 8px var(--shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 300px;
+}
+
+.players-list-header {
+  padding: 1rem;
+  border-bottom: 2px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.players-list-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.players-list {
+  overflow-y: auto;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.player-item {
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  transition: background 0.2s;
+}
+
+.player-item:hover {
+  background: var(--bg-secondary);
+}
+
+.player-item--own {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+}
+
+.player-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  color: var(--text-primary);
+  transition: color 0.2s;
+}
+
+.player-link:hover {
+  color: #667eea;
+}
+
+.player-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #667eea;
+  color: white;
+  font-weight: 700;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.avatar-text {
+  user-select: none;
+}
+
+.player-name {
+  flex: 1;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.player-badge {
+  font-size: 0.75rem;
+  color: #667eea;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 0.25rem;
+}
+
+.players-list-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.chat-wrapper {
+  flex-shrink: 0;
+  width: 100%;
   height: 500px;
   display: flex;
   flex-direction: column;
 }
 
 @media (max-width: 768px) {
+  .sidebar-wrapper {
+    width: 100%;
+    order: 1;
+  }
+
+  .players-list-wrapper {
+    max-height: 200px;
+  }
+
   .chat-wrapper {
     width: 100%;
     height: 300px;
-    order: 1;
   }
 }
 

@@ -407,6 +407,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Отправка начального состояния игры игроку %s", playerID)
 	s.sendGameStateToPlayer(room, player)
 	log.Printf("Начальное состояние игры отправлено игроку %s", playerID)
+	
+	// Отправка списка игроков новому игроку
+	s.sendPlayerListToPlayer(room, player)
 
 	// Обработка сообщений
 	for {
@@ -1117,6 +1120,32 @@ func (s *Server) broadcastToAll(room *Room, msg Message) {
 			log.Printf("Ошибка отправки сообщения чата игроку %s: %v", id, err)
 		}
 		player.mu.Unlock()
+	}
+}
+
+func (s *Server) sendPlayerListToPlayer(room *Room, targetPlayer *Player) {
+	room.mu.RLock()
+	playersList := make([]map[string]string, 0, len(room.Players))
+	for _, player := range room.Players {
+		player.mu.Lock()
+		playersList = append(playersList, map[string]string{
+			"id":       player.ID,
+			"nickname": player.Nickname,
+			"color":    player.Color,
+		})
+		player.mu.Unlock()
+	}
+	room.mu.RUnlock()
+
+	msgData := map[string]interface{}{
+		"type":    "players",
+		"players": playersList,
+	}
+
+	targetPlayer.mu.Lock()
+	defer targetPlayer.mu.Unlock()
+	if err := targetPlayer.Conn.WriteJSON(msgData); err != nil {
+		log.Printf("Ошибка отправки списка игроков: %v", err)
 	}
 }
 
