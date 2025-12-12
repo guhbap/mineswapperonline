@@ -173,7 +173,6 @@
                   :style="participant.color ? { borderColor: participant.color } : {}"
                 >
                   {{ participant.nickname }}
-                  <span v-if="index < game.participants.length - 1" class="participant-separator">,</span>
                 </span>
               </div>
             </div>
