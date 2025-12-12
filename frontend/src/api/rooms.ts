@@ -16,10 +16,21 @@ axios.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Токен невалидный, очищаем и перенаправляем на страницу входа
-      localStorage.removeItem('token')
-      if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-        window.location.href = '/login'
+      const requestUrl = error.config?.url || ''
+      const requestMethod = error.config?.method?.toLowerCase() || ''
+
+      // Не делаем редирект для ошибок пароля комнаты (POST /rooms/join)
+      // Редирект только для ошибок авторизации пользователя (невалидный токен)
+      const isRoomPasswordError =
+        requestMethod === 'post' &&
+        (requestUrl.endsWith('/rooms/join') || requestUrl.includes('/api/rooms/join'))
+
+      if (!isRoomPasswordError) {
+        // Токен невалидный, очищаем и перенаправляем на страницу входа
+        localStorage.removeItem('token')
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+          window.location.href = '/login'
+        }
       }
     }
     return Promise.reject(error)

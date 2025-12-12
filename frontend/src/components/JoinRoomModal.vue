@@ -2,10 +2,10 @@
   <div v-if="show" class="modal-overlay" @click.self="handleOverlayClick">
     <div class="modal">
       <h2 class="modal__title">Подключиться к комнате</h2>
-      <p class="modal__subtitle">{{ room.name }}</p>
+      <p class="modal__subtitle">{{ room?.name }}</p>
 
       <div class="modal__form">
-        <div v-if="room.hasPassword" class="form-group">
+        <div v-if="room && room.hasPassword" class="form-group">
           <label class="form-label">Пароль</label>
           <input
             v-model="password"
@@ -68,7 +68,14 @@ const handleSubmit = async () => {
     error.value = ''
     password.value = ''
   } catch (err: any) {
-    error.value = err.response?.data || 'Ошибка подключения к комнате'
+    // Обрабатываем ошибку пароля или другие ошибки
+    if (err.response?.status === 401) {
+      error.value = 'Неверный пароль'
+    } else if (err.response?.status === 404) {
+      error.value = 'Комната не найдена'
+    } else {
+      error.value = err.response?.data?.error || err.response?.data || 'Ошибка подключения к комнате'
+    }
   }
 }
 

@@ -35,11 +35,13 @@
       <div class="game-content-wrapper">
         <!-- Игровое поле -->
         <div
+          ref="boardWrapper"
           class="game-board-wrapper"
           @contextmenu.prevent
           @touchstart="handleTouchStart"
           @touchmove="handleTouchMove"
           @touchend="handleTouchEnd"
+          @mousemove="handleBoardMouseMove"
         >
       <!-- Кнопки зума для мобильных -->
       <div v-if="isMobile" class="zoom-controls">
@@ -143,6 +145,7 @@
         v-for="cursor in displayCursors"
         :key="cursor.playerId"
         class="remote-cursor"
+        :class="{ 'remote-cursor--hovered': cursorHovered === cursor.playerId }"
         :style="{
           transform: `translate(${cursor.x - 12}px, ${cursor.y - 12}px)`,
           '--cursor-color': cursor.color,
@@ -312,8 +315,10 @@ const props = defineProps<{
 const gameState = ref<WebSocketMessage['gameState'] | null>(null)
 const otherCursors = ref<Array<{ playerId: string; x: number; y: number; nickname: string; color: string }>>([])
 const cursorTimeout = ref<Map<string, number>>(new Map())
+const cursorHovered = ref<string | null>(null)
 const isModalTransparent = ref(false)
 const boardContainer = ref<HTMLElement | null>(null)
+const boardWrapper = ref<HTMLElement | null>(null)
 const authStore = useAuthStore()
 
 // Отслеживание времени игры
@@ -387,6 +392,36 @@ const handleMouseMove = (event: MouseEvent) => {
 
 const handleMouseLeave = () => {
   // Можно отправить сообщение об уходе курсора, но для простоты просто очистим через таймаут
+}
+
+const handleBoardMouseMove = (event: MouseEvent) => {
+  if (!boardWrapper.value) return
+
+  const rect = boardWrapper.value.getBoundingClientRect()
+  const x = event.clientX - rect.left
+  const y = event.clientY - rect.top
+
+  // Проверяем, находится ли мышь над каким-либо курсором
+  let hoveredCursorId: string | null = null
+  for (const cursor of displayCursors.value) {
+    const cursorX = cursor.x - 12
+    const cursorY = cursor.y - 12
+    const cursorSize = 24 // размер курсора
+    const labelHeight = 30 // примерная высота лейбла
+
+    // Проверяем, находится ли мышь в области курсора (иконка + лейбл)
+    if (
+      x >= cursorX &&
+      x <= cursorX + cursorSize &&
+      y >= cursorY &&
+      y <= cursorY + cursorSize + labelHeight
+    ) {
+      hoveredCursorId = cursor.playerId
+      break
+    }
+  }
+
+  cursorHovered.value = hoveredCursorId
 }
 
 const handleCellClick = (row: number, col: number, isRightClick: boolean = false) => {
@@ -977,6 +1012,11 @@ onUnmounted(() => {
   left: 0;
   top: 0;
   will-change: transform;
+  transition: opacity 0.2s ease;
+}
+
+.remote-cursor--hovered {
+  opacity: 0.5;
 }
 
 .cursor-icon {
