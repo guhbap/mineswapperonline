@@ -8,6 +8,7 @@ import (
 
 	"minesweeperonline/internal/database"
 	"minesweeperonline/internal/models"
+	"minesweeperonline/internal/rating"
 	"minesweeperonline/internal/utils"
 )
 
@@ -172,9 +173,49 @@ func isValidHexColor(color string) bool {
 	return true
 }
 
-func (h *ProfileHandler) RecordGameResult(userID int, won bool) error {
+// RecordGameResult records game result and updates player rating
+// width, height, mines - dimensions of the game field
+// gameTime - time taken to complete the game in seconds
+// won - whether the player won
+func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool) error {
+	// Get current player rating
+	var currentRating float64
+	err := h.db.QueryRow(
+		"SELECT COALESCE(rating, 1500.0) FROM users WHERE id = $1",
+		userID,
+	).Scan(&currentRating)
+	if err != nil {
+		log.Printf("Error getting player rating: %v", err)
+		currentRating = 1500.0 // Default rating
+	}
+
+	// Compute Dref (reference complexity for 16x16, 40 mines)
+	Dref := rating.ComputeDref()
+
+	// Update rating only if game was won (lost games don't affect rating)
+	var newRating float64
 	if won {
-		_, err := h.db.Exec(
+		newRating, _ = rating.UpdatePlayerRating(
+			float64(width), float64(height), float64(mines),
+			gameTime, currentRating, Dref,
+		)
+	} else {
+		// For lost games, we could implement a penalty, but for now keep the same rating
+		newRating = currentRating
+	}
+
+	// Update user rating in database
+	_, err = h.db.Exec(
+		"UPDATE users SET rating = $1 WHERE id = $2",
+		newRating, userID,
+	)
+	if err != nil {
+		log.Printf("Error updating player rating: %v", err)
+	}
+
+	// Update game statistics
+	if won {
+		_, err = h.db.Exec(
 			`INSERT INTO user_stats (user_id, games_played, games_won, updated_at) 
 			 VALUES ($1, 1, 1, CURRENT_TIMESTAMP)
 			 ON CONFLICT (user_id) 
@@ -186,7 +227,7 @@ func (h *ProfileHandler) RecordGameResult(userID int, won bool) error {
 		)
 		return err
 	} else {
-		_, err := h.db.Exec(
+		_, err = h.db.Exec(
 			`INSERT INTO user_stats (user_id, games_played, games_lost, updated_at) 
 			 VALUES ($1, 1, 1, CURRENT_TIMESTAMP)
 			 ON CONFLICT (user_id) 
@@ -203,9 +244,9 @@ func (h *ProfileHandler) RecordGameResult(userID int, won bool) error {
 func (h *ProfileHandler) findUserByID(id int) (models.User, error) {
 	var user models.User
 	err := h.db.QueryRow(
-		"SELECT id, username, email, color, created_at FROM users WHERE id = $1",
+		"SELECT id, username, email, color, COALESCE(rating, 1500.0), created_at FROM users WHERE id = $1",
 		id,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.Rating, &user.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		return models.User{}, err
@@ -216,9 +257,9 @@ func (h *ProfileHandler) findUserByID(id int) (models.User, error) {
 func (h *ProfileHandler) findUserByUsername(username string) (models.User, error) {
 	var user models.User
 	err := h.db.QueryRow(
-		"SELECT id, username, email, color, created_at FROM users WHERE username = $1",
+		"SELECT id, username, email, color, COALESCE(rating, 1500.0), created_at FROM users WHERE username = $1",
 		username,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.Rating, &user.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		return models.User{}, err

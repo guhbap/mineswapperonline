@@ -10,6 +10,7 @@ type User struct {
 	Email        string    `json:"email"`
 	PasswordHash string    `json:"-"`
 	Color        string    `json:"color,omitempty"`
+	Rating       float64  `json:"rating"`
 	CreatedAt    time.Time `json:"createdAt"`
 }
 

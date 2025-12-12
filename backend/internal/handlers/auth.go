@@ -149,9 +149,9 @@ func (h *AuthHandler) createUser(username, email, password string) (models.User,
 
 	var user models.User
 	err = h.db.QueryRow(
-		"INSERT INTO users (username, email, password_hash, color) VALUES ($1, $2, $3, $4) RETURNING id, username, email, color, created_at",
+		"INSERT INTO users (username, email, password_hash, color) VALUES ($1, $2, $3, $4) RETURNING id, username, email, color, COALESCE(rating, 1500.0), created_at",
 		username, email, passwordHash, defaultColor,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.Rating, &user.CreatedAt)
 
 	return user, err
 }

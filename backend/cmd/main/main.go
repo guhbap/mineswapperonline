@@ -105,6 +105,7 @@ type Room struct {
 	Players         map[string]*Player `json:"-"`
 	GameState       *GameState         `json:"-"`
 	CreatedAt       time.Time          `json:"createdAt"`
+	StartTime       *time.Time         `json:"-"` // Время начала игры (первый клик)
 	deleteTimer     *time.Timer        // Таймер для отложенного удаления
 	deleteTimerMu   sync.Mutex         // Мьютекс для безопасной работы с таймером
 	mu              sync.RWMutex
@@ -489,6 +490,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		case "newGame":
 			room.mu.Lock()
 			room.GameState = NewGameState(room.Rows, room.Cols, room.Mines)
+			room.StartTime = nil // Сбрасываем время начала игры
 			room.mu.Unlock()
 			log.Printf("Новая игра начата")
 			s.broadcastGameState(room)
@@ -627,6 +629,11 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			// Обновляем ссылку на ячейку после перемещения мин
 			cell = &room.GameState.Board[row][col]
 		}
+		// Устанавливаем время начала игры при первом клике
+		room.mu.Lock()
+		now := time.Now()
+		room.StartTime = &now
+		room.mu.Unlock()
 	}
 
 	cell.IsRevealed = true
@@ -644,9 +651,20 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			userID := player.UserID
 			player.mu.Unlock()
 
-			// Записываем поражение в БД
+			// Вычисляем время игры
+			room.mu.RLock()
+			var gameTime float64
+			if room.StartTime != nil {
+				gameTime = time.Since(*room.StartTime).Seconds()
+			} else {
+				// Если StartTime не установлен (не должно происходить), используем 0
+				gameTime = 0.0
+			}
+			room.mu.RUnlock()
+
+			// Записываем поражение в БД (поражения не влияют на рейтинг)
 			if userID > 0 && s.profileHandler != nil {
-				if err := s.profileHandler.RecordGameResult(userID, false); err != nil {
+				if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false); err != nil {
 					log.Printf("Ошибка записи результата игры: %v", err)
 				}
 			}
@@ -701,13 +719,22 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			room.GameState.GameWon = true
 			log.Printf("Победа! Все ячейки открыты!")
 
-			// Записываем победу для всех игроков в комнате, которые не проиграли
+			// Вычисляем время игры
 			room.mu.RLock()
+			var gameTime float64
+			if room.StartTime != nil {
+				gameTime = time.Since(*room.StartTime).Seconds()
+			} else {
+				// Если StartTime не установлен (не должно происходить), используем 0
+				gameTime = 0.0
+			}
 			loserID := room.GameState.LoserPlayerID
+			
+			// Записываем победу для всех игроков в комнате, которые не проиграли
 			for _, p := range room.Players {
 				// Записываем победу только для игроков, которые не проиграли
 				if p.ID != loserID && p.UserID > 0 && s.profileHandler != nil {
-					if err := s.profileHandler.RecordGameResult(p.UserID, true); err != nil {
+					if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true); err != nil {
 						log.Printf("Ошибка записи результата игры: %v", err)
 					}
 				}
