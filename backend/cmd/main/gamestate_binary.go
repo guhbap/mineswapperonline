@@ -146,6 +146,18 @@ func encodeGameStateBinary(gs *GameState) ([]byte, error) {
 		count++
 	}
 
+	// Записываем SafeCells (для режима без угадываний)
+	safeCellsCount := uint16(len(gs.SafeCells))
+	if safeCellsCount > 65535 {
+		safeCellsCount = 65535
+	}
+	binary.Write(buf, binary.LittleEndian, safeCellsCount)
+	for i := 0; i < int(safeCellsCount); i++ {
+		cell := gs.SafeCells[i]
+		binary.Write(buf, binary.LittleEndian, uint16(cell.Row))
+		binary.Write(buf, binary.LittleEndian, uint16(cell.Col))
+	}
+
 	return buf.Bytes(), nil
 }
 
@@ -239,6 +251,24 @@ func decodeGameStateBinary(data []byte) (*GameState, error) {
 						}
 					}
 				}
+			}
+		}
+	}
+
+	// Читаем SafeCells (если есть данные)
+	if buf.Len() > 0 {
+		var safeCellsCount uint16
+		if err := binary.Read(buf, binary.LittleEndian, &safeCellsCount); err == nil && safeCellsCount > 0 {
+			gs.SafeCells = make([]SafeCell, safeCellsCount)
+			for i := 0; i < int(safeCellsCount); i++ {
+				var row, col uint16
+				if err := binary.Read(buf, binary.LittleEndian, &row); err != nil {
+					break
+				}
+				if err := binary.Read(buf, binary.LittleEndian, &col); err != nil {
+					break
+				}
+				gs.SafeCells[i] = SafeCell{Row: int(row), Col: int(col)}
 			}
 		}
 	}

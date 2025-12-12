@@ -14,6 +14,8 @@
  * - Rows*Cols байт: Board (каждая Cell = 1 байт)
  * - 1 байт: Количество флагов с цветами
  * - Для каждого флага: 2 байта cellKey (uint16), 1 байт длина цвета, N байт цвет
+ * - 2 байта: Количество SafeCells (uint16)
+ * - Для каждой SafeCell: 2 байта row (uint16), 2 байта col (uint16)
  */
 export function decodeGameStateBinary(data: ArrayBuffer): {
   b: Array<Array<{ m: boolean; r: boolean; f: boolean; n: number; fc?: string }>> // board
@@ -24,6 +26,7 @@ export function decodeGameStateBinary(data: ArrayBuffer): {
   gw: boolean // gameWon
   rv: number // revealed
   hu: number // hintsUsed
+  sc?: Array<{ r: number; c: number }> // safeCells
   lpid?: string // loserPlayerId
   ln?: string // loserNickname
 } {
@@ -120,6 +123,24 @@ export function decodeGameStateBinary(data: ArrayBuffer): {
     }
   }
 
+  // Читаем SafeCells (если есть данные)
+  let safeCells: Array<{ r: number; c: number }> | undefined
+  if (offset < data.byteLength) {
+    const safeCellsCount = view.getUint16(offset, true)
+    offset += 2
+    
+    if (safeCellsCount > 0) {
+      safeCells = []
+      for (let i = 0; i < safeCellsCount && offset + 4 <= data.byteLength; i++) {
+        const row = view.getUint16(offset, true)
+        offset += 2
+        const col = view.getUint16(offset, true)
+        offset += 2
+        safeCells.push({ r: row, c: col })
+      }
+    }
+  }
+
   return {
     b: board,
     r: rows,
@@ -129,6 +150,7 @@ export function decodeGameStateBinary(data: ArrayBuffer): {
     gw: gameWon,
     rv: revealed,
     hu: hintsUsed,
+    sc: safeCells,
     lpid: loserPlayerID,
     ln: loserNickname
   }

@@ -48,6 +48,11 @@ type FlagInfo struct {
 	PlayerID string
 }
 
+type SafeCell struct {
+	Row int `json:"r"`
+	Col int `json:"c"`
+}
+
 type GameState struct {
 	Board         [][]Cell         `json:"b"`
 	Rows          int              `json:"r"`
@@ -56,7 +61,8 @@ type GameState struct {
 	GameOver      bool             `json:"go"`
 	GameWon       bool             `json:"gw"`
 	Revealed      int              `json:"rv"`
-	HintsUsed     int              `json:"hu"` // Количество использованных подсказок (глобально для комнаты)
+	HintsUsed     int              `json:"hu"`           // Количество использованных подсказок (глобально для комнаты)
+	SafeCells     []SafeCell       `json:"sc,omitempty"` // Безопасные ячейки для режима без угадываний
 	LoserPlayerID string           `json:"lpid,omitempty"`
 	LoserNickname string           `json:"ln,omitempty"`
 	flagSetInfo   map[int]FlagInfo // Информация об установке флага для каждой ячейки (ключ: row*cols + col)
@@ -110,7 +116,7 @@ type Room struct {
 	Cols          int                `json:"cols"`
 	Mines         int                `json:"mines"`
 	NoGuessing    bool               `json:"noGuessing"` // Режим без угадываний
-	CreatorID     int                `json:"creatorId"` // ID создателя комнаты (0 для гостей)
+	CreatorID     int                `json:"creatorId"`  // ID создателя комнаты (0 для гостей)
 	Players       map[string]*Player `json:"-"`
 	GameState     *GameState         `json:"-"`
 	CreatedAt     time.Time          `json:"createdAt"`
@@ -232,7 +238,9 @@ func NewGameState(rows, cols, mines int, noGuessing bool) *GameState {
 
 		// Если режим без угадываний, проверяем решаемость поля
 		if noGuessing {
-			if isSolvableWithoutGuessing(gs) {
+			isSolvable, safeCells := isSolvableWithoutGuessing(gs)
+			if isSolvable {
+				gs.SafeCells = safeCells
 				return gs
 			}
 			attempts++
@@ -303,7 +311,8 @@ func generateRandomBoard(rows, cols, mines int) *GameState {
 }
 
 // isSolvableWithoutGuessing проверяет, можно ли решить поле без угадываний
-func isSolvableWithoutGuessing(gs *GameState) bool {
+// Возвращает true и список безопасных ячеек, если поле решаемо, иначе false и nil
+func isSolvableWithoutGuessing(gs *GameState) (bool, []SafeCell) {
 	// Создаем копию доски для симуляции
 	revealed := make([][]bool, gs.Rows)
 	for i := range revealed {
@@ -321,11 +330,19 @@ func isSolvableWithoutGuessing(gs *GameState) bool {
 		}
 	}
 
+	// Собираем все безопасные ячейки (те, которые можно открыть логически)
+	safeCells := make([]SafeCell, 0)
+
 	// Если нет безопасных стартовых точек, поле может требовать угадываний
 	if len(queue) == 0 {
 		// Проверяем, есть ли хотя бы одна ячейка, которую можно открыть логически
 		// (ячейка, где все соседи с минами уже определены)
-		return false
+		return false, nil
+	}
+
+	// Добавляем начальные безопасные ячейки
+	for _, cell := range queue {
+		safeCells = append(safeCells, SafeCell{Row: cell.row, Col: cell.col})
 	}
 
 	// Симулируем открытие ячеек
@@ -410,6 +427,8 @@ func isSolvableWithoutGuessing(gs *GameState) bool {
 				if canReveal && neighborUnknown == 0 {
 					revealed[i][j] = true
 					changed = true
+					// Добавляем в список безопасных ячеек
+					safeCells = append(safeCells, SafeCell{Row: i, Col: j})
 					if gs.Board[i][j].NeighborMines == 0 {
 						queue = append(queue, struct{ row, col int }{i, j})
 					}
@@ -430,7 +449,10 @@ func isSolvableWithoutGuessing(gs *GameState) bool {
 	}
 
 	// Поле решаемо без угадываний, если все не-минные ячейки можно открыть логически
-	return revealedCount == totalCells-gs.Mines
+	if revealedCount == totalCells-gs.Mines {
+		return true, safeCells
+	}
+	return false, nil
 }
 
 func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int, noGuessing bool) *Room {
@@ -879,6 +901,32 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		return
 	}
 
+	// Проверка для режима без угадываний: можно открывать только безопасные ячейки
+	room.mu.RLock()
+	noGuessing := room.NoGuessing
+	room.mu.RUnlock()
+
+	if noGuessing && len(room.GameState.SafeCells) > 0 {
+		// Проверяем, есть ли открытые ячейки (если нет - это первый клик)
+		hasRevealedCells := room.GameState.Revealed > 0
+
+		// Проверяем, является ли эта ячейка безопасной
+		isSafe := false
+		for _, safeCell := range room.GameState.SafeCells {
+			if safeCell.Row == row && safeCell.Col == col {
+				isSafe = true
+				break
+			}
+		}
+
+		// Если это не первый клик и ячейка не безопасна - блокируем
+		if hasRevealedCells && !isSafe {
+			log.Printf("В режиме без угадываний нельзя открыть непомеченную ячейку: row=%d, col=%d", row, col)
+			room.GameState.mu.Unlock()
+			return
+		}
+	}
+
 	// Если это первое открытие, убеждаемся, что ячейка безопасна (0)
 	isFirstClick := room.GameState.Revealed == 0
 	if isFirstClick {
@@ -1300,6 +1348,7 @@ func (s *Server) sendGameStateToPlayer(room *Room, player *Player) {
 		GameWon:       room.GameState.GameWon,
 		Revealed:      room.GameState.Revealed,
 		HintsUsed:     room.GameState.HintsUsed,
+		SafeCells:     room.GameState.SafeCells,
 		LoserPlayerID: loserPlayerID,
 		LoserNickname: room.GameState.LoserNickname,
 	}
@@ -1345,6 +1394,7 @@ func (s *Server) broadcastGameState(room *Room) {
 		GameWon:       room.GameState.GameWon,
 		Revealed:      room.GameState.Revealed,
 		HintsUsed:     room.GameState.HintsUsed,
+		SafeCells:     room.GameState.SafeCells,
 		LoserPlayerID: loserPlayerID,
 		LoserNickname: room.GameState.LoserNickname,
 	}
@@ -1555,12 +1605,12 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name        string `json:"name"`
-		Password    string `json:"password"`
-		Rows        int    `json:"rows"`
-		Cols        int    `json:"cols"`
-		Mines       int    `json:"mines"`
-		NoGuessing  bool   `json:"noGuessing"`
+		Name       string `json:"name"`
+		Password   string `json:"password"`
+		Rows       int    `json:"rows"`
+		Cols       int    `json:"cols"`
+		Mines      int    `json:"mines"`
+		NoGuessing bool   `json:"noGuessing"`
 	}
 
 	if err := utils.DecodeJSON(r, &req); err != nil {
