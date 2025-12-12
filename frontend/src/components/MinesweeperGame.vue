@@ -226,6 +226,22 @@
       </button>
       <h2>Победа! 🎉</h2>
       <p>Все мины найдены!</p>
+      <div v-if="ratingChange !== null" class="rating-change">
+        <div v-if="ratingChange > 0" class="rating-change__positive">
+          +{{ Math.round(ratingChange) }} рейтинга
+        </div>
+        <div v-else-if="ratingChange < 0" class="rating-change__negative">
+          {{ Math.round(ratingChange) }} рейтинга
+        </div>
+        <div v-else class="rating-change__neutral">
+          Рейтинг не изменился
+        </div>
+      </div>
+      <div v-else-if="gameState && !isComplexitySufficient(gameState.c, gameState.r, gameState.m)" class="rating-change">
+        <div class="rating-change__hint">
+          Поле слишком простое для получения рейтинга
+        </div>
+      </div>
       <button @click="handleNewGame" class="game-message__button">
         Новая игра
       </button>
@@ -234,11 +250,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import type { WebSocketMessage, Cell, IWebSocketClient } from '@/api/websocket'
 import { useCursorAnimation } from '@/composables/useCursorAnimation'
 import { useGameBoardZoom } from '@/composables/useGameBoardZoom'
 import { useCellTouch } from '@/composables/useCellTouch'
+import { useAuthStore } from '@/stores/auth'
+import { calculateRatingChange, isComplexitySufficient } from '@/utils/ratingCalculator'
 import Chat from '@/components/Chat.vue'
 
 const props = defineProps<{
@@ -251,6 +269,11 @@ const otherCursors = ref<Array<{ playerId: string; x: number; y: number; nicknam
 const cursorTimeout = ref<Map<string, number>>(new Map())
 const isModalTransparent = ref(false)
 const boardContainer = ref<HTMLElement | null>(null)
+const authStore = useAuthStore()
+
+// Отслеживание времени игры
+const gameStartTime = ref<number | null>(null)
+const ratingChange = ref<number | null>(null)
 
 // Определение мобильного устройства
 const isMobile = computed(() => {
@@ -329,17 +352,52 @@ const handleCellClick = (row: number, col: number, isRightClick: boolean = false
     return
   }
 
+  // Запоминаем время начала игры при первом клике
+  if (gameStartTime.value === null && !isRightClick) {
+    gameStartTime.value = Date.now()
+  }
+
   props.wsClient.sendCellClick(row, col, isRightClick)
 }
 
 const handleNewGame = () => {
   if (!props.wsClient?.isConnected()) return
   props.wsClient.sendNewGame()
+  // Сбрасываем время начала игры и изменение рейтинга
+  gameStartTime.value = null
+  ratingChange.value = null
 }
 
 const handleMessage = (msg: WebSocketMessage) => {
   if (msg.type === 'gameState' && msg.gameState) {
+    const prevGameWon = gameState.value?.gw
     gameState.value = msg.gameState
+    
+    // Если игра только что завершилась победой, рассчитываем изменение рейтинга
+    if (msg.gameState.gw && !prevGameWon && gameStartTime.value !== null && gameState.value) {
+      const gameTime = (Date.now() - gameStartTime.value) / 1000 // время в секундах
+      const currentRating = authStore.user?.rating || 1500.0
+      
+      // Проверяем, достаточно ли сложности поля для получения рейтинга
+      if (isComplexitySufficient(gameState.value.c, gameState.value.r, gameState.value.m)) {
+        const result = calculateRatingChange(
+          gameState.value.c,
+          gameState.value.r,
+          gameState.value.m,
+          gameTime,
+          currentRating
+        )
+        ratingChange.value = result.delta
+      } else {
+        ratingChange.value = null // Поле слишком простое
+      }
+    }
+    
+    // Сбрасываем время начала игры при новой игре
+    if (!msg.gameState.gw && !msg.gameState.go && gameState.value.rv === 0) {
+      gameStartTime.value = null
+      ratingChange.value = null
+    }
   } else if (msg.type === 'cursor' && msg.cursor) {
     // playerId может быть на верхнем уровне или внутри cursor (pid)
     const playerId = msg.playerId || msg.cursor.pid
@@ -824,6 +882,53 @@ onUnmounted(() => {
 
 .game-message--won h2 {
   color: #16a34a;
+}
+
+.rating-change {
+  margin: 1rem 0;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rating-change__positive {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+  border: 2px solid rgba(34, 197, 94, 0.3);
+}
+
+.rating-change__negative {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  border: 2px solid rgba(239, 68, 68, 0.3);
+}
+
+.rating-change__neutral {
+  color: var(--text-secondary);
+  background: rgba(107, 114, 128, 0.1);
+  border: 2px solid rgba(107, 114, 128, 0.3);
+}
+
+.rating-change__hint {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 400;
+  font-style: italic;
+  background: rgba(107, 114, 128, 0.1);
+  border: 2px solid rgba(107, 114, 128, 0.3);
 }
 
 .loading-message {

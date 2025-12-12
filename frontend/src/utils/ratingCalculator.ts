@@ -93,3 +93,35 @@ export function isComplexitySufficient(
   return D >= minComplexity
 }
 
+// Вычисляет оценку производительности S в диапазоне (0.01..0.99) на основе реального времени T и ожидаемого времени Texp
+function performanceScore(T: number, Texp: number): number {
+  // linear mapping: S = 1 - (T - Texp) / (3*Texp)
+  let s = 1.0 - (T - Texp) / (3.0 * Texp)
+  if (s < MIN_S) {
+    s = MIN_S
+  }
+  if (s > MAX_S) {
+    s = MAX_S
+  }
+  return s
+}
+
+// Вычисляет изменение рейтинга на основе реального времени игры
+// Возвращает изменение рейтинга (delta) и новый рейтинг
+export function calculateRatingChange(
+  width: number,
+  height: number,
+  mines: number,
+  gameTime: number, // время игры в секундах
+  currentRating: number = 1500.0
+): { delta: number; newRating: number } {
+  const Dref = computeDref()
+  const Rp = computeRp(width, height, mines, Dref)
+  const Texp = expectedTime(width, height, mines)
+  const S = performanceScore(gameTime, Texp)
+  const E = expectedResult(Rp, currentRating)
+  const delta = K * (S - E)
+  const newRating = currentRating + delta
+  return { delta, newRating }
+}
+
