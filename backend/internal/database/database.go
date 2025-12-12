@@ -49,20 +49,65 @@ func (db *DB) Close() error {
 }
 
 func (db *DB) InitSchema() error {
-	// AutoMigrate создаст таблицы, если их нет, и обновит существующие
-	err := db.AutoMigrate(
-		&models.User{},
+	migrator := db.Migrator()
+
+	// Проверяем существование таблиц и создаем их, если нужно
+	if !migrator.HasTable(&models.User{}) {
+		if err := migrator.CreateTable(&models.User{}); err != nil {
+			return fmt.Errorf("failed to create users table: %w", err)
+		}
+	} else {
+		// Если таблица существует, создаем уникальные ограничения вручную, если их нет
+		db.Exec(`
+			DO $$ 
+			BEGIN
+				IF NOT EXISTS (
+					SELECT 1 FROM pg_constraint WHERE conname = 'users_username_key'
+				) THEN
+					ALTER TABLE users ADD CONSTRAINT users_username_key UNIQUE (username);
+				END IF;
+			END $$;
+		`)
+
+		db.Exec(`
+			DO $$ 
+			BEGIN
+				IF NOT EXISTS (
+					SELECT 1 FROM pg_constraint WHERE conname = 'users_email_key'
+				) THEN
+					ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
+				END IF;
+			END $$;
+		`)
+	}
+
+	// Создаем остальные таблицы через AutoMigrate
+	// Используем отдельные вызовы для лучшего контроля ошибок
+	tables := []interface{}{
 		&models.UserStats{},
 		&models.UserBestResult{},
 		&models.UserGameHistory{},
 		&models.GameParticipant{},
-	)
-	if err != nil {
-		return fmt.Errorf("failed to migrate database: %w", err)
+		&models.Room{},
 	}
 
+	for _, table := range tables {
+		if err := migrator.AutoMigrate(table); err != nil {
+			log.Printf("Warning during migration of %T: %v", table, err)
+			// Продолжаем выполнение, так как таблицы могут быть уже созданы
+		}
+	}
+
+	// Создаем уникальные индексы вручную, если их нет
+	db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);
+	`)
+	db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
+	`)
+
 	// Создаем индексы вручную, так как GORM не всегда корректно их создает
-	err = db.Exec(`
+	err := db.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_user_game_history_user_id_rating_gain 
 		ON user_game_history(user_id, rating_gain DESC);
 	`).Error

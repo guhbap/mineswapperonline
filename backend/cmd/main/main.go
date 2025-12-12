@@ -26,14 +26,14 @@ var upgrader = websocket.Upgrader{
 }
 
 type Player struct {
-	ID                string    `json:"id"`
-	UserID            int       `json:"userId,omitempty"` // ID пользователя из БД, если авторизован
-	Nickname          string    `json:"nickname"`
-	Color             string    `json:"color"`
-	Conn              *websocket.Conn
-	mu                sync.Mutex
-	LastCursorX       float64   // Последняя отправленная позиция курсора X
-	LastCursorY       float64   // Последняя отправленная позиция курсора Y
+	ID                 string `json:"id"`
+	UserID             int    `json:"userId,omitempty"` // ID пользователя из БД, если авторизован
+	Nickname           string `json:"nickname"`
+	Color              string `json:"color"`
+	Conn               *websocket.Conn
+	mu                 sync.Mutex
+	LastCursorX        float64   // Последняя отправленная позиция курсора X
+	LastCursorY        float64   // Последняя отправленная позиция курсора Y
 	LastCursorSendTime time.Time // Время последней отправки курсора
 }
 
@@ -49,16 +49,16 @@ type FlagInfo struct {
 }
 
 type GameState struct {
-	Board         [][]Cell        `json:"b"`
-	Rows          int             `json:"r"`
-	Cols          int             `json:"c"`
-	Mines         int             `json:"m"`
-	GameOver      bool            `json:"go"`
-	GameWon       bool            `json:"gw"`
-	Revealed      int             `json:"rv"`
-	HintsUsed     int             `json:"hu"` // Количество использованных подсказок (глобально для комнаты)
-	LoserPlayerID string          `json:"lpid,omitempty"`
-	LoserNickname string          `json:"ln,omitempty"`
+	Board         [][]Cell         `json:"b"`
+	Rows          int              `json:"r"`
+	Cols          int              `json:"c"`
+	Mines         int              `json:"m"`
+	GameOver      bool             `json:"go"`
+	GameWon       bool             `json:"gw"`
+	Revealed      int              `json:"rv"`
+	HintsUsed     int              `json:"hu"` // Количество использованных подсказок (глобально для комнаты)
+	LoserPlayerID string           `json:"lpid,omitempty"`
+	LoserNickname string           `json:"ln,omitempty"`
 	flagSetInfo   map[int]FlagInfo // Информация об установке флага для каждой ячейки (ключ: row*cols + col)
 	mu            sync.RWMutex
 }
@@ -103,25 +103,25 @@ type Hint struct {
 }
 
 type Room struct {
-	ID              string             `json:"id"`
-	Name            string             `json:"name"`
-	Password        string             `json:"-"`
-	Rows            int                `json:"rows"`
-	Cols            int                `json:"cols"`
-	Mines           int                `json:"mines"`
-	CreatorID       int                `json:"creatorId"` // ID создателя комнаты (0 для гостей)
-	Players         map[string]*Player `json:"-"`
-	GameState       *GameState         `json:"-"`
-	CreatedAt       time.Time          `json:"createdAt"`
-	StartTime       *time.Time         `json:"-"` // Время начала игры (первый клик)
-	deleteTimer     *time.Timer        // Таймер для отложенного удаления
-	deleteTimerMu   sync.Mutex         // Мьютекс для безопасной работы с таймером
-	mu              sync.RWMutex
+	ID            string             `json:"id"`
+	Name          string             `json:"name"`
+	Password      string             `json:"-"`
+	Rows          int                `json:"rows"`
+	Cols          int                `json:"cols"`
+	Mines         int                `json:"mines"`
+	CreatorID     int                `json:"creatorId"` // ID создателя комнаты (0 для гостей)
+	Players       map[string]*Player `json:"-"`
+	GameState     *GameState         `json:"-"`
+	CreatedAt     time.Time          `json:"createdAt"`
+	StartTime     *time.Time         `json:"-"` // Время начала игры (первый клик)
+	deleteTimer   *time.Timer        // Таймер для отложенного удаления
+	deleteTimerMu sync.Mutex         // Мьютекс для безопасной работы с таймером
+	mu            sync.RWMutex
 }
 
 type RoomManager struct {
-	rooms map[string]*Room
-	mu    sync.RWMutex
+	rooms  map[string]*Room
+	mu     sync.RWMutex
 	server *Server // Ссылка на сервер для доступа к DeleteRoom
 }
 
@@ -154,7 +154,7 @@ func NewRoom(id, name, password string, rows, cols, mines int, creatorID int) *R
 		Rows:      rows,
 		Cols:      cols,
 		Mines:     mines,
-		CreatorID:  creatorID,
+		CreatorID: creatorID,
 		Players:   make(map[string]*Player),
 		GameState: NewGameState(rows, cols, mines),
 		CreatedAt: time.Now(),
@@ -241,14 +241,14 @@ func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, co
 	rm.mu.RLock()
 	room, exists := rm.rooms[roomID]
 	rm.mu.RUnlock()
-	
+
 	if !exists {
 		return fmt.Errorf("room not found")
 	}
-	
+
 	room.mu.Lock()
 	defer room.mu.Unlock()
-	
+
 	// Обновляем параметры комнаты
 	room.Name = name
 	if password == "__KEEP__" {
@@ -260,11 +260,11 @@ func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, co
 	room.Rows = rows
 	room.Cols = cols
 	room.Mines = mines
-	
+
 	// Пересоздаем игровое поле с новыми параметрами
 	room.GameState = NewGameState(rows, cols, mines)
 	room.StartTime = nil // Сбрасываем время начала игры
-	
+
 	log.Printf("Комната обновлена: %s (ID: %s)", name, roomID)
 	return nil
 }
@@ -315,7 +315,7 @@ func (rm *RoomManager) ScheduleRoomDeletion(roomID string, delay time.Duration) 
 	rm.mu.RLock()
 	room, exists := rm.rooms[roomID]
 	rm.mu.RUnlock()
-	
+
 	if !exists {
 		return
 	}
@@ -444,7 +444,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Отправка начального состояния игры игроку %s", playerID)
 	s.sendGameStateToPlayer(room, player)
 	log.Printf("Начальное состояние игры отправлено игроку %s", playerID)
-	
+
 	// Отправка списка игроков новому игроку
 	s.sendPlayerListToPlayer(room, player)
 
@@ -503,26 +503,26 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				dx := msg.Cursor.X - player.LastCursorX
 				dy := msg.Cursor.Y - player.LastCursorY
 				distance := dx*dx + dy*dy // квадрат расстояния для оптимизации
-				
+
 				// Отправляем только если прошло достаточно времени И позиция изменилась значительно
 				if timeSinceLastSend < 100*time.Millisecond && distance < 25 { // 5px * 5px = 25
 					player.mu.Unlock()
 					continue // Пропускаем это сообщение
 				}
-				
+
 				// Обрезаем playerID до 5 символов
 				truncatedPlayerID := truncatePlayerID(playerID)
 				msg.PlayerID = truncatedPlayerID
 				msg.Cursor.PlayerID = truncatedPlayerID
 				msg.Nickname = player.Nickname
 				msg.Color = player.Color
-				
+
 				// Обновляем последнюю позицию и время
 				player.LastCursorX = msg.Cursor.X
 				player.LastCursorY = msg.Cursor.Y
 				player.LastCursorSendTime = now
 				player.mu.Unlock()
-				
+
 				s.broadcastToOthers(room, playerID, msg)
 			}
 
@@ -603,11 +603,11 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			room.GameState.mu.Unlock()
 			return
 		}
-		
+
 		wasFlagged := cell.IsFlagged
 		cellKey := row*room.GameState.Cols + col
 		now := time.Now()
-		
+
 		// Если пытаемся снять флаг, проверяем защиту от одновременных кликов
 		if wasFlagged {
 			if flagInfo, exists := room.GameState.flagSetInfo[cellKey]; exists {
@@ -634,7 +634,7 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			// Сохраняем цвет игрока, который поставил флаг
 			cell.FlagColor = playerColor
 		}
-		
+
 		cell.IsFlagged = !cell.IsFlagged
 		log.Printf("Флаг переключен: row=%d, col=%d, flagged=%v", row, col, cell.IsFlagged)
 		room.GameState.mu.Unlock()
@@ -731,7 +731,7 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 					p.mu.Unlock()
 				}
 				room.mu.RUnlock()
-				
+
 				if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, participants); err != nil {
 					log.Printf("Ошибка записи результата игры: %v", err)
 				}
@@ -797,7 +797,7 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 				gameTime = 0.0
 			}
 			loserID := room.GameState.LoserPlayerID
-			
+
 			// Собираем список участников игры
 			participants := make([]handlers.GameParticipant, 0)
 			for _, p := range room.Players {
@@ -811,7 +811,7 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 				}
 				p.mu.Unlock()
 			}
-			
+
 			// Записываем победу для всех игроков в комнате, которые не проиграли
 			for _, p := range room.Players {
 				// Записываем победу только для игроков, которые не проиграли
@@ -1116,7 +1116,7 @@ func (s *Server) sendGameStateToPlayer(room *Room, player *Player) {
 	// Отправляем бинарные данные с префиксом типа сообщения
 	// Первый байт: тип сообщения (0 = gameState binary)
 	message := append([]byte{0}, binaryData...)
-	
+
 	log.Printf("Отправка gameState (binary): Rows=%d, Cols=%d, Mines=%d, Revealed=%d, Size=%d bytes",
 		gameStateCopy.Rows, gameStateCopy.Cols, gameStateCopy.Mines, gameStateCopy.Revealed, len(message))
 	if err := player.Conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
@@ -1467,7 +1467,7 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 	rows := int(rowsFloat)
 	cols := int(colsFloat)
 	mines := int(minesFloat)
-	
+
 	// Проверяем, было ли передано поле password
 	passwordProvided := false
 	var password string

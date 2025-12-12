@@ -6,8 +6,8 @@ import (
 
 type User struct {
 	ID           int       `gorm:"primaryKey;autoIncrement" json:"id"`
-	Username     string    `gorm:"type:varchar(50);uniqueIndex;not null" json:"username"`
-	Email        string    `gorm:"type:varchar(100);uniqueIndex;not null" json:"email"`
+	Username     string    `gorm:"type:varchar(50);uniqueIndex:idx_users_username;not null" json:"username"`
+	Email        string    `gorm:"type:varchar(100);uniqueIndex:idx_users_email;not null" json:"email"`
 	PasswordHash string    `gorm:"type:varchar(255);not null;column:password_hash" json:"-"`
 	Color        *string   `gorm:"type:varchar(7)" json:"color,omitempty"`
 	Rating       float64   `gorm:"type:double precision;default:0.0" json:"rating"`
@@ -54,14 +54,14 @@ type UserProfile struct {
 }
 
 type UserBestResult struct {
-	UserID    int       `gorm:"primaryKey;column:user_id" json:"userId"`
-	Width     int       `gorm:"primaryKey;not null" json:"width"`
-	Height    int       `gorm:"primaryKey;not null" json:"height"`
-	Mines     int       `gorm:"primaryKey;not null" json:"mines"`
-	BestTime  float64   `gorm:"type:double precision;not null;column:best_time" json:"bestTime"`
-	Complexity float64  `gorm:"type:double precision;not null" json:"complexity"`
-	BestP     float64   `gorm:"type:double precision;default:0.0;column:best_p" json:"bestP"`
-	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`
+	UserID     int       `gorm:"primaryKey;column:user_id" json:"userId"`
+	Width      int       `gorm:"primaryKey;not null" json:"width"`
+	Height     int       `gorm:"primaryKey;not null" json:"height"`
+	Mines      int       `gorm:"primaryKey;not null" json:"mines"`
+	BestTime   float64   `gorm:"type:double precision;not null;column:best_time" json:"bestTime"`
+	Complexity float64   `gorm:"type:double precision;not null" json:"complexity"`
+	BestP      float64   `gorm:"type:double precision;default:0.0;column:best_p" json:"bestP"`
+	UpdatedAt  time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`
 }
 
 func (UserBestResult) TableName() string {
@@ -88,13 +88,12 @@ func (UserGameHistory) TableName() string {
 }
 
 type GameParticipant struct {
-	GameHistoryID int       `gorm:"primaryKey;column:game_history_id;index:idx_game_participants_game_history_id" json:"gameHistoryId"`
-	UserID        int       `gorm:"primaryKey;column:user_id" json:"userId"`
-	Nickname      string    `gorm:"type:varchar(100);not null" json:"nickname"`
-	Color         *string   `gorm:"type:varchar(7)" json:"color,omitempty"`
+	GameHistoryID int     `gorm:"primaryKey;column:game_history_id;index:idx_game_participants_game_history_id" json:"gameHistoryId"`
+	UserID        int     `gorm:"primaryKey;column:user_id" json:"userId"`
+	Nickname      string  `gorm:"type:varchar(100);not null" json:"nickname"`
+	Color         *string `gorm:"type:varchar(7)" json:"color,omitempty"`
 }
 
 func (GameParticipant) TableName() string {
 	return "game_participants"
 }
-
