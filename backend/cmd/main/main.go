@@ -1242,6 +1242,10 @@ func main() {
 	r.HandleFunc("/profile", profileHandler.GetProfileByUsername).Methods("GET", "OPTIONS").Queries("username", "{username}")
 	// Публичный маршрут для получения рейтинга
 	r.HandleFunc("/leaderboard", profileHandler.GetLeaderboard).Methods("GET", "OPTIONS")
+	// Публичный маршрут для получения топ-10 лучших игр (может принимать username как параметр)
+	r.HandleFunc("/profile/top-games", profileHandler.GetTopGames).Methods("GET", "OPTIONS")
+	// Защищенный маршрут для получения своих топ-10 игр
+	protected.HandleFunc("/profile/top-games", profileHandler.GetTopGames).Methods("GET", "OPTIONS")
 
 	log.Printf("Сервер запущен на :%s", cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, middleware.CORSMiddleware(router)))

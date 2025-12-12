@@ -56,3 +56,25 @@ export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
   return response.data
 }
 
+export interface TopGame {
+  id: number
+  width: number
+  height: number
+  mines: number
+  gameTime: number
+  ratingGain: number
+  ratingBefore: number
+  ratingAfter: number
+  complexity: number
+  attemptPoints: number
+  createdAt: string
+}
+
+export async function getTopGames(username?: string): Promise<TopGame[]> {
+  const url = username 
+    ? `${API_BASE}/profile/top-games?username=${encodeURIComponent(username)}`
+    : `${API_BASE}/profile/top-games`
+  const response = await axios.get<TopGame[]>(url)
+  return response.data
+}
+

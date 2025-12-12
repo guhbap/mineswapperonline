@@ -287,6 +287,16 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 				log.Printf("Error updating player rating: %v", err)
 			}
 
+			// Сохраняем игру в историю (только если был начислен рейтинг)
+			_, err = h.db.Exec(
+				`INSERT INTO user_game_history (user_id, width, height, mines, game_time, rating_gain, rating_before, rating_after, complexity, attempt_points)
+				 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+				userID, width, height, mines, gameTime, reward, currentRating, newRating, currentComplexity, P,
+			)
+			if err != nil {
+				log.Printf("Error saving game to history: %v", err)
+			}
+
 			// Update or insert best result with new BestP
 			_, err = h.db.Exec(
 				`INSERT INTO user_best_results (user_id, width, height, mines, best_time, complexity, best_p, updated_at)
@@ -469,4 +479,85 @@ func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) 
 	}
 
 	utils.JSONResponse(w, http.StatusOK, leaderboard)
+}
+
+// GetTopGames возвращает топ-10 лучших игр пользователя по начисленному рейтингу
+func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
+	// Получаем userID из параметра или из контекста (для своего профиля)
+	var userID int
+	var err error
+
+	username := r.URL.Query().Get("username")
+	if username != "" {
+		// Получаем userID по username
+		user, err := h.findUserByUsername(username)
+		if err != nil {
+			utils.JSONError(w, http.StatusNotFound, "User not found")
+			return
+		}
+		userID = user.ID
+	} else {
+		// Используем userID из контекста (свой профиль)
+		userIDValue := r.Context().Value("userID")
+		if userIDValue == nil {
+			utils.JSONError(w, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+		userID = userIDValue.(int)
+	}
+
+	// Получаем топ-10 игр по начисленному рейтингу
+	rows, err := h.db.Query(
+		`SELECT id, width, height, mines, game_time, rating_gain, rating_before, rating_after, complexity, attempt_points, created_at
+		 FROM user_game_history
+		 WHERE user_id = $1 AND rating_gain > 0
+		 ORDER BY rating_gain DESC
+		 LIMIT 10`,
+		userID,
+	)
+	if err != nil {
+		log.Printf("Error querying top games: %v", err)
+		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	defer rows.Close()
+
+	type GameHistory struct {
+		ID            int     `json:"id"`
+		Width         int     `json:"width"`
+		Height        int     `json:"height"`
+		Mines         int     `json:"mines"`
+		GameTime      float64 `json:"gameTime"`
+		RatingGain    float64 `json:"ratingGain"`
+		RatingBefore  float64 `json:"ratingBefore"`
+		RatingAfter   float64 `json:"ratingAfter"`
+		Complexity    float64 `json:"complexity"`
+		AttemptPoints float64 `json:"attemptPoints"`
+		CreatedAt     string  `json:"createdAt"`
+	}
+
+	var games []GameHistory
+	for rows.Next() {
+		var game GameHistory
+		var createdAt time.Time
+		err := rows.Scan(
+			&game.ID, &game.Width, &game.Height, &game.Mines,
+			&game.GameTime, &game.RatingGain, &game.RatingBefore, &game.RatingAfter,
+			&game.Complexity, &game.AttemptPoints, &createdAt,
+		)
+		if err != nil {
+			log.Printf("Error scanning game history: %v", err)
+			continue
+		}
+		game.CreatedAt = createdAt.Format(time.RFC3339)
+		games = append(games, game)
+	}
+
+	if err = rows.Err(); err != nil {
+		log.Printf("Error iterating game history rows: %v", err)
+		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	utils.JSONResponse(w, http.StatusOK, games)
 }

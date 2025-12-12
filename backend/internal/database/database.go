@@ -70,6 +70,21 @@ func (db *DB) InitSchema() error {
 			PRIMARY KEY (user_id, width, height, mines)
 		);`,
 		`ALTER TABLE user_best_results ADD COLUMN IF NOT EXISTS best_p DOUBLE PRECISION DEFAULT 0.0;`,
+		`CREATE TABLE IF NOT EXISTS user_game_history (
+			id SERIAL PRIMARY KEY,
+			user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+			width INTEGER NOT NULL,
+			height INTEGER NOT NULL,
+			mines INTEGER NOT NULL,
+			game_time DOUBLE PRECISION NOT NULL,
+			rating_gain DOUBLE PRECISION DEFAULT 0.0,
+			rating_before DOUBLE PRECISION NOT NULL,
+			rating_after DOUBLE PRECISION NOT NULL,
+			complexity DOUBLE PRECISION NOT NULL,
+			attempt_points DOUBLE PRECISION NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_user_game_history_user_id_rating_gain ON user_game_history(user_id, rating_gain DESC);`,
 	}
 
 	for _, query := range queries {

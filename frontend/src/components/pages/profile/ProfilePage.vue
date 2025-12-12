@@ -99,6 +99,40 @@
           <span class="info-value info-value--private">Скрыто</span>
         </div>
       </div>
+
+      <div class="top-games-section">
+        <h3 class="top-games-title">Топ-10 лучших игр</h3>
+        <div v-if="topGamesLoading" class="top-games-loading">Загрузка...</div>
+        <div v-else-if="topGamesError" class="top-games-error">{{ topGamesError }}</div>
+        <div v-else-if="topGames.length === 0" class="top-games-empty">
+          Пока нет игр с начисленным рейтингом
+        </div>
+        <div v-else class="top-games-list">
+          <div
+            v-for="(game, index) in topGames"
+            :key="game.id"
+            class="top-game-item"
+          >
+            <div class="game-rank">#{{ index + 1 }}</div>
+            <div class="game-info">
+              <div class="game-field">
+                <span class="game-field-size">{{ game.width }}×{{ game.height }}</span>
+                <span class="game-mines">💣 {{ game.mines }}</span>
+              </div>
+              <div class="game-details">
+                <div class="game-time">⏱️ {{ formatTime(game.gameTime) }}</div>
+                <div class="game-date">{{ formatDate(game.createdAt) }}</div>
+              </div>
+            </div>
+            <div class="game-rating">
+              <div class="rating-gain">+{{ Math.round(game.ratingGain) }}</div>
+              <div class="rating-change">
+                {{ Math.round(game.ratingBefore) }} → {{ Math.round(game.ratingAfter) }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </main>
 </template>
@@ -107,7 +141,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { getProfile, getProfileByUsername, updateColor, type UserProfile } from '@/api/profile'
+import { getProfile, getProfileByUsername, updateColor, getTopGames, type UserProfile, type TopGame } from '@/api/profile'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -118,6 +152,9 @@ const isOwnProfile = ref(true)
 const selectedColor = ref<string>('')
 const savingColor = ref(false)
 const colorError = ref('')
+const topGames = ref<TopGame[]>([])
+const topGamesLoading = ref(false)
+const topGamesError = ref('')
 
 const colorOptions = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
@@ -144,6 +181,15 @@ const formatDate = (dateString: string) => {
   })
 }
 
+const formatTime = (seconds: number) => {
+  if (seconds < 60) {
+    return `${Math.round(seconds)}с`
+  }
+  const minutes = Math.floor(seconds / 60)
+  const secs = Math.round(seconds % 60)
+  return `${minutes}м ${secs}с`
+}
+
 const loadProfile = async () => {
   try {
     loading.value = true
@@ -155,17 +201,34 @@ const loadProfile = async () => {
       // Загружаем профиль другого пользователя
       isOwnProfile.value = false
       profile.value = await getProfileByUsername(username)
+      // Загружаем топ-10 игр для этого пользователя
+      await loadTopGames(username)
     } else {
       // Загружаем свой профиль
       isOwnProfile.value = true
       profile.value = await getProfile()
       selectedColor.value = profile.value?.user.color || ''
+      // Загружаем топ-10 игр для себя
+      await loadTopGames()
     }
   } catch (err: any) {
     error.value = err.response?.data || 'Ошибка загрузки профиля'
     console.error('Ошибка загрузки профиля:', err)
   } finally {
     loading.value = false
+  }
+}
+
+const loadTopGames = async (username?: string) => {
+  try {
+    topGamesLoading.value = true
+    topGamesError.value = ''
+    topGames.value = await getTopGames(username)
+  } catch (err: any) {
+    topGamesError.value = err.response?.data || 'Ошибка загрузки игр'
+    console.error('Ошибка загрузки топ-10 игр:', err)
+  } finally {
+    topGamesLoading.value = false
   }
 }
 
@@ -550,6 +613,127 @@ onMounted(() => {
   .info-item {
     flex-direction: column;
     align-items: flex-start;
+    gap: 0.5rem;
+  }
+}
+
+.top-games-section {
+  background: var(--bg-primary);
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+.top-games-title {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+
+.top-games-loading,
+.top-games-error,
+.top-games-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+}
+
+.top-games-error {
+  color: #dc2626;
+}
+
+.top-games-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.top-game-item {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.25rem;
+  background: var(--bg-secondary);
+  border-radius: 0.75rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+  border-left: 4px solid #667eea;
+}
+
+.top-game-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
+.game-rank {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  min-width: 3rem;
+  text-align: center;
+}
+
+.game-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.game-field {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.game-field-size {
+  font-size: 1.125rem;
+}
+
+.game-mines {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.game-details {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.game-rating {
+  text-align: right;
+  min-width: 120px;
+}
+
+.rating-gain {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #22c55e;
+  margin-bottom: 0.25rem;
+}
+
+.rating-change {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .top-game-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .game-rating {
+    text-align: left;
+    width: 100%;
+  }
+
+  .game-details {
+    flex-direction: column;
     gap: 0.5rem;
   }
 }
