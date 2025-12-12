@@ -335,13 +335,46 @@ func isSolvableWithoutGuessing(gs *GameState) (bool, []SafeCell) {
 	// 1) Собираем входные видимые массивы
 	revealed := make([][]bool, rows)
 	flagged := make([][]bool, rows)
+	totalRevealed := 0
 	for i := 0; i < rows; i++ {
 		revealed[i] = make([]bool, cols)
 		flagged[i] = make([]bool, cols)
 		for j := 0; j < cols; j++ {
 			revealed[i][j] = gs.Board[i][j].IsRevealed
 			flagged[i][j] = gs.Board[i][j].IsFlagged
+			if revealed[i][j] {
+				totalRevealed++
+			}
 		}
+	}
+
+	// Специальная обработка начального состояния: если все клетки закрыты,
+	// возвращаем все клетки с нулевыми соседями как безопасные
+	if totalRevealed == 0 {
+		safeCells := []SafeCell{}
+		for i := 0; i < rows; i++ {
+			for j := 0; j < cols; j++ {
+				// Клетка безопасна, если она не мина и не имеет соседних мин
+				if !gs.Board[i][j].IsMine && gs.Board[i][j].NeighborMines == 0 {
+					safeCells = append(safeCells, SafeCell{Row: i, Col: j})
+				}
+			}
+		}
+		// Если есть хотя бы одна безопасная клетка, возвращаем их
+		if len(safeCells) > 0 {
+			return true, safeCells
+		}
+		// Если нет безопасных клеток с нулевыми соседями, возвращаем все не-мины
+		// (это гарантирует, что игрок сможет начать игру)
+		allSafe := []SafeCell{}
+		for i := 0; i < rows; i++ {
+			for j := 0; j < cols; j++ {
+				if !gs.Board[i][j].IsMine {
+					allSafe = append(allSafe, SafeCell{Row: i, Col: j})
+				}
+			}
+		}
+		return len(allSafe) > 0, allSafe
 	}
 
 	// 2) Собираем фронтир: скрытые клетки, которые соседствуют с открытыми числами

@@ -530,8 +530,17 @@ const hasClosedCells = computed(() => {
 
 // Проверяем, является ли ячейка безопасной
 const isSafeCell = (row: number, col: number): boolean => {
-  if (!gameState.value?.sc) return false
-  return gameState.value.sc.some(cell => cell.r === row && cell.c === col)
+  if (!gameState.value?.sc) {
+    if (props.room?.noGuessing) {
+      console.log('No safe cells data available')
+    }
+    return false
+  }
+  const isSafe = gameState.value.sc.some(cell => cell.r === row && cell.c === col)
+  if (props.room?.noGuessing && row === 0 && col === 0) {
+    console.log('Checking cell (0,0):', isSafe, 'Safe cells:', gameState.value.sc.slice(0, 5))
+  }
+  return isSafe
 }
 
 // Проверяем, заблокирована ли ячейка для клика
@@ -591,6 +600,11 @@ const handleMessage = (msg: WebSocketMessage) => {
   if (msg.type === 'gameState' && msg.gameState) {
     const prevGameWon = gameState.value?.gw
     gameState.value = msg.gameState
+    
+    // Отладочный вывод для проверки безопасных клеток
+    if (props.room?.noGuessing && msg.gameState.sc) {
+      console.log('Safe cells received:', msg.gameState.sc.length, msg.gameState.sc)
+    }
 
     // Если игра только что завершилась победой, рассчитываем изменение рейтинга
     if (msg.gameState.gw && !prevGameWon && gameStartTime.value !== null && gameState.value) {
