@@ -45,6 +45,7 @@ export interface Cell {
   r: boolean // isRevealed
   f: boolean // isFlagged
   n: number // neighborMines
+  fc?: string // flagColor - цвет игрока, который поставил флаг
 }
 
 export interface IWebSocketClient {

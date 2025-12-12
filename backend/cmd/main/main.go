@@ -63,10 +63,11 @@ type GameState struct {
 }
 
 type Cell struct {
-	IsMine        bool `json:"m"`
-	IsRevealed    bool `json:"r"`
-	IsFlagged     bool `json:"f"`
-	NeighborMines int  `json:"n"`
+	IsMine        bool   `json:"m"`
+	IsRevealed    bool   `json:"r"`
+	IsFlagged     bool   `json:"f"`
+	NeighborMines int    `json:"n"`
+	FlagColor     string `json:"fc,omitempty"` // Цвет игрока, который поставил флаг
 }
 
 type Message struct {
@@ -569,12 +570,15 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			}
 			// Удаляем информацию об установке при снятии флага
 			delete(room.GameState.flagSetInfo, cellKey)
+			cell.FlagColor = "" // Очищаем цвет при снятии флага
 		} else {
 			// Сохраняем время установки и playerID того, кто поставил флаг
 			room.GameState.flagSetInfo[cellKey] = FlagInfo{
 				SetTime:  now,
 				PlayerID: playerID,
 			}
+			// Сохраняем цвет игрока, который поставил флаг
+			cell.FlagColor = playerColor
 		}
 		
 		cell.IsFlagged = !cell.IsFlagged

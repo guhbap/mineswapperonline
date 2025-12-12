@@ -97,7 +97,32 @@
           </span>
           <span v-else-if="cell.r && cell.m" class="cell-mine">💣</span>
           <span v-else-if="(gameState?.go || gameState?.gw) && cell.m && !cell.r" class="cell-mine">💣</span>
-          <span v-else-if="cell.f" class="cell-flag">🚩</span>
+          <svg
+            v-else-if="cell.f"
+            class="cell-flag"
+            :style="cell.fc ? { '--flag-color': cell.fc } : {}"
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+          >
+            <!-- Древко флага -->
+            <line
+              x1="4"
+              y1="2"
+              x2="4"
+              y2="22"
+              stroke="#8b5a3c"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+            <!-- Полотнище флага -->
+            <path
+              d="M4 2 L18 8 L4 14 Z"
+              class="flag-cloth"
+              stroke="#000"
+              stroke-width="0.5"
+            />
+          </svg>
         </div>
       </div>
       </div>
@@ -636,7 +661,13 @@ onUnmounted(() => {
 }
 
 .cell-flag {
-  font-size: 1rem;
+  display: inline-block;
+  vertical-align: middle;
+  --flag-color: #dc2626;
+}
+
+.cell-flag .flag-cloth {
+  fill: var(--flag-color, #dc2626);
 }
 
 .remote-cursor {

@@ -11,9 +11,11 @@
  * - 1 байт: Длина LoserNickname
  * - N байт: LoserNickname (UTF-8)
  * - Rows*Cols байт: Board (каждая Cell = 1 байт)
+ * - 1 байт: Количество флагов с цветами
+ * - Для каждого флага: 2 байта cellKey (uint16), 1 байт длина цвета, N байт цвет
  */
 export function decodeGameStateBinary(data: ArrayBuffer): {
-  b: boolean[][][] // board
+  b: Array<Array<{ m: boolean; r: boolean; f: boolean; n: number; fc?: string }>> // board
   r: number // rows
   c: number // cols
   m: number // mines
@@ -63,7 +65,7 @@ export function decodeGameStateBinary(data: ArrayBuffer): {
   }
 
   // Инициализируем Board
-  const board: Array<Array<{ m: boolean; r: boolean; f: boolean; n: number }>> = []
+  const board: Array<Array<{ m: boolean; r: boolean; f: boolean; n: number; fc?: string }>> = []
   for (let i = 0; i < rows; i++) {
     board[i] = []
     for (let j = 0; j < cols; j++) {
@@ -77,6 +79,38 @@ export function decodeGameStateBinary(data: ArrayBuffer): {
         n: (cellByte >> 3) & 0x0F // NeighborMines (бит 3-6)
       }
       board[i][j] = cell
+    }
+  }
+
+  // Читаем цвета флагов (если есть данные)
+  if (offset < data.byteLength) {
+    const flagCount = view.getUint8(offset)
+    offset += 1
+    
+    // Читаем цвета флагов
+    for (let i = 0; i < flagCount && offset < data.byteLength; i++) {
+      // Читаем cellKey (2 байта, little-endian)
+      const cellKey = view.getUint16(offset, true)
+      offset += 2
+      
+      // Читаем длину цвета
+      if (offset >= data.byteLength) break
+      const colorLen = view.getUint8(offset)
+      offset += 1
+      
+      // Читаем цвет
+      if (colorLen > 0 && colorLen <= 7 && offset + colorLen <= data.byteLength) {
+        const colorBytes = new Uint8Array(data, offset, colorLen)
+        offset += colorLen
+        const color = new TextDecoder('utf-8').decode(colorBytes)
+        
+        // Применяем цвет к соответствующей ячейке
+        const row = Math.floor(cellKey / cols)
+        const col = cellKey % cols
+        if (row >= 0 && row < rows && col >= 0 && col < cols) {
+          board[row][col].fc = color
+        }
+      }
     }
   }
 

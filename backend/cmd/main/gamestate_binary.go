@@ -17,6 +17,8 @@ import (
 // - 1 байт: Длина LoserNickname
 // - N байт: LoserNickname (UTF-8)
 // - Rows*Cols байт: Board (каждая Cell = 1 байт)
+// - 1 байт: Количество флагов с цветами
+// - Для каждого флага: 2 байта cellKey (uint16), 1 байт длина цвета, N байт цвет
 func encodeGameStateBinary(gs *GameState) ([]byte, error) {
 	gs.mu.RLock()
 	defer gs.mu.RUnlock()
@@ -93,6 +95,49 @@ func encodeGameStateBinary(gs *GameState) ([]byte, error) {
 		}
 	}
 
+	// Секция с цветами флагов
+	// Собираем все флаги с цветами
+	flagColors := make(map[uint16]string)
+	for i := 0; i < gs.Rows; i++ {
+		for j := 0; j < gs.Cols; j++ {
+			cell := gs.Board[i][j]
+			if cell.IsFlagged && cell.FlagColor != "" {
+				cellKey := uint16(i*gs.Cols + j)
+				flagColors[cellKey] = cell.FlagColor
+			}
+		}
+	}
+
+	// Записываем количество флагов с цветами
+	flagCount := byte(len(flagColors))
+	if flagCount > 255 {
+		flagCount = 255
+	}
+	buf.WriteByte(flagCount)
+
+	// Записываем цвета флагов
+	count := 0
+	for cellKey, color := range flagColors {
+		if count >= 255 {
+			break
+		}
+		// Записываем cellKey (2 байта)
+		binary.Write(buf, binary.LittleEndian, cellKey)
+		// Записываем длину цвета (максимум 7 для hex цвета #RRGGBB)
+		colorBytes := []byte(color)
+		colorLen := byte(len(colorBytes))
+		if colorLen > 7 {
+			colorLen = 7
+			colorBytes = colorBytes[:7]
+		}
+		buf.WriteByte(colorLen)
+		// Записываем цвет
+		if colorLen > 0 {
+			buf.Write(colorBytes)
+		}
+		count++
+	}
+
 	return buf.Bytes(), nil
 }
 
@@ -150,6 +195,39 @@ func decodeGameStateBinary(data []byte) (*GameState, error) {
 			cell.IsRevealed = (cellByte & (1 << 1)) != 0
 			cell.IsFlagged = (cellByte & (1 << 2)) != 0
 			cell.NeighborMines = int((cellByte >> 3) & 0x0F) // Бит 3-6
+		}
+	}
+
+	// Читаем цвета флагов (если есть данные)
+	if buf.Len() > 0 {
+		flagCount, err := buf.ReadByte()
+		if err == nil && flagCount > 0 {
+			// Читаем цвета флагов
+			for i := 0; i < int(flagCount); i++ {
+				// Читаем cellKey (2 байта)
+				var cellKey uint16
+				if err := binary.Read(buf, binary.LittleEndian, &cellKey); err != nil {
+					break
+				}
+				// Читаем длину цвета
+				colorLen, err := buf.ReadByte()
+				if err != nil {
+					break
+				}
+				// Читаем цвет
+				if colorLen > 0 && colorLen <= 7 {
+					colorBytes := make([]byte, colorLen)
+					if n, err := buf.Read(colorBytes); err == nil && n == int(colorLen) {
+						color := string(colorBytes)
+						// Применяем цвет к соответствующей ячейке
+						row := int(cellKey) / gs.Cols
+						col := int(cellKey) % gs.Cols
+						if row >= 0 && row < gs.Rows && col >= 0 && col < gs.Cols {
+							gs.Board[row][col].FlagColor = color
+						}
+					}
+				}
+			}
 		}
 	}
 
