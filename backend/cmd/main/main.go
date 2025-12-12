@@ -330,6 +330,11 @@ func neighbors(rows, cols, i, j int) [][2]int {
 
 // Главная функция
 func isSolvableWithoutGuessing(gs *GameState) (bool, []SafeCell) {
+	return isSolvableWithoutGuessingRecursive(gs, false)
+}
+
+// Вспомогательная функция с флагом для избежания рекурсии
+func isSolvableWithoutGuessingRecursive(gs *GameState, skipInitialCheck bool) (bool, []SafeCell) {
 	rows, cols := gs.Rows, gs.Cols
 
 	// 1) Собираем входные видимые массивы
@@ -349,32 +354,86 @@ func isSolvableWithoutGuessing(gs *GameState) (bool, []SafeCell) {
 	}
 
 	// Специальная обработка начального состояния: если все клетки закрыты,
-	// возвращаем все клетки с нулевыми соседями как безопасные
-	if totalRevealed == 0 {
-		safeCells := []SafeCell{}
+	// нужно найти хотя бы одну клетку, с которой можно начать игру логически
+	if !skipInitialCheck && totalRevealed == 0 {
+		// Пробуем каждую клетку (которая не мина) как стартовую
+		// и проверяем, можно ли после ее открытия продолжить логически
 		for i := 0; i < rows; i++ {
 			for j := 0; j < cols; j++ {
-				// Клетка безопасна, если она не мина и не имеет соседних мин
-				if !gs.Board[i][j].IsMine && gs.Board[i][j].NeighborMines == 0 {
-					safeCells = append(safeCells, SafeCell{Row: i, Col: j})
+				if gs.Board[i][j].IsMine {
+					continue
+				}
+
+				// Создаем временную копию состояния для симуляции
+				tempGS := &GameState{
+					Rows:      rows,
+					Cols:      cols,
+					Mines:     gs.Mines,
+					Board:     make([][]Cell, rows),
+					Revealed:  0,
+					GameOver:  false,
+					GameWon:   false,
+					HintsUsed: 0,
+				}
+				// Копируем доску
+				for ri := 0; ri < rows; ri++ {
+					tempGS.Board[ri] = make([]Cell, cols)
+					for cj := 0; cj < cols; cj++ {
+						tempGS.Board[ri][cj] = gs.Board[ri][cj]
+					}
+				}
+
+				// Симулируем открытие этой клетки и всех нулевых соседей
+				queue := []struct{ r, c int }{{i, j}}
+				opened := make(map[[2]int]bool)
+
+				for len(queue) > 0 {
+					cur := queue[0]
+					queue = queue[1:]
+					r, c := cur.r, cur.c
+
+					if opened[[2]int{r, c}] || tempGS.Board[r][c].IsMine {
+						continue
+					}
+
+					opened[[2]int{r, c}] = true
+					tempGS.Board[r][c].IsRevealed = true
+					tempGS.Revealed++
+
+					// Если это нулевая клетка, открываем соседей
+					if tempGS.Board[r][c].NeighborMines == 0 {
+						for di := -1; di <= 1; di++ {
+							for dj := -1; dj <= 1; dj++ {
+								if di == 0 && dj == 0 {
+									continue
+								}
+								ni, nj := r+di, c+dj
+								if ni >= 0 && ni < rows && nj >= 0 && nj < cols {
+									if !opened[[2]int{ni, nj}] && !tempGS.Board[ni][nj].IsMine {
+										queue = append(queue, struct{ r, c int }{ni, nj})
+									}
+								}
+							}
+						}
+					}
+				}
+
+				// Теперь проверяем, можно ли продолжить логически после этого открытия
+				// Используем skipInitialCheck=true, чтобы избежать рекурсии
+				_, safeAfterOpen := isSolvableWithoutGuessingRecursive(tempGS, true)
+				if len(safeAfterOpen) > 0 {
+					// Нашли стартовую клетку! Возвращаем все открытые клетки как безопасные
+					safeCells := []SafeCell{}
+					for cell := range opened {
+						safeCells = append(safeCells, SafeCell{Row: cell[0], Col: cell[1]})
+					}
+					return true, safeCells
 				}
 			}
 		}
-		// Если есть хотя бы одна безопасная клетка, возвращаем их
-		if len(safeCells) > 0 {
-			return true, safeCells
-		}
-		// Если нет безопасных клеток с нулевыми соседями, возвращаем все не-мины
-		// (это гарантирует, что игрок сможет начать игру)
-		allSafe := []SafeCell{}
-		for i := 0; i < rows; i++ {
-			for j := 0; j < cols; j++ {
-				if !gs.Board[i][j].IsMine {
-					allSafe = append(allSafe, SafeCell{Row: i, Col: j})
-				}
-			}
-		}
-		return len(allSafe) > 0, allSafe
+
+		// Не нашли ни одной клетки, с которой можно начать логически
+		return false, nil
 	}
 
 	// 2) Собираем фронтир: скрытые клетки, которые соседствуют с открытыми числами
@@ -1227,6 +1286,17 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 
 		cell.IsFlagged = !cell.IsFlagged
 		log.Printf("Флаг переключен: row=%d, col=%d, flagged=%v", row, col, cell.IsFlagged)
+
+		// В режиме без угадываний пересчитываем безопасные клетки после установки/снятия флага
+		room.mu.RLock()
+		noGuessing := room.NoGuessing
+		room.mu.RUnlock()
+		if noGuessing {
+			_, safeCells := isSolvableWithoutGuessing(room.GameState)
+			room.GameState.SafeCells = safeCells
+			log.Printf("Обновлены безопасные клетки после флага: %d клеток", len(safeCells))
+		}
+
 		room.GameState.mu.Unlock()
 		s.broadcastGameState(room)
 
@@ -1377,6 +1447,16 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		if cell.NeighborMines == 0 {
 			log.Printf("Открытие соседних ячеек для row=%d, col=%d", row, col)
 			s.revealNeighbors(room, row, col)
+		}
+
+		// В режиме без угадываний пересчитываем безопасные клетки после каждого открытия
+		room.mu.RLock()
+		noGuessing := room.NoGuessing
+		room.mu.RUnlock()
+		if noGuessing {
+			_, safeCells := isSolvableWithoutGuessing(room.GameState)
+			room.GameState.SafeCells = safeCells
+			log.Printf("Обновлены безопасные клетки: %d клеток", len(safeCells))
 		}
 
 		// Отправляем сервисное сообщение об открытии поля
