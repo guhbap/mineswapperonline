@@ -83,36 +83,32 @@
         @mousemove="handleMouseMove"
         @mouseleave="handleMouseLeave"
       >
-      <div
-        v-for="(row, rowIndex) in gameState?.b"
-        :key="rowIndex"
-      >
         <div
-          v-for="(cell, colIndex) in row"
-          :key="colIndex"
+          v-for="cellData in flatCells"
+          :key="`${cellData.rowIndex}-${cellData.colIndex}`"
           :class="[
             'cell',
             {
-              'cell--revealed': cell.r,
-              'cell--mine': cell.r && cell.m,
-              'cell--flagged': cell.f,
-              'cell--show-mine': (gameState?.go || gameState?.gw) && cell.m && !cell.r,
+              'cell--revealed': cellData.cell.r,
+              'cell--mine': cellData.cell.r && cellData.cell.m,
+              'cell--flagged': cellData.cell.f,
+              'cell--show-mine': (gameState?.go || gameState?.gw) && cellData.cell.m && !cellData.cell.r,
             }
           ]"
-          @click="handleCellClick(rowIndex, colIndex, false)"
-          @contextmenu.prevent="handleCellClick(rowIndex, colIndex, true)"
+          @click="handleCellClick(cellData.rowIndex, cellData.colIndex, false)"
+          @contextmenu.prevent="handleCellClick(cellData.rowIndex, cellData.colIndex, true)"
           @touchstart.stop="handleCellTouchStart"
-          @touchend.stop="handleCellTouchEnd(rowIndex, colIndex, $event, handleCellClick)"
+          @touchend.stop="handleCellTouchEnd(cellData.rowIndex, cellData.colIndex, $event, handleCellClick)"
         >
-          <span v-if="cell.r && !cell.m && cell.n > 0" class="cell-number">
-            {{ cell.n }}
+          <span v-if="cellData.cell.r && !cellData.cell.m && cellData.cell.n > 0" class="cell-number">
+            {{ cellData.cell.n }}
           </span>
-          <span v-else-if="cell.r && cell.m" class="cell-mine">💣</span>
-          <span v-else-if="(gameState?.go || gameState?.gw) && cell.m && !cell.r" class="cell-mine">💣</span>
+          <span v-else-if="cellData.cell.r && cellData.cell.m" class="cell-mine">💣</span>
+          <span v-else-if="(gameState?.go || gameState?.gw) && cellData.cell.m && !cellData.cell.r" class="cell-mine">💣</span>
           <svg
-            v-else-if="cell.f"
+            v-else-if="cellData.cell.f"
             class="cell-flag"
-            :style="cell.fc ? { '--flag-color': cell.fc } : {}"
+            :style="cellData.cell.fc ? { '--flag-color': cellData.cell.fc } : {}"
             viewBox="0 0 24 24"
             width="18"
             height="18"
@@ -136,7 +132,6 @@
             />
           </svg>
         </div>
-      </div>
       </div>
       </div>
 
@@ -358,6 +353,18 @@ const { handleTouchStart: handleCellTouchStart, handleTouchEnd: handleCellTouchE
 
 // Используем анимацию курсоров
 const { animatedCursors, updateCursor, removeCursor } = useCursorAnimation()
+
+// Вычисляемое свойство для преобразования двумерного массива в плоский для правильного отображения в CSS Grid
+const flatCells = computed(() => {
+  if (!gameState.value?.b) return []
+  const cells: Array<{ cell: any; rowIndex: number; colIndex: number }> = []
+  gameState.value.b.forEach((row, rowIndex) => {
+    row.forEach((cell, colIndex) => {
+      cells.push({ cell, rowIndex, colIndex })
+    })
+  })
+  return cells
+})
 
 // Вычисляемое свойство для отображения курсоров с плавной анимацией
 // Фильтруем свой собственный курсор
