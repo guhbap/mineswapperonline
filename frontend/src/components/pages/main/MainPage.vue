@@ -3,41 +3,43 @@
     <!-- Выбор комнаты -->
     <section v-if="!selectedRoom" class="rooms-wrapper" aria-label="Выбор игровой комнаты">
       <!-- Описание игры -->
-      <div class="game-description-wrapper">
-        <div class="game-description-toggle" @click="toggleDescription">
-          <span class="toggle-icon">{{ isDescriptionVisible ? '▼' : '▶' }}</span>
-          <span class="toggle-text">{{ isDescriptionVisible ? 'Скрыть описание' : 'Показать описание' }}</span>
-        </div>
-        <div v-show="isDescriptionVisible" class="game-description">
-          <h1 class="game-description__title">🎮 Сапер Онлайн</h1>
-          <p class="game-description__text">
-            Классическая игра Сапер в многопользовательском режиме! Играйте вместе с друзьями в реальном времени,
-            соревнуйтесь за лучший результат и получайте рейтинг за успешные игры.
-          </p>
-          <div class="game-description__features">
-            <div class="feature-item">
-              <span class="feature-icon">👥</span>
-              <span class="feature-text">Играйте с друзьями в реальном времени</span>
-            </div>
-            <div class="feature-item">
-              <span class="feature-icon">🏆</span>
-              <span class="feature-text">Получайте рейтинг за успешные игры</span>
-            </div>
-            <div class="feature-item">
-              <span class="feature-icon">💬</span>
-              <span class="feature-text">Общайтесь в чате во время игры</span>
-            </div>
-            <div class="feature-item">
-              <span class="feature-icon">⚙️</span>
-              <span class="feature-text">Настраивайте размер поля и сложность</span>
-            </div>
+      <div v-show="isDescriptionVisible" class="game-description">
+        <h1 class="game-description__title">🎮 Сапер Онлайн</h1>
+        <p class="game-description__text">
+          Классическая игра Сапер в многопользовательском режиме! Играйте вместе с друзьями в реальном времени,
+          соревнуйтесь за лучший результат и получайте рейтинг за успешные игры.
+        </p>
+        <div class="game-description__features">
+          <div class="feature-item">
+            <span class="feature-icon">👥</span>
+            <span class="feature-text">Играйте с друзьями в реальном времени</span>
           </div>
-          <div class="game-description__actions">
-            <router-link to="/faq" class="game-description__link">
-              📖 Часто задаваемые вопросы
-            </router-link>
+          <div class="feature-item">
+            <span class="feature-icon">🏆</span>
+            <span class="feature-text">Получайте рейтинг за успешные игры</span>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">💬</span>
+            <span class="feature-text">Общайтесь в чате во время игры</span>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">⚙️</span>
+            <span class="feature-text">Настраивайте размер поля и сложность</span>
           </div>
         </div>
+        <div class="game-description__actions">
+          <router-link to="/faq" class="game-description__link">
+            📖 Часто задаваемые вопросы
+          </router-link>
+          <a @click.prevent="toggleDescription" class="game-description__link game-description__link--toggle">
+            {{ isDescriptionVisible ? 'Скрыть описание' : 'Показать описание' }}
+          </a>
+        </div>
+      </div>
+      <div v-if="!isDescriptionVisible" class="game-description-toggle-wrapper">
+        <a @click.prevent="toggleDescription" class="game-description__link game-description__link--show">
+          Показать описание игры
+        </a>
       </div>
       <RoomsList
         @create="showCreateModal = true"
@@ -299,51 +301,22 @@ const connectToRoom = (playerNickname: string) => {
   overflow-x: hidden;
 }
 
-.game-description-wrapper {
+.game-description {
   max-width: 1200px;
   margin: 0 auto;
-  margin-bottom: 2rem;
-}
-
-.game-description-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  background: var(--bg-secondary);
-  border-radius: 0.5rem;
-  cursor: pointer;
-  user-select: none;
-  transition: all 0.2s;
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  border: 1px solid var(--border-color);
-}
-
-.game-description-toggle:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border-color: #667eea;
-}
-
-.toggle-icon {
-  font-size: 0.75rem;
-  transition: transform 0.2s;
-}
-
-.toggle-text {
-  flex: 1;
-}
-
-.game-description {
-  max-width: 100%;
   padding: 2rem;
   background: var(--bg-secondary);
   border-radius: 1rem;
   box-shadow: 0 4px 12px var(--shadow);
+  margin-bottom: 2rem;
   animation: slideDown 0.3s ease-out;
+}
+
+.game-description-toggle-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  margin-bottom: 2rem;
+  text-align: center;
 }
 
 @keyframes slideDown {
@@ -406,7 +379,10 @@ const connectToRoom = (playerNickname: string) => {
 }
 
 .game-description__actions {
-  text-align: center;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .game-description__link {
@@ -418,12 +394,31 @@ const connectToRoom = (playerNickname: string) => {
   border-radius: 0.5rem;
   transition: all 0.2s;
   border: 2px solid transparent;
+  cursor: pointer;
 }
 
 .game-description__link:hover {
   color: #764ba2;
   border-color: #667eea;
   background: rgba(102, 126, 234, 0.1);
+}
+
+.game-description__link--toggle {
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.game-description__link--toggle:hover {
+  color: var(--text-primary);
+  border-color: transparent;
+  background: transparent;
+  text-decoration: underline;
+}
+
+.game-description__link--show {
+  color: #667eea;
+  font-size: 1rem;
 }
 
 @media (max-width: 768px) {

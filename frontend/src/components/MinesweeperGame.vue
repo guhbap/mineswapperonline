@@ -83,7 +83,7 @@
         @mousemove="handleMouseMove"
         @mouseleave="handleMouseLeave"
       >
-        <div
+      <div
           v-for="cellData in flatCells"
           :key="`${cellData.rowIndex}-${cellData.colIndex}`"
           :class="[
@@ -131,7 +131,7 @@
               stroke-width="0.5"
             />
           </svg>
-        </div>
+      </div>
       </div>
       </div>
 
