@@ -406,3 +406,67 @@ func (h *ProfileHandler) createUserStats(userID int) (models.UserStats, error) {
 	return h.getUserStats(userID)
 }
 
+// GetLeaderboard возвращает список всех игроков, отсортированных по рейтингу
+func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.db.Query(`
+		SELECT 
+			u.id,
+			u.username,
+			u.color,
+			COALESCE(u.rating, 1500.0) as rating,
+			COALESCE(us.games_played, 0) as games_played,
+			COALESCE(us.games_won, 0) as games_won,
+			COALESCE(us.games_lost, 0) as games_lost
+		FROM users u
+		LEFT JOIN user_stats us ON u.id = us.user_id
+		ORDER BY COALESCE(u.rating, 1500.0) DESC, u.username ASC
+	`)
+	if err != nil {
+		log.Printf("Error getting leaderboard: %v", err)
+		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	defer rows.Close()
+
+	type LeaderboardEntry struct {
+		ID          int     `json:"id"`
+		Username    string  `json:"username"`
+		Color       string  `json:"color,omitempty"`
+		Rating      float64 `json:"rating"`
+		GamesPlayed int     `json:"gamesPlayed"`
+		GamesWon    int     `json:"gamesWon"`
+		GamesLost   int     `json:"gamesLost"`
+	}
+
+	var leaderboard []LeaderboardEntry
+	for rows.Next() {
+		var entry LeaderboardEntry
+		var color sql.NullString
+		err := rows.Scan(
+			&entry.ID,
+			&entry.Username,
+			&color,
+			&entry.Rating,
+			&entry.GamesPlayed,
+			&entry.GamesWon,
+			&entry.GamesLost,
+		)
+		if err != nil {
+			log.Printf("Error scanning leaderboard row: %v", err)
+			continue
+		}
+		if color.Valid {
+			entry.Color = color.String
+		}
+		leaderboard = append(leaderboard, entry)
+	}
+
+	if err = rows.Err(); err != nil {
+		log.Printf("Error iterating leaderboard rows: %v", err)
+		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	utils.JSONResponse(w, http.StatusOK, leaderboard)
+}
+

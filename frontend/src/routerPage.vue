@@ -9,6 +9,9 @@
         >
           Главная
         </a>
+        <router-link to="/rating" class="nav__link" :class="{ 'nav__link--active': $route.path === '/rating' }">
+          Рейтинг
+        </router-link>
       </div>
       <div class="nav__right">
         <ThemeToggle />

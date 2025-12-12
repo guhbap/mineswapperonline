@@ -8,6 +8,7 @@ import MainPage from '@/components/pages/main/MainPage.vue'
 import LoginPage from '@/components/pages/auth/LoginPage.vue'
 import RegisterPage from '@/components/pages/auth/RegisterPage.vue'
 import ProfilePage from '@/components/pages/profile/ProfilePage.vue'
+import RatingPage from '@/components/pages/rating/RatingPage.vue'
 
 // Типизированный массив маршрутов
 const routes: RouteRecordRaw[] = [
@@ -73,6 +74,16 @@ const routes: RouteRecordRaw[] = [
           title: 'Профиль пользователя - Сапер Онлайн',
           description: 'Профиль пользователя и статистика игр',
           keywords: 'профиль, статистика, игры сапера'
+        }
+      },
+      {
+        path: 'rating',
+        name: 'Rating',
+        component: RatingPage,
+        meta: {
+          title: 'Рейтинг игроков - Сапер Онлайн',
+          description: 'Рейтинг всех игроков по рейтинговым очкам',
+          keywords: 'рейтинг, топ игроков, лидеры, сапер онлайн'
         }
       }
     ]

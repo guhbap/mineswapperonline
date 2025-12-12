@@ -1198,6 +1198,8 @@ func main() {
 
 	// Публичный маршрут для просмотра профиля по username
 	r.HandleFunc("/profile", profileHandler.GetProfileByUsername).Methods("GET", "OPTIONS").Queries("username", "{username}")
+	// Публичный маршрут для получения рейтинга
+	r.HandleFunc("/leaderboard", profileHandler.GetLeaderboard).Methods("GET", "OPTIONS")
 
 	log.Printf("Сервер запущен на :%s", cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, middleware.CORSMiddleware(router)))

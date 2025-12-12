@@ -41,3 +41,18 @@ export async function updateColor(color: string): Promise<void> {
   await axios.post(`${API_BASE}/profile/color`, { color })
 }
 
+export interface LeaderboardEntry {
+  id: number
+  username: string
+  color?: string
+  rating: number
+  gamesPlayed: number
+  gamesWon: number
+  gamesLost: number
+}
+
+export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
+  const response = await axios.get<LeaderboardEntry[]>(`${API_BASE}/leaderboard`)
+  return response.data
+}
+
