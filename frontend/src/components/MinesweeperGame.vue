@@ -330,7 +330,17 @@ const isRoomCreator = computed(() => {
   if (!props.room || !authStore.isAuthenticated || !authStore.user) {
     return false
   }
-  return props.room.creatorId === authStore.user.id
+  // Убеждаемся, что creatorId существует и не равен 0 (0 означает гость)
+  const creatorId = props.room.creatorId
+  const userId = authStore.user.id
+
+  // Если creatorId не определен или равен 0 (комната создана гостем), то не показываем кнопку
+  if (creatorId === undefined || creatorId === null || creatorId === 0) {
+    return false
+  }
+
+  // Строгое сравнение чисел
+  return Number(creatorId) === Number(userId)
 })
 
 const handleEditRoom = () => {

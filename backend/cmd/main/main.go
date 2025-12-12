@@ -1257,7 +1257,8 @@ func main() {
 	router := mux.NewRouter()
 
 	r := router.PathPrefix("/api").Subrouter()
-	// Публичные маршруты
+	// Публичные маршруты с опциональной авторизацией (для получения creatorID)
+	r.Use(middleware.OptionalAuthMiddleware)
 	r.HandleFunc("/auth/register", authHandler.Register).Methods("POST", "OPTIONS")
 	r.HandleFunc("/auth/login", authHandler.Login).Methods("POST", "OPTIONS")
 	r.HandleFunc("/ws", server.handleWebSocket)
@@ -1365,12 +1366,13 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 
 	room.mu.RLock()
 	response := map[string]interface{}{
-		"id":        room.ID,
-		"name":      room.Name,
-		"rows":      room.Rows,
-		"cols":      room.Cols,
-		"mines":     room.Mines,
-		"creatorId": room.CreatorID,
+		"id":          room.ID,
+		"name":        room.Name,
+		"hasPassword": room.Password != "",
+		"rows":        room.Rows,
+		"cols":        room.Cols,
+		"mines":       room.Mines,
+		"creatorId":   room.CreatorID,
 	}
 	room.mu.RUnlock()
 
