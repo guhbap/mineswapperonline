@@ -34,6 +34,17 @@ export function calculateMaxRating(
   return difficulty
 }
 
+// Проверяет, достаточно ли сложности поля для получения рейтинга
+// Упрощенная версия: просто проверяет, что сложность > 0
+export function isComplexitySufficient(
+  width: number,
+  height: number,
+  mines: number
+): boolean {
+  const difficulty = calculateDifficulty(width, height, mines)
+  return difficulty > 0
+}
+
 // Вычисляет изменение рейтинга на основе сложности поля
 // Просто возвращает сложность как изменение рейтинга
 export function calculateRatingChange(

@@ -189,12 +189,10 @@ const isRatedGame = computed(() => {
 
 const maxRatingGain = computed(() => {
   if (!isRatedGame.value) return 0
-  const currentRating = authStore.user?.rating || 0.0
   return calculateMaxRatingGain(
     form.value.cols,
     form.value.rows,
-    form.value.mines,
-    currentRating
+    form.value.mines
   )
 })
 
