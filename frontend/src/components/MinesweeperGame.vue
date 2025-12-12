@@ -284,7 +284,7 @@
           Финальный прирост зависит от вашего лучшего результата на этом поле
         </div>
       </div>
-      <div v-else-if="gameState && !isComplexitySufficient(gameState.c, gameState.r, gameState.m)" class="rating-change">
+      <div v-else-if="gameState && calculateDifficulty(gameState.c, gameState.r, gameState.m) === 0" class="rating-change">
         <div class="rating-change__hint">
           Поле слишком простое для получения рейтинга
         </div>
@@ -297,13 +297,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import type { WebSocketMessage, Cell, IWebSocketClient } from '@/api/websocket'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import type { WebSocketMessage, IWebSocketClient } from '@/api/websocket'
 import { useCursorAnimation } from '@/composables/useCursorAnimation'
 import { useGameBoardZoom } from '@/composables/useGameBoardZoom'
 import { useCellTouch } from '@/composables/useCellTouch'
 import { useAuthStore } from '@/stores/auth'
-import { calculateRatingChange, isComplexitySufficient } from '@/utils/ratingCalculator'
+import { calculateDifficulty, calculateRatingChange } from '@/utils/ratingCalculator'
 import Chat from '@/components/Chat.vue'
 
 const props = defineProps<{
@@ -321,7 +321,6 @@ const otherCursors = ref<Array<{ playerId: string; x: number; y: number; nicknam
 const cursorTimeout = ref<Map<string, number>>(new Map())
 const cursorHovered = ref<string | null>(null)
 const isModalTransparent = ref(false)
-const boardContainer = ref<HTMLElement | null>(null)
 const boardWrapper = ref<HTMLElement | null>(null)
 const authStore = useAuthStore()
 
@@ -544,15 +543,8 @@ const handleMessage = (msg: WebSocketMessage) => {
       const currentRating = authStore.user?.rating || 0.0
 
       // Проверяем, достаточно ли сложности поля для получения рейтинга
-      if (isComplexitySufficient(gameState.value.c, gameState.value.r, gameState.value.m)) {
-        const result = calculateRatingChange(
-          gameState.value.c,
-          gameState.value.r,
-          gameState.value.m,
-          gameTime,
-          currentRating
-        )
-        ratingChange.value = result.delta
+      if (calculateDifficulty(gameState.value.c, gameState.value.r, gameState.value.m) > 0) {
+        ratingChange.value = calculateDifficulty(gameState.value.c, gameState.value.r, gameState.value.m)
       } else {
         ratingChange.value = null // Поле слишком простое
       }

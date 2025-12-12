@@ -90,6 +90,20 @@ func ComputeComplexity(w, h, m float64) float64 {
 	return computeD(w, h, m)
 }
 
+// CalculateDifficulty вычисляет сложность поля по формуле: (M / (W * H)) * sqrt(W^2 + H^2)
+// где M - количество мин, W - ширина (cols), H - высота (rows)
+func CalculateDifficulty(width, height, mines float64) float64 {
+	totalCells := width * height
+	if totalCells <= 0 {
+		return 0
+	}
+	
+	density := mines / totalCells
+	diagonal := math.Sqrt(width*width + height*height)
+	
+	return density * diagonal
+}
+
 // IsComplexitySufficient проверяет, достаточно ли сложности поля для получения рейтинга
 // Возвращает true, если:
 // 1. Количество мин >= MinMines

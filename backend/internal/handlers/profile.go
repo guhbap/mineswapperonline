@@ -215,146 +215,69 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 		currentRating = 0.0 // Default rating
 	}
 
-	// Compute complexity of current field
-	currentComplexity := rating.ComputeComplexity(float64(width), float64(height), float64(mines))
-	Dref := rating.ComputeDref()
-
-	// Check if field complexity is sufficient for rating (prevents farming on very easy fields)
-	if !rating.IsComplexitySufficient(float64(width), float64(height), float64(mines), Dref) {
-		log.Printf("Field %dx%d with %d mines (complexity %.2f) is too simple - no rating",
-			width, height, mines, currentComplexity)
-		// Still update statistics but not rating
-		if won {
-			_, err = h.db.Exec(
-				`INSERT INTO user_stats (user_id, games_played, games_won, updated_at) 
-				 VALUES ($1, 1, 1, CURRENT_TIMESTAMP)
-				 ON CONFLICT (user_id) 
-				 DO UPDATE SET 
-					games_played = user_stats.games_played + 1,
-					games_won = user_stats.games_won + 1,
-					updated_at = CURRENT_TIMESTAMP`,
-				userID,
-			)
-		} else {
-			_, err = h.db.Exec(
-				`INSERT INTO user_stats (user_id, games_played, games_lost, updated_at) 
-				 VALUES ($1, 1, 1, CURRENT_TIMESTAMP)
-				 ON CONFLICT (user_id) 
-				 DO UPDATE SET 
-					games_played = user_stats.games_played + 1,
-					games_lost = user_stats.games_lost + 1,
-					updated_at = CURRENT_TIMESTAMP`,
-				userID,
-			)
-		}
-		return err
-	}
+	// Вычисляем сложность поля по упрощенной формуле: (M / (W * H)) * sqrt(W^2 + H^2)
+	difficulty := rating.CalculateDifficulty(float64(width), float64(height), float64(mines))
 
 	if won {
-		// Новая система рейтинга: вычисляем очки попытки P
-		P := rating.ComputeAttemptPoints(
-			float64(width), float64(height), float64(mines),
-			gameTime, currentRating, Dref,
+		// Упрощенная система рейтинга: просто добавляем сложность к рейтингу
+		ratingGain := difficulty
+		newRating := currentRating + ratingGain
+		
+		// Ensure rating doesn't go below a minimum (e.g., 0)
+		if newRating < 0 {
+			newRating = 0
+		}
+
+		log.Printf("Field %dx%d with %d mines: difficulty=%.2f, rating %.2f -> %.2f",
+			width, height, mines, difficulty, currentRating, newRating)
+
+		// Update user rating in database
+		_, err = h.db.Exec(
+			"UPDATE users SET rating = $1 WHERE id = $2",
+			newRating, userID,
 		)
+		if err != nil {
+			log.Printf("Error updating player rating: %v", err)
+		}
 
-		// Получаем BestP для этого поля (лучший P, когда-то полученный игроком)
-		var bestP sql.NullFloat64
-		var bestTime sql.NullFloat64
+		// Сохраняем игру в историю
+		var gameHistoryID int
 		err = h.db.QueryRow(
-			"SELECT COALESCE(best_p, 0.0), best_time FROM user_best_results WHERE user_id = $1 AND width = $2 AND height = $3 AND mines = $4",
-			userID, width, height, mines,
-		).Scan(&bestP, &bestTime)
-
-		// Если записи нет, bestP = 0 (первая игра на этом поле)
-		bestPValue := 0.0
-		if err == nil && bestP.Valid {
-			bestPValue = bestP.Float64
-		}
-
-		// Вычисляем награду: reward = max(0, P - BestP)
-		reward := P - bestPValue
-		if reward < 0 {
-			reward = 0
-		}
-
-		// Обновляем рейтинг только если есть прогресс (reward > 0)
-		if reward > 0 {
-			newRating := currentRating + reward
-			// Ensure rating doesn't go below a minimum (e.g., 0)
-			if newRating < 0 {
-				newRating = 0
-			}
-
-			log.Printf("Field %dx%d with %d mines: P=%.2f, BestP=%.2f, reward=%.2f, rating %.2f -> %.2f",
-				width, height, mines, P, bestPValue, reward, currentRating, newRating)
-
-			// Update user rating in database
-			_, err = h.db.Exec(
-				"UPDATE users SET rating = $1 WHERE id = $2",
-				newRating, userID,
-			)
-			if err != nil {
-				log.Printf("Error updating player rating: %v", err)
-			}
-
-			// Сохраняем игру в историю (только если был начислен рейтинг)
-			var gameHistoryID int
-			err = h.db.QueryRow(
-				`INSERT INTO user_game_history (user_id, width, height, mines, game_time, rating_gain, rating_before, rating_after, complexity, attempt_points)
-				 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-				 RETURNING id`,
-				userID, width, height, mines, gameTime, reward, currentRating, newRating, currentComplexity, P,
-			).Scan(&gameHistoryID)
-			if err != nil {
-				log.Printf("Error saving game to history: %v", err)
-			} else if len(participants) > 0 {
-				// Сохраняем участников игры
-				for _, participant := range participants {
-					_, err = h.db.Exec(
-						`INSERT INTO game_participants (game_history_id, user_id, nickname, color)
-						 VALUES ($1, $2, $3, $4)
-						 ON CONFLICT (game_history_id, user_id) DO NOTHING`,
-						gameHistoryID, participant.UserID, participant.Nickname, participant.Color,
-					)
-					if err != nil {
-						log.Printf("Error saving game participant: %v", err)
-					}
+			`INSERT INTO user_game_history (user_id, width, height, mines, game_time, rating_gain, rating_before, rating_after, complexity, attempt_points)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			 RETURNING id`,
+			userID, width, height, mines, gameTime, ratingGain, currentRating, newRating, difficulty, 0.0,
+		).Scan(&gameHistoryID)
+		if err != nil {
+			log.Printf("Error saving game to history: %v", err)
+		} else if len(participants) > 0 {
+			// Сохраняем участников игры
+			for _, participant := range participants {
+				_, err = h.db.Exec(
+					`INSERT INTO game_participants (game_history_id, user_id, nickname, color)
+					 VALUES ($1, $2, $3, $4)
+					 ON CONFLICT (game_history_id, user_id) DO NOTHING`,
+					gameHistoryID, participant.UserID, participant.Nickname, participant.Color,
+				)
+				if err != nil {
+					log.Printf("Error saving game participant: %v", err)
 				}
 			}
+		}
 
-			// Update or insert best result with new BestP
-			_, err = h.db.Exec(
-				`INSERT INTO user_best_results (user_id, width, height, mines, best_time, complexity, best_p, updated_at)
-				 VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-				 ON CONFLICT (user_id, width, height, mines)
-				 DO UPDATE SET 
-					best_time = LEAST(user_best_results.best_time, $5),
-					complexity = $6,
-					best_p = GREATEST(user_best_results.best_p, $7),
-					updated_at = CURRENT_TIMESTAMP`,
-				userID, width, height, mines, gameTime, currentComplexity, P,
-			)
-			if err != nil {
-				log.Printf("Error updating best result: %v", err)
-			}
-		} else {
-			// Нет прогресса (P <= BestP), но обновляем best_time если улучшили время
-			log.Printf("Field %dx%d with %d mines: P=%.2f, BestP=%.2f, no reward (no progress)",
-				width, height, mines, P, bestPValue)
-
-			// Обновляем best_time если это улучшение (best_p остается прежним)
-			_, err = h.db.Exec(
-				`INSERT INTO user_best_results (user_id, width, height, mines, best_time, complexity, best_p, updated_at)
-				 VALUES ($1, $2, $3, $4, $5, $6, COALESCE((SELECT best_p FROM user_best_results WHERE user_id = $1 AND width = $2 AND height = $3 AND mines = $4), 0.0), CURRENT_TIMESTAMP)
-				 ON CONFLICT (user_id, width, height, mines)
-				 DO UPDATE SET 
-					best_time = LEAST(user_best_results.best_time, $5),
-					updated_at = CURRENT_TIMESTAMP`,
-				userID, width, height, mines, gameTime, currentComplexity,
-			)
-			if err != nil {
-				log.Printf("Error updating best result: %v", err)
-			}
+		// Обновляем best_time
+		_, err = h.db.Exec(
+			`INSERT INTO user_best_results (user_id, width, height, mines, best_time, complexity, best_p, updated_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+			 ON CONFLICT (user_id, width, height, mines)
+			 DO UPDATE SET 
+				best_time = LEAST(user_best_results.best_time, $5),
+				complexity = $6,
+				updated_at = CURRENT_TIMESTAMP`,
+			userID, width, height, mines, gameTime, difficulty, 0.0,
+		)
+		if err != nil {
+			log.Printf("Error updating best result: %v", err)
 		}
 	} else {
 		// For lost games, don't update rating or best results
