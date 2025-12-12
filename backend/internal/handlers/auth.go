@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"database/sql"
+	"errors"
 	"log"
 	"math/rand"
 	"net/http"
@@ -11,6 +11,7 @@ import (
 	"minesweeperonline/internal/database"
 	"minesweeperonline/internal/models"
 	"minesweeperonline/internal/utils"
+	"gorm.io/gorm"
 )
 
 type AuthHandler struct {
@@ -124,9 +125,11 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 // Вспомогательные методы
 
 func (h *AuthHandler) userExists(username, email string) bool {
-	var id int
-	err := h.db.QueryRow("SELECT id FROM users WHERE username = $1 OR email = $2", username, email).Scan(&id)
-	return err == nil
+	var count int64
+	h.db.Model(&models.User{}).
+		Where("username = ? OR email = ?", username, email).
+		Count(&count)
+	return count > 0
 }
 
 func (h *AuthHandler) createUser(username, email, password string) (models.User, error) {
@@ -147,23 +150,27 @@ func (h *AuthHandler) createUser(username, email, password string) (models.User,
 	rand.Seed(time.Now().UnixNano())
 	defaultColor := defaultColors[rand.Intn(len(defaultColors))]
 
-	var user models.User
-	err = h.db.QueryRow(
-		"INSERT INTO users (username, email, password_hash, color) VALUES ($1, $2, $3, $4) RETURNING id, username, email, color, COALESCE(rating, 0.0), created_at",
-		username, email, passwordHash, defaultColor,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.Rating, &user.CreatedAt)
+	user := models.User{
+		Username:     username,
+		Email:        email,
+		PasswordHash: passwordHash,
+		Color:        &defaultColor,
+		Rating:       0.0,
+		CreatedAt:    time.Now(),
+	}
 
-	return user, err
+	err = h.db.Create(&user).Error
+	if err != nil {
+		return models.User{}, err
+	}
+
+	return user, nil
 }
 
 func (h *AuthHandler) findUserByUsername(username string) (models.User, error) {
 	var user models.User
-	err := h.db.QueryRow(
-		"SELECT id, username, email, password_hash, color, created_at FROM users WHERE username = $1",
-		username,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.Color, &user.CreatedAt)
-
-	if err == sql.ErrNoRows {
+	err := h.db.Where("username = ?", username).First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return models.User{}, err
 	}
 	return user, err
@@ -171,10 +178,13 @@ func (h *AuthHandler) findUserByUsername(username string) (models.User, error) {
 
 func (h *AuthHandler) findUserByID(id int) (models.User, error) {
 	var user models.User
-	err := h.db.QueryRow(
-		"SELECT id, username, email, color, COALESCE(rating, 0.0), created_at FROM users WHERE id = $1",
-		id,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.Rating, &user.CreatedAt)
-
+	err := h.db.First(&user, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return models.User{}, err
+	}
+	// Убеждаемся, что рейтинг не nil
+	if user.Rating < 0 {
+		user.Rating = 0.0
+	}
 	return user, err
 }

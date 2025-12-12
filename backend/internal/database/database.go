@@ -1,27 +1,37 @@
 package database
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 
-	_ "github.com/lib/pq"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+
+	"minesweeperonline/internal/models"
 )
 
 type DB struct {
-	*sql.DB
+	*gorm.DB
 }
 
 func NewDB(host, port, user, password, dbname string) (*DB, error) {
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		host, port, user, password, dbname)
 
-	db, err := sql.Open("postgres", connStr)
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Info),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	if err := db.Ping(); err != nil {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get underlying sql.DB: %w", err)
+	}
+
+	if err := sqlDB.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
@@ -30,76 +40,42 @@ func NewDB(host, port, user, password, dbname string) (*DB, error) {
 	return &DB{db}, nil
 }
 
+func (db *DB) Close() error {
+	sqlDB, err := db.DB.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
+}
+
 func (db *DB) InitSchema() error {
-	queries := []string{
-		`CREATE TABLE IF NOT EXISTS users (
-			id SERIAL PRIMARY KEY,
-			username VARCHAR(50) UNIQUE NOT NULL,
-			email VARCHAR(100) UNIQUE NOT NULL,
-			password_hash VARCHAR(255) NOT NULL,
-			color VARCHAR(7) DEFAULT NULL,
-			rating DOUBLE PRECISION DEFAULT 0.0,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);`,
-		`ALTER TABLE users ADD COLUMN IF NOT EXISTS color VARCHAR(7) DEFAULT NULL;`,
-		`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating DOUBLE PRECISION DEFAULT 0.0;`,
-		`CREATE TABLE IF NOT EXISTS user_stats (
-			user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-			games_played INTEGER DEFAULT 0,
-			games_won INTEGER DEFAULT 0,
-			games_lost INTEGER DEFAULT 0,
-			last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);`,
-		`CREATE TABLE IF NOT EXISTS user_sessions (
-			user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-			session_token VARCHAR(255) UNIQUE NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			expires_at TIMESTAMP NOT NULL,
-			PRIMARY KEY (user_id, session_token)
-		);`,
-		`CREATE TABLE IF NOT EXISTS user_best_results (
-			user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-			width INTEGER NOT NULL,
-			height INTEGER NOT NULL,
-			mines INTEGER NOT NULL,
-			best_time DOUBLE PRECISION NOT NULL,
-			complexity DOUBLE PRECISION NOT NULL,
-			best_p DOUBLE PRECISION DEFAULT 0.0,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY (user_id, width, height, mines)
-		);`,
-		`ALTER TABLE user_best_results ADD COLUMN IF NOT EXISTS best_p DOUBLE PRECISION DEFAULT 0.0;`,
-		`CREATE TABLE IF NOT EXISTS user_game_history (
-			id SERIAL PRIMARY KEY,
-			user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-			width INTEGER NOT NULL,
-			height INTEGER NOT NULL,
-			mines INTEGER NOT NULL,
-			game_time DOUBLE PRECISION NOT NULL,
-			rating_gain DOUBLE PRECISION DEFAULT 0.0,
-			rating_before DOUBLE PRECISION NOT NULL,
-			rating_after DOUBLE PRECISION NOT NULL,
-			complexity DOUBLE PRECISION NOT NULL,
-			attempt_points DOUBLE PRECISION NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);`,
-		`CREATE INDEX IF NOT EXISTS idx_user_game_history_user_id_rating_gain ON user_game_history(user_id, rating_gain DESC);`,
-		`CREATE TABLE IF NOT EXISTS game_participants (
-			game_history_id INTEGER REFERENCES user_game_history(id) ON DELETE CASCADE,
-			user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-			nickname VARCHAR(100) NOT NULL,
-			color VARCHAR(7),
-			PRIMARY KEY (game_history_id, user_id)
-		);`,
-		`CREATE INDEX IF NOT EXISTS idx_game_participants_game_history_id ON game_participants(game_history_id);`,
+	// AutoMigrate создаст таблицы, если их нет, и обновит существующие
+	err := db.AutoMigrate(
+		&models.User{},
+		&models.UserStats{},
+		&models.UserBestResult{},
+		&models.UserGameHistory{},
+		&models.GameParticipant{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to migrate database: %w", err)
 	}
 
-	for _, query := range queries {
-		_, err := db.Exec(query)
-		if err != nil {
-			return fmt.Errorf("failed to create table: %w", err)
-		}
+	// Создаем индексы вручную, так как GORM не всегда корректно их создает
+	err = db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_user_game_history_user_id_rating_gain 
+		ON user_game_history(user_id, rating_gain DESC);
+	`).Error
+	if err != nil {
+		log.Printf("Warning: failed to create index idx_user_game_history_user_id_rating_gain: %v", err)
+	}
+
+	err = db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_game_participants_game_history_id 
+		ON game_participants(game_history_id);
+	`).Error
+	if err != nil {
+		log.Printf("Warning: failed to create index idx_game_participants_game_history_id: %v", err)
 	}
 
 	log.Println("Database schema initialized successfully")

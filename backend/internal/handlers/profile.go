@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"database/sql"
+	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -10,6 +10,7 @@ import (
 	"minesweeperonline/internal/models"
 	"minesweeperonline/internal/rating"
 	"minesweeperonline/internal/utils"
+	"gorm.io/gorm"
 )
 
 type ProfileHandler struct {
@@ -91,14 +92,25 @@ func (h *ProfileHandler) GetProfileByUsername(w http.ResponseWriter, r *http.Req
 }
 
 func (h *ProfileHandler) UpdateLastSeen(userID int) error {
-	_, err := h.db.Exec(
-		`INSERT INTO user_stats (user_id, last_seen, updated_at) 
-		 VALUES ($1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		 ON CONFLICT (user_id) 
-		 DO UPDATE SET last_seen = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP`,
-		userID,
-	)
-	return err
+	now := time.Now()
+	stats := models.UserStats{
+		UserID:   userID,
+		LastSeen: now,
+		UpdatedAt: now,
+	}
+	
+	err := h.db.Where("user_id = ?", userID).FirstOrCreate(&stats, models.UserStats{UserID: userID}).Error
+	if err != nil {
+		return err
+	}
+	
+	// Обновляем last_seen и updated_at
+	return h.db.Model(&models.UserStats{}).
+		Where("user_id = ?", userID).
+		Updates(map[string]interface{}{
+			"last_seen": now,
+			"updated_at": now,
+		}).Error
 }
 
 func (h *ProfileHandler) UpdateActivity(w http.ResponseWriter, r *http.Request) {
@@ -131,10 +143,14 @@ func (h *ProfileHandler) UpdateColor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := h.db.Exec(
-		"UPDATE users SET color = $1 WHERE id = $2",
-		req.Color, userID,
-	)
+	var colorPtr *string
+	if req.Color != "" {
+		colorPtr = &req.Color
+	}
+	
+	err := h.db.Model(&models.User{}).
+		Where("id = ?", userID).
+		Update("color", colorPtr).Error
 	if err != nil {
 		log.Printf("Error updating color for user %d: %v", userID, err)
 		utils.JSONError(w, http.StatusInternalServerError, "Failed to update color")
@@ -145,17 +161,16 @@ func (h *ProfileHandler) UpdateColor(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ProfileHandler) FindUserColor(id int) (string, error) {
-	var color sql.NullString
-	err := h.db.QueryRow(
-		"SELECT color FROM users WHERE id = $1",
-		id,
-	).Scan(&color)
-
-	if err == sql.ErrNoRows {
+	var user models.User
+	err := h.db.Select("color").First(&user, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", err
 	}
-	if color.Valid {
-		return color.String, nil
+	if err != nil {
+		return "", err
+	}
+	if user.Color != nil {
+		return *user.Color, nil
 	}
 	return "", nil
 }
@@ -205,14 +220,16 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 		participants = []GameParticipant{}
 	}
 	// Get current player rating
-	var currentRating float64
-	err := h.db.QueryRow(
-		"SELECT COALESCE(rating, 0.0) FROM users WHERE id = $1",
-		userID,
-	).Scan(&currentRating)
-	if err != nil {
+	var user models.User
+	err := h.db.Select("rating").First(&user, userID).Error
+	currentRating := 0.0
+	if err == nil {
+		currentRating = user.Rating
+		if currentRating < 0 {
+			currentRating = 0.0
+		}
+	} else {
 		log.Printf("Error getting player rating: %v", err)
-		currentRating = 0.0 // Default rating
 	}
 
 	// Вычисляем сложность поля по упрощенной формуле: (M / (W * H)) * sqrt(W^2 + H^2)
@@ -232,33 +249,45 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 			width, height, mines, difficulty, currentRating, newRating)
 
 		// Update user rating in database
-		_, err = h.db.Exec(
-			"UPDATE users SET rating = $1 WHERE id = $2",
-			newRating, userID,
-		)
+		err = h.db.Model(&models.User{}).
+			Where("id = ?", userID).
+			Update("rating", newRating).Error
 		if err != nil {
 			log.Printf("Error updating player rating: %v", err)
 		}
 
 		// Сохраняем игру в историю
-		var gameHistoryID int
-		err = h.db.QueryRow(
-			`INSERT INTO user_game_history (user_id, width, height, mines, game_time, rating_gain, rating_before, rating_after, complexity, attempt_points)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			 RETURNING id`,
-			userID, width, height, mines, gameTime, ratingGain, currentRating, newRating, difficulty, 0.0,
-		).Scan(&gameHistoryID)
+		gameHistory := models.UserGameHistory{
+			UserID:        userID,
+			Width:         width,
+			Height:        height,
+			Mines:         mines,
+			GameTime:      gameTime,
+			RatingGain:    ratingGain,
+			RatingBefore:  currentRating,
+			RatingAfter:   newRating,
+			Complexity:    difficulty,
+			AttemptPoints: 0.0,
+			CreatedAt:     time.Now(),
+		}
+		err = h.db.Create(&gameHistory).Error
 		if err != nil {
 			log.Printf("Error saving game to history: %v", err)
 		} else if len(participants) > 0 {
 			// Сохраняем участников игры
 			for _, participant := range participants {
-				_, err = h.db.Exec(
-					`INSERT INTO game_participants (game_history_id, user_id, nickname, color)
-					 VALUES ($1, $2, $3, $4)
-					 ON CONFLICT (game_history_id, user_id) DO NOTHING`,
-					gameHistoryID, participant.UserID, participant.Nickname, participant.Color,
-				)
+				var colorPtr *string
+				if participant.Color != "" {
+					colorPtr = &participant.Color
+				}
+				gameParticipant := models.GameParticipant{
+					GameHistoryID: gameHistory.ID,
+					UserID:        participant.UserID,
+					Nickname:      participant.Nickname,
+					Color:         colorPtr,
+				}
+				err = h.db.Where("game_history_id = ? AND user_id = ?", gameHistory.ID, participant.UserID).
+					FirstOrCreate(&gameParticipant).Error
 				if err != nil {
 					log.Printf("Error saving game participant: %v", err)
 				}
@@ -266,16 +295,41 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 		}
 
 		// Обновляем best_time
-		_, err = h.db.Exec(
-			`INSERT INTO user_best_results (user_id, width, height, mines, best_time, complexity, best_p, updated_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-			 ON CONFLICT (user_id, width, height, mines)
-			 DO UPDATE SET 
-				best_time = LEAST(user_best_results.best_time, $5),
-				complexity = $6,
-				updated_at = CURRENT_TIMESTAMP`,
-			userID, width, height, mines, gameTime, difficulty, 0.0,
-		)
+		var bestResult models.UserBestResult
+		err = h.db.Where("user_id = ? AND width = ? AND height = ? AND mines = ?", 
+			userID, width, height, mines).First(&bestResult).Error
+		
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Создаем новую запись
+			bestResult = models.UserBestResult{
+				UserID:    userID,
+				Width:     width,
+				Height:    height,
+				Mines:     mines,
+				BestTime:  gameTime,
+				Complexity: difficulty,
+				BestP:     0.0,
+				UpdatedAt: time.Now(),
+			}
+			err = h.db.Create(&bestResult).Error
+		} else if err == nil {
+			// Обновляем существующую запись, если новое время лучше
+			if gameTime < bestResult.BestTime {
+				err = h.db.Model(&bestResult).
+					Updates(map[string]interface{}{
+						"best_time": gameTime,
+						"complexity": difficulty,
+						"updated_at": time.Now(),
+					}).Error
+			} else {
+				// Обновляем только complexity и updated_at
+				err = h.db.Model(&bestResult).
+					Updates(map[string]interface{}{
+						"complexity": difficulty,
+						"updated_at": time.Now(),
+					}).Error
+			}
+		}
 		if err != nil {
 			log.Printf("Error updating best result: %v", err)
 		}
@@ -285,108 +339,90 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 	}
 
 	// Update game statistics
+	now := time.Now()
 	if won {
-		_, err = h.db.Exec(
-			`INSERT INTO user_stats (user_id, games_played, games_won, updated_at) 
-			 VALUES ($1, 1, 1, CURRENT_TIMESTAMP)
-			 ON CONFLICT (user_id) 
-			 DO UPDATE SET 
-				games_played = user_stats.games_played + 1,
-				games_won = user_stats.games_won + 1,
-				updated_at = CURRENT_TIMESTAMP`,
-			userID,
-		)
+		stats := models.UserStats{UserID: userID}
+		err = h.db.Where("user_id = ?", userID).FirstOrCreate(&stats).Error
+		if err != nil {
+			return err
+		}
+		err = h.db.Model(&models.UserStats{}).
+			Where("user_id = ?", userID).
+			Updates(map[string]interface{}{
+				"games_played": gorm.Expr("games_played + ?", 1),
+				"games_won": gorm.Expr("games_won + ?", 1),
+				"updated_at": now,
+			}).Error
 		return err
 	} else {
-		_, err = h.db.Exec(
-			`INSERT INTO user_stats (user_id, games_played, games_lost, updated_at) 
-			 VALUES ($1, 1, 1, CURRENT_TIMESTAMP)
-			 ON CONFLICT (user_id) 
-			 DO UPDATE SET 
-				games_played = user_stats.games_played + 1,
-				games_lost = user_stats.games_lost + 1,
-				updated_at = CURRENT_TIMESTAMP`,
-			userID,
-		)
+		stats := models.UserStats{UserID: userID}
+		err = h.db.Where("user_id = ?", userID).FirstOrCreate(&stats).Error
+		if err != nil {
+			return err
+		}
+		err = h.db.Model(&models.UserStats{}).
+			Where("user_id = ?", userID).
+			Updates(map[string]interface{}{
+				"games_played": gorm.Expr("games_played + ?", 1),
+				"games_lost": gorm.Expr("games_lost + ?", 1),
+				"updated_at": now,
+			}).Error
 		return err
 	}
 }
 
 func (h *ProfileHandler) findUserByID(id int) (models.User, error) {
 	var user models.User
-	err := h.db.QueryRow(
-		"SELECT id, username, email, color, COALESCE(rating, 0.0), created_at FROM users WHERE id = $1",
-		id,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.Rating, &user.CreatedAt)
-
-	if err == sql.ErrNoRows {
+	err := h.db.First(&user, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return models.User{}, err
+	}
+	if user.Rating < 0 {
+		user.Rating = 0.0
 	}
 	return user, err
 }
 
 func (h *ProfileHandler) findUserByUsername(username string) (models.User, error) {
 	var user models.User
-	err := h.db.QueryRow(
-		"SELECT id, username, email, color, COALESCE(rating, 0.0), created_at FROM users WHERE username = $1",
-		username,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.Rating, &user.CreatedAt)
-
-	if err == sql.ErrNoRows {
+	err := h.db.Where("username = ?", username).First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return models.User{}, err
+	}
+	if user.Rating < 0 {
+		user.Rating = 0.0
 	}
 	return user, err
 }
 
 func (h *ProfileHandler) getUserStats(userID int) (models.UserStats, error) {
 	var stats models.UserStats
-	err := h.db.QueryRow(
-		`SELECT user_id, games_played, games_won, games_lost, last_seen 
-		 FROM user_stats WHERE user_id = $1`,
-		userID,
-	).Scan(&stats.UserID, &stats.GamesPlayed, &stats.GamesWon, &stats.GamesLost, &stats.LastSeen)
-
-	if err == sql.ErrNoRows {
+	err := h.db.Where("user_id = ?", userID).First(&stats).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return models.UserStats{}, err
 	}
 	return stats, err
 }
 
 func (h *ProfileHandler) createUserStats(userID int) (models.UserStats, error) {
-	_, err := h.db.Exec(
-		`INSERT INTO user_stats (user_id, games_played, games_won, games_lost, last_seen, updated_at) 
-		 VALUES ($1, 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-		userID,
-	)
+	now := time.Now()
+	stats := models.UserStats{
+		UserID:      userID,
+		GamesPlayed: 0,
+		GamesWon:    0,
+		GamesLost:   0,
+		LastSeen:    now,
+		UpdatedAt:   now,
+	}
+	err := h.db.Create(&stats).Error
 	if err != nil {
 		return models.UserStats{}, err
 	}
-
-	return h.getUserStats(userID)
+	return stats, nil
 }
 
 // GetLeaderboard возвращает список всех игроков, отсортированных по рейтингу
 func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.Query(`
-		SELECT 
-			u.id,
-			u.username,
-			u.color,
-			COALESCE(u.rating, 0.0) as rating,
-			COALESCE(us.games_played, 0) as games_played,
-			COALESCE(us.games_won, 0) as games_won,
-			COALESCE(us.games_lost, 0) as games_lost
-		FROM users u
-		LEFT JOIN user_stats us ON u.id = us.user_id
-		ORDER BY COALESCE(u.rating, 0.0) DESC, u.username ASC
-	`)
-	if err != nil {
-		log.Printf("Error getting leaderboard: %v", err)
-		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
-		return
-	}
-	defer rows.Close()
-
 	type LeaderboardEntry struct {
 		ID          int     `json:"id"`
 		Username    string  `json:"username"`
@@ -397,33 +433,36 @@ func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) 
 		GamesLost   int     `json:"gamesLost"`
 	}
 
-	var leaderboard []LeaderboardEntry
-	for rows.Next() {
-		var entry LeaderboardEntry
-		var color sql.NullString
-		err := rows.Scan(
-			&entry.ID,
-			&entry.Username,
-			&color,
-			&entry.Rating,
-			&entry.GamesPlayed,
-			&entry.GamesWon,
-			&entry.GamesLost,
-		)
-		if err != nil {
-			log.Printf("Error scanning leaderboard row: %v", err)
-			continue
-		}
-		if color.Valid {
-			entry.Color = color.String
-		}
-		leaderboard = append(leaderboard, entry)
-	}
-
-	if err = rows.Err(); err != nil {
-		log.Printf("Error iterating leaderboard rows: %v", err)
+	var users []models.User
+	err := h.db.Order("COALESCE(rating, 0.0) DESC, username ASC").Find(&users).Error
+	if err != nil {
+		log.Printf("Error getting leaderboard: %v", err)
 		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
 		return
+	}
+
+	var leaderboard []LeaderboardEntry
+	for _, user := range users {
+		entry := LeaderboardEntry{
+			ID:       user.ID,
+			Username: user.Username,
+			Rating:   user.Rating,
+		}
+		if user.Rating < 0 {
+			entry.Rating = 0.0
+		}
+		if user.Color != nil {
+			entry.Color = *user.Color
+		}
+
+		// Получаем статистику пользователя
+		var stats models.UserStats
+		h.db.Where("user_id = ?", user.ID).First(&stats)
+		entry.GamesPlayed = stats.GamesPlayed
+		entry.GamesWon = stats.GamesWon
+		entry.GamesLost = stats.GamesLost
+
+		leaderboard = append(leaderboard, entry)
 	}
 
 	utils.JSONResponse(w, http.StatusOK, leaderboard)
@@ -455,21 +494,6 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Получаем топ-10 игр по начисленному рейтингу
-	rows, err := h.db.Query(
-		`SELECT id, width, height, mines, game_time, rating_gain, rating_before, rating_after, complexity, attempt_points, created_at
-		 FROM user_game_history
-		 WHERE user_id = $1 AND rating_gain > 0
-		 ORDER BY rating_gain DESC
-		 LIMIT 10`,
-		userID,
-	)
-	if err != nil {
-		log.Printf("Error querying top games: %v", err)
-		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
-		return
-	}
-	defer rows.Close()
-
 	type GameHistory struct {
 		ID            int     `json:"id"`
 		Width         int     `json:"width"`
@@ -484,27 +508,33 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 		CreatedAt     string  `json:"createdAt"`
 	}
 
-	var games []GameHistory
-	for rows.Next() {
-		var game GameHistory
-		var createdAt time.Time
-		err := rows.Scan(
-			&game.ID, &game.Width, &game.Height, &game.Mines,
-			&game.GameTime, &game.RatingGain, &game.RatingBefore, &game.RatingAfter,
-			&game.Complexity, &game.AttemptPoints, &createdAt,
-		)
-		if err != nil {
-			log.Printf("Error scanning game history: %v", err)
-			continue
-		}
-		game.CreatedAt = createdAt.Format(time.RFC3339)
-		games = append(games, game)
-	}
+	var historyRecords []models.UserGameHistory
+	err = h.db.Where("user_id = ? AND rating_gain > ?", userID, 0).
+		Order("rating_gain DESC").
+		Limit(10).
+		Find(&historyRecords).Error
 
-	if err = rows.Err(); err != nil {
-		log.Printf("Error iterating game history rows: %v", err)
+	if err != nil {
+		log.Printf("Error querying top games: %v", err)
 		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
 		return
+	}
+
+	var games []GameHistory
+	for _, record := range historyRecords {
+		games = append(games, GameHistory{
+			ID:            record.ID,
+			Width:         record.Width,
+			Height:        record.Height,
+			Mines:         record.Mines,
+			GameTime:      record.GameTime,
+			RatingGain:    record.RatingGain,
+			RatingBefore:  record.RatingBefore,
+			RatingAfter:   record.RatingAfter,
+			Complexity:    record.Complexity,
+			AttemptPoints: record.AttemptPoints,
+			CreatedAt:     record.CreatedAt.Format(time.RFC3339),
+		})
 	}
 
 	utils.JSONResponse(w, http.StatusOK, games)
@@ -536,21 +566,6 @@ func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Получаем последние 10 игр
-	rows, err := h.db.Query(
-		`SELECT id, width, height, mines, game_time, rating_gain, rating_before, rating_after, complexity, attempt_points, created_at
-		 FROM user_game_history
-		 WHERE user_id = $1
-		 ORDER BY created_at DESC
-		 LIMIT 10`,
-		userID,
-	)
-	if err != nil {
-		log.Printf("Error querying recent games: %v", err)
-		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
-		return
-	}
-	defer rows.Close()
-
 	type GameParticipantInfo struct {
 		UserID   int    `json:"userId"`
 		Nickname string `json:"nickname"`
@@ -572,51 +587,52 @@ func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) 
 		Participants  []GameParticipantInfo `json:"participants"`
 	}
 
+	var historyRecords []models.UserGameHistory
+	err = h.db.Where("user_id = ?", userID).
+		Order("created_at DESC").
+		Limit(10).
+		Find(&historyRecords).Error
+
+	if err != nil {
+		log.Printf("Error querying recent games: %v", err)
+		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
 	var games []RecentGame
-	for rows.Next() {
-		var game RecentGame
-		var createdAt time.Time
-		err := rows.Scan(
-			&game.ID, &game.Width, &game.Height, &game.Mines,
-			&game.GameTime, &game.RatingGain, &game.RatingBefore, &game.RatingAfter,
-			&game.Complexity, &game.AttemptPoints, &createdAt,
-		)
-		if err != nil {
-			log.Printf("Error scanning recent game: %v", err)
-			continue
+	for _, record := range historyRecords {
+		game := RecentGame{
+			ID:            record.ID,
+			Width:         record.Width,
+			Height:        record.Height,
+			Mines:         record.Mines,
+			GameTime:      record.GameTime,
+			RatingGain:    record.RatingGain,
+			RatingBefore:  record.RatingBefore,
+			RatingAfter:   record.RatingAfter,
+			Complexity:    record.Complexity,
+			AttemptPoints: record.AttemptPoints,
+			CreatedAt:     record.CreatedAt.Format(time.RFC3339),
+			Participants:  []GameParticipantInfo{},
 		}
-		game.CreatedAt = createdAt.Format(time.RFC3339)
-		game.Participants = []GameParticipantInfo{} // Инициализируем пустой слайс
 
 		// Получаем участников игры
-		participantRows, err := h.db.Query(
-			`SELECT user_id, nickname, color
-			 FROM game_participants
-			 WHERE game_history_id = $1`,
-			game.ID,
-		)
+		var participants []models.GameParticipant
+		err := h.db.Where("game_history_id = ?", record.ID).Find(&participants).Error
 		if err == nil {
-			for participantRows.Next() {
-				var participant GameParticipantInfo
-				var color sql.NullString
-				err := participantRows.Scan(&participant.UserID, &participant.Nickname, &color)
-				if err == nil {
-					if color.Valid {
-						participant.Color = color.String
-					}
-					game.Participants = append(game.Participants, participant)
+			for _, p := range participants {
+				participant := GameParticipantInfo{
+					UserID:   p.UserID,
+					Nickname: p.Nickname,
 				}
+				if p.Color != nil {
+					participant.Color = *p.Color
+				}
+				game.Participants = append(game.Participants, participant)
 			}
-			participantRows.Close()
 		}
 
 		games = append(games, game)
-	}
-
-	if err = rows.Err(); err != nil {
-		log.Printf("Error iterating recent games rows: %v", err)
-		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
-		return
 	}
 
 	utils.JSONResponse(w, http.StatusOK, games)
