@@ -23,6 +23,10 @@ const (
 	// Референсное поле (16x16, 40) имеет плотность ~0.156 (15.6%)
 	// Минимум установлен в 5% (0.05) для предотвращения фарма на больших полях с низкой плотностью
 	MinDensity = 0.05
+	// DFmin - минимальный коэффициент сложности поля (нижний порог для DF)
+	DFmin = 0.05
+	// Gamma - параметр для расчета DF (контроль крутизны)
+	Gamma = 0.6
 )
 
 // computeD returns complexity D = A * (M/A)^alpha
@@ -113,7 +117,38 @@ func IsComplexitySufficient(w, h, m float64, Dref float64) bool {
 	return D >= minComplexity
 }
 
+// ComputeDifficultyFactor вычисляет коэффициент сложности поля DF
+// DF = max(DFmin, (D/(D+Dref))^gamma)
+// где D - сложность поля, Dref - референсная сложность, gamma - параметр крутизны
+func ComputeDifficultyFactor(w, h, m, Dref float64) float64 {
+	if Dref <= 0 {
+		return DFmin
+	}
+	D := computeD(w, h, m)
+	if D <= 0 {
+		return DFmin
+	}
+	ratio := D / (D + Dref)
+	df := math.Pow(ratio, Gamma)
+	if df < DFmin {
+		return DFmin
+	}
+	return df
+}
+
+// ComputeAttemptPoints вычисляет очки попытки P = K * DF * (S - E)
+// где K - K-factor, DF - коэффициент сложности, S - оценка исполнения, E - ожидаемый результат
+func ComputeAttemptPoints(w, h, m, T, Rpl, Dref float64) float64 {
+	DF := ComputeDifficultyFactor(w, h, m, Dref)
+	Texp := expectedTime(w, h, m)
+	S := performanceScore(T, Texp)
+	Rp := computeRp(w, h, m, Dref)
+	E := expectedResult(Rp, Rpl)
+	return K * DF * (S - E)
+}
+
 // UpdatePlayerRating performs one update, returns new rating and delta
+// DEPRECATED: Используйте ComputeAttemptPoints и логику с BestP
 func UpdatePlayerRating(w, h, m, T, Rpl float64, Dref float64) (newR float64, delta float64) {
 	Rp := computeRp(w, h, m, Dref)
 	Texp := expectedTime(w, h, m)

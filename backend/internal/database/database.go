@@ -65,9 +65,11 @@ func (db *DB) InitSchema() error {
 			mines INTEGER NOT NULL,
 			best_time DOUBLE PRECISION NOT NULL,
 			complexity DOUBLE PRECISION NOT NULL,
+			best_p DOUBLE PRECISION DEFAULT 0.0,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (user_id, width, height, mines)
 		);`,
+		`ALTER TABLE user_best_results ADD COLUMN IF NOT EXISTS best_p DOUBLE PRECISION DEFAULT 0.0;`,
 	}
 
 	for _, query := range queries {

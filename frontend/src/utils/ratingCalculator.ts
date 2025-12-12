@@ -18,6 +18,10 @@ const MIN_MINES = 10
 // Референсное поле (16x16, 40) имеет плотность ~0.156 (15.6%)
 // Минимум установлен в 5% (0.05) для предотвращения фарма на больших полях с низкой плотностью
 const MIN_DENSITY = 0.05
+// DFmin - минимальный коэффициент сложности поля (нижний порог для DF)
+const DF_MIN = 0.05
+// Gamma - параметр для расчета DF (контроль крутизны)
+const GAMMA = 0.6
 
 // Вычисляет сложность D = A * (M/A)^alpha
 function computeD(width: number, height: number, mines: number): number {
@@ -55,7 +59,8 @@ export function computeDref(): number {
 }
 
 // Вычисляет максимальный прирост рейтинга для данного поля
-// Максимальный прирост достигается при идеальном времени (S = MAX_S) и минимальном E
+// Использует новую систему с DF (коэффициент сложности)
+// Максимальный прирост достигается при идеальном времени (S = MAX_S)
 export function calculateMaxRatingGain(
   width: number,
   height: number,
@@ -63,14 +68,12 @@ export function calculateMaxRatingGain(
   currentRating: number = 1500.0
 ): number {
   const Dref = computeDref()
+  const DF = computeDifficultyFactor(width, height, mines)
   const Rp = computeRp(width, height, mines, Dref)
-  
-  // Максимальный прирост при S = MAX_S и E минимально (когда Rp >> Rpl)
-  // Но для более точного расчета используем реальный E
   const E = expectedResult(Rp, currentRating)
   
-  // Максимальный прирост = K * (MAX_S - E)
-  const maxDelta = K * (MAX_S - E)
+  // Максимальный прирост = K * DF * (MAX_S - E)
+  const maxDelta = K * DF * (MAX_S - E)
   
   return maxDelta
 }
@@ -123,8 +126,41 @@ function performanceScore(T: number, Texp: number): number {
   return s
 }
 
+// Вычисляет коэффициент сложности поля DF
+// DF = max(DFmin, (D/(D+Dref))^gamma)
+function computeDifficultyFactor(width: number, height: number, mines: number): number {
+  const Dref = computeDref()
+  if (Dref <= 0) return DF_MIN
+  const D = computeD(width, height, mines)
+  if (D <= 0) return DF_MIN
+  const ratio = D / (D + Dref)
+  let df = Math.pow(ratio, GAMMA)
+  if (df < DF_MIN) {
+    return DF_MIN
+  }
+  return df
+}
+
+// Вычисляет очки попытки P = K * DF * (S - E)
+export function computeAttemptPoints(
+  width: number,
+  height: number,
+  mines: number,
+  gameTime: number, // время игры в секундах
+  currentRating: number = 1500.0
+): number {
+  const Dref = computeDref()
+  const DF = computeDifficultyFactor(width, height, mines)
+  const Texp = expectedTime(width, height, mines)
+  const S = performanceScore(gameTime, Texp)
+  const Rp = computeRp(width, height, mines, Dref)
+  const E = expectedResult(Rp, currentRating)
+  return K * DF * (S - E)
+}
+
 // Вычисляет изменение рейтинга на основе реального времени игры
-// Возвращает изменение рейтинга (delta) и новый рейтинг
+// Использует новую систему с DF (коэффициент сложности)
+// Возвращает очки попытки P (без учета BestP, так как BestP неизвестен на фронтенде)
 export function calculateRatingChange(
   width: number,
   height: number,
@@ -132,12 +168,11 @@ export function calculateRatingChange(
   gameTime: number, // время игры в секундах
   currentRating: number = 1500.0
 ): { delta: number; newRating: number } {
-  const Dref = computeDref()
-  const Rp = computeRp(width, height, mines, Dref)
-  const Texp = expectedTime(width, height, mines)
-  const S = performanceScore(gameTime, Texp)
-  const E = expectedResult(Rp, currentRating)
-  const delta = K * (S - E)
+  // Вычисляем P (очки попытки)
+  const P = computeAttemptPoints(width, height, mines, gameTime, currentRating)
+  // На фронтенде мы не знаем BestP, поэтому показываем P как максимальный возможный прирост
+  // (если BestP = 0, то reward = P)
+  const delta = Math.max(0, P) // reward не может быть отрицательным
   const newRating = currentRating + delta
   return { delta, newRating }
 }
