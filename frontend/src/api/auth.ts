@@ -31,6 +31,7 @@ export interface User {
   username: string
   email: string
   color?: string
+  rating: number
   createdAt: string
 }
 

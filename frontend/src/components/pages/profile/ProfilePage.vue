@@ -19,6 +19,10 @@
           <div class="user-details">
             <h2 class="username">{{ profile.user.username }}</h2>
             <p v-if="isOwnProfile" class="email">{{ profile.user.email }}</p>
+            <div class="user-rating">
+              <span class="rating-label">Рейтинг:</span>
+              <span class="rating-value">{{ Math.round(profile.user.rating) }}</span>
+            </div>
             <div class="status-badge" :class="{ 'status-online': profile.stats.isOnline, 'status-offline': !profile.stats.isOnline }">
               <span class="status-dot"></span>
               <span>{{ profile.stats.isOnline ? 'В сети' : 'Не в сети' }}</span>
@@ -58,6 +62,10 @@
       <div class="profile-stats">
         <h3 class="stats-title">Статистика игр</h3>
         <div class="stats-grid">
+          <div class="stat-card stat-card--rating">
+            <div class="stat-value">{{ Math.round(profile.user.rating) }}</div>
+            <div class="stat-label">Рейтинг</div>
+          </div>
           <div class="stat-card">
             <div class="stat-value">{{ profile.stats.gamesPlayed }}</div>
             <div class="stat-label">Игр сыграно</div>
@@ -297,6 +305,28 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
+.user-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1rem 0;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 1rem;
+  color: white;
+  font-weight: 600;
+}
+
+.rating-label {
+  font-size: 0.875rem;
+  opacity: 0.9;
+}
+
+.rating-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -366,6 +396,11 @@ onMounted(() => {
 
 .stat-card--ratio {
   border-left: 4px solid #667eea;
+}
+
+.stat-card--rating {
+  border-left: 4px solid #f59e0b;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
 }
 
 .stat-value {

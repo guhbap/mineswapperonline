@@ -63,6 +63,12 @@
           <div class="form-hint">Максимум: {{ maxMines }}</div>
         </div>
 
+        <div v-if="maxRatingGain > 0" class="form-group rating-info">
+          <div class="rating-info__label">Максимальный прирост рейтинга:</div>
+          <div class="rating-info__value">+{{ Math.round(maxRatingGain) }}</div>
+          <div class="rating-info__hint">При идеальном прохождении</div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">
             <input
@@ -98,6 +104,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { generateRandomName } from '@/utils/nameGenerator'
+import { calculateMaxRatingGain } from '@/utils/ratingCalculator'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{
   show: boolean
@@ -118,6 +126,7 @@ const form = ref({
 
 const hasPassword = ref(false)
 const error = ref('')
+const authStore = useAuthStore()
 
 // Генерируем случайное название при открытии модалки
 watch(() => props.show, (isShowing) => {
@@ -135,6 +144,16 @@ onMounted(() => {
 
 const maxMines = computed(() => {
   return form.value.rows * form.value.cols - 1
+})
+
+const maxRatingGain = computed(() => {
+  const currentRating = authStore.user?.rating || 1500.0
+  return calculateMaxRatingGain(
+    form.value.cols,
+    form.value.rows,
+    form.value.mines,
+    currentRating
+  )
 })
 
 const isValid = computed(() => {
@@ -339,6 +358,34 @@ const handleOverlayClick = () => {
 .form-hint {
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+.rating-info {
+  padding: 1rem;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  border-radius: 0.5rem;
+  border: 2px solid rgba(102, 126, 234, 0.3);
+  text-align: center;
+}
+
+.rating-info__label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.rating-info__value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #22c55e;
+  margin-bottom: 0.25rem;
+}
+
+.rating-info__hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-style: italic;
 }
 
 .form-error {

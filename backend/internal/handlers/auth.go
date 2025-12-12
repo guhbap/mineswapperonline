@@ -172,9 +172,9 @@ func (h *AuthHandler) findUserByUsername(username string) (models.User, error) {
 func (h *AuthHandler) findUserByID(id int) (models.User, error) {
 	var user models.User
 	err := h.db.QueryRow(
-		"SELECT id, username, email, color, created_at FROM users WHERE id = $1",
+		"SELECT id, username, email, color, COALESCE(rating, 1500.0), created_at FROM users WHERE id = $1",
 		id,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.Color, &user.Rating, &user.CreatedAt)
 
 	return user, err
 }
