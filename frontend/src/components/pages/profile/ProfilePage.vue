@@ -116,7 +116,7 @@
             <div class="game-rank">#{{ index + 1 }}</div>
             <div class="game-info">
               <div class="game-field">
-                <span class="game-field-size">{{ game.width }}×{{ game.height }}</span>
+                <span class="game-field-size">{{ game.height }}×{{ game.width }}</span>
                 <span class="game-mines">💣 {{ game.mines }}</span>
               </div>
               <div class="game-details">
