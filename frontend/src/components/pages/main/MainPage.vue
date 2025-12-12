@@ -3,34 +3,40 @@
     <!-- Выбор комнаты -->
     <section v-if="!selectedRoom" class="rooms-wrapper" aria-label="Выбор игровой комнаты">
       <!-- Описание игры -->
-      <div class="game-description">
-        <h1 class="game-description__title">🎮 Сапер Онлайн</h1>
-        <p class="game-description__text">
-          Классическая игра Сапер в многопользовательском режиме! Играйте вместе с друзьями в реальном времени,
-          соревнуйтесь за лучший результат и получайте рейтинг за успешные игры.
-        </p>
-        <div class="game-description__features">
-          <div class="feature-item">
-            <span class="feature-icon">👥</span>
-            <span class="feature-text">Играйте с друзьями в реальном времени</span>
-          </div>
-          <div class="feature-item">
-            <span class="feature-icon">🏆</span>
-            <span class="feature-text">Получайте рейтинг за успешные игры</span>
-          </div>
-          <div class="feature-item">
-            <span class="feature-icon">💬</span>
-            <span class="feature-text">Общайтесь в чате во время игры</span>
-          </div>
-          <div class="feature-item">
-            <span class="feature-icon">⚙️</span>
-            <span class="feature-text">Настраивайте размер поля и сложность</span>
-          </div>
+      <div class="game-description-wrapper">
+        <div class="game-description-toggle" @click="toggleDescription">
+          <span class="toggle-icon">{{ isDescriptionVisible ? '▼' : '▶' }}</span>
+          <span class="toggle-text">{{ isDescriptionVisible ? 'Скрыть описание' : 'Показать описание' }}</span>
         </div>
-        <div class="game-description__actions">
-          <router-link to="/faq" class="game-description__link">
-            📖 Часто задаваемые вопросы
-          </router-link>
+        <div v-show="isDescriptionVisible" class="game-description">
+          <h1 class="game-description__title">🎮 Сапер Онлайн</h1>
+          <p class="game-description__text">
+            Классическая игра Сапер в многопользовательском режиме! Играйте вместе с друзьями в реальном времени,
+            соревнуйтесь за лучший результат и получайте рейтинг за успешные игры.
+          </p>
+          <div class="game-description__features">
+            <div class="feature-item">
+              <span class="feature-icon">👥</span>
+              <span class="feature-text">Играйте с друзьями в реальном времени</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-icon">🏆</span>
+              <span class="feature-text">Получайте рейтинг за успешные игры</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-icon">💬</span>
+              <span class="feature-text">Общайтесь в чате во время игры</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-icon">⚙️</span>
+              <span class="feature-text">Настраивайте размер поля и сложность</span>
+            </div>
+          </div>
+          <div class="game-description__actions">
+            <router-link to="/faq" class="game-description__link">
+              📖 Часто задаваемые вопросы
+            </router-link>
+          </div>
         </div>
       </div>
       <RoomsList
@@ -90,6 +96,16 @@ const wsClient = ref<IWebSocketClient | null>(null)
 const selectedRoom = ref<Room | null>(null)
 const selectedRoomForJoin = ref<Room | null>(null)
 const showCreateModal = ref(false)
+
+// Состояние видимости описания игры (загружаем из localStorage)
+const savedDescriptionState = localStorage.getItem('gameDescriptionVisible')
+const isDescriptionVisible = ref(savedDescriptionState !== null ? savedDescriptionState === 'true' : true)
+
+// Функция для переключения видимости описания
+const toggleDescription = () => {
+  isDescriptionVisible.value = !isDescriptionVisible.value
+  localStorage.setItem('gameDescriptionVisible', String(isDescriptionVisible.value))
+}
 
 // Функция для сброса состояния игры и возврата к выбору комнаты
 const resetToRoomSelection = () => {
@@ -283,14 +299,62 @@ const connectToRoom = (playerNickname: string) => {
   overflow-x: hidden;
 }
 
-.game-description {
+.game-description-wrapper {
   max-width: 1200px;
   margin: 0 auto;
+  margin-bottom: 2rem;
+}
+
+.game-description-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-secondary);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.game-description-toggle:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: #667eea;
+}
+
+.toggle-icon {
+  font-size: 0.75rem;
+  transition: transform 0.2s;
+}
+
+.toggle-text {
+  flex: 1;
+}
+
+.game-description {
+  max-width: 100%;
   padding: 2rem;
   background: var(--bg-secondary);
   border-radius: 1rem;
   box-shadow: 0 4px 12px var(--shadow);
-  margin-bottom: 2rem;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .game-description__title {
