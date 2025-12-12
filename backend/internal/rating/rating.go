@@ -16,6 +16,9 @@ const (
 	// MinComplexityRatio - минимальная сложность относительно референсного поля (25% от Dref)
 	// Поля с меньшей сложностью не дают рейтинг, чтобы предотвратить фарм на очень простых полях
 	MinComplexityRatio = 0.25
+	// MinMines - минимальное количество мин для получения рейтинга
+	// Предотвращает фарм на очень больших полях с малым количеством мин
+	MinMines = 10
 )
 
 // computeD returns complexity D = A * (M/A)^alpha
@@ -80,9 +83,15 @@ func ComputeComplexity(w, h, m float64) float64 {
 }
 
 // IsComplexitySufficient проверяет, достаточно ли сложности поля для получения рейтинга
-// Возвращает true, если сложность поля >= MinComplexityRatio * Dref
+// Возвращает true, если:
+// 1. Количество мин >= MinMines
+// 2. Сложность поля >= MinComplexityRatio * Dref
 func IsComplexitySufficient(w, h, m float64, Dref float64) bool {
 	if Dref <= 0 {
+		return false
+	}
+	// Проверка минимального количества мин
+	if m < MinMines {
 		return false
 	}
 	D := computeD(w, h, m)

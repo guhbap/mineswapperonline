@@ -11,6 +11,9 @@ const MAX_S = 0.99
 // MinComplexityRatio - минимальная сложность относительно референсного поля (25% от Dref)
 // Поля с меньшей сложностью не дают рейтинг, чтобы предотвратить фарм на очень простых полях
 const MIN_COMPLEXITY_RATIO = 0.25
+// MinMines - минимальное количество мин для получения рейтинга
+// Предотвращает фарм на очень больших полях с малым количеством мин
+const MIN_MINES = 10
 
 // Вычисляет сложность D = A * (M/A)^alpha
 function computeD(width: number, height: number, mines: number): number {
@@ -80,7 +83,9 @@ export function calculateMaxRating(
 }
 
 // Проверяет, достаточно ли сложности поля для получения рейтинга
-// Возвращает true, если сложность поля >= MinComplexityRatio * Dref
+// Возвращает true, если:
+// 1. Количество мин >= MinMines
+// 2. Сложность поля >= MinComplexityRatio * Dref
 export function isComplexitySufficient(
   width: number,
   height: number,
@@ -88,6 +93,8 @@ export function isComplexitySufficient(
 ): boolean {
   const Dref = computeDref()
   if (Dref <= 0) return false
+  // Проверка минимального количества мин
+  if (mines < MIN_MINES) return false
   const D = computeD(width, height, mines)
   const minComplexity = Dref * MIN_COMPLEXITY_RATIO
   return D >= minComplexity
