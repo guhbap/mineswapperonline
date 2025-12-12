@@ -1428,7 +1428,7 @@ func (s *Server) updateSafeCells(room *Room) {
 	log.Printf("Обновлены безопасные ячейки: %d ячеек", len(room.GameState.SafeCells))
 }
 
-// calculateCellHints вычисляет подсказки для всех ячеек на границе (показываются при проигрыше)
+// calculateCellHints вычисляет подсказки для всех закрытых ячеек (показываются при проигрыше)
 func (s *Server) calculateCellHints(room *Room) {
 	room.GameState.mu.Lock()
 	defer room.GameState.mu.Unlock()
@@ -1447,8 +1447,10 @@ func (s *Server) calculateCellHints(room *Room) {
 	// Создаем решатель
 	solver := game.MakeSolver(lm, room.GameState.Mines)
 
-	// Вычисляем подсказки для всех ячеек на границе
+	// Вычисляем подсказки для всех закрытых ячеек
 	hints := make([]CellHint, 0)
+
+	// Обрабатываем ячейки на границе
 	boundary := lm.GetBoundary()
 	for i, pos := range boundary {
 		canBeDangerous := solver.CanBeDangerous(i)
@@ -1473,8 +1475,43 @@ func (s *Server) calculateCellHints(room *Room) {
 		})
 	}
 
+	// Обрабатываем ячейки вне границы (все остальные закрытые ячейки)
+	for i := 0; i < room.GameState.Rows; i++ {
+		for j := 0; j < room.GameState.Cols; j++ {
+			// Пропускаем открытые ячейки и ячейки на границе (уже обработаны)
+			if room.GameState.Board[i][j].IsRevealed {
+				continue
+			}
+			if lm.GetBoundaryIndex(i, j) != -1 {
+				continue // Уже обработана как граница
+			}
+
+			// Проверяем, может ли область вне границы быть безопасной или опасной
+			outsideCanBeSafe := solver.OutsideCanBeSafe()
+			outsideIsSafe := solver.OutsideIsSafe()
+
+			var hintType string
+			if outsideIsSafe {
+				// Если область вне границы гарантированно безопасна
+				hintType = "SAFE"
+			} else if !outsideCanBeSafe {
+				// Если область вне границы не может быть безопасной (все мины)
+				hintType = "MINE"
+			} else {
+				// Может быть и миной, и безопасной
+				hintType = "UNKNOWN"
+			}
+
+			hints = append(hints, CellHint{
+				Row:  i,
+				Col:  j,
+				Type: hintType,
+			})
+		}
+	}
+
 	room.GameState.CellHints = hints
-	log.Printf("Вычислены подсказки для %d ячеек", len(hints))
+	log.Printf("Вычислены подсказки для %d ячеек (граница: %d, вне границы: %d)", len(hints), len(boundary), len(hints)-len(boundary))
 }
 
 // determineMinePlacement определяет размещение мин при клике в fairMode

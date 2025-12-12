@@ -103,9 +103,9 @@
               'cell--flagged': cellData.cell.f,
               'cell--show-mine': (gameState?.go || gameState?.gw) && cellData.cell.m && !cellData.cell.r,
               'cell--blocked': isCellBlocked(cellData.rowIndex, cellData.colIndex),
-              'hint hint-mine': gameState?.go && room?.fairMode && getCellHint(cellData.rowIndex, cellData.colIndex) === 'MINE',
-              'hint hint-safe': gameState?.go && room?.fairMode && getCellHint(cellData.rowIndex, cellData.colIndex) === 'SAFE',
-              'hint hint-unknown': gameState?.go && room?.fairMode && getCellHint(cellData.rowIndex, cellData.colIndex) === 'UNKNOWN',
+              'hint hint-mine': gameState?.go && room?.fairMode && !cellData.cell.r && getCellHint(cellData.rowIndex, cellData.colIndex) === 'MINE',
+              'hint hint-safe': gameState?.go && room?.fairMode && !cellData.cell.r && getCellHint(cellData.rowIndex, cellData.colIndex) === 'SAFE',
+              'hint hint-unknown': gameState?.go && room?.fairMode && !cellData.cell.r && getCellHint(cellData.rowIndex, cellData.colIndex) === 'UNKNOWN',
             }
           ]"
           @click="handleCellClick(cellData.rowIndex, cellData.colIndex, false)"
