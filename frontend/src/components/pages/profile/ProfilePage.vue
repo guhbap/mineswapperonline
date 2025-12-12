@@ -10,7 +10,7 @@
       <div class="profile-header">
         <h1 class="profile-title">{{ isOwnProfile ? 'Мой профиль' : 'Профиль пользователя' }}</h1>
         <div class="profile-user-info">
-          <div 
+          <div
             class="user-avatar"
             :style="profile.user.color ? { background: profile.user.color } : {}"
           >
@@ -29,7 +29,7 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Выбор цвета (только для своего профиля) -->
         <div v-if="isOwnProfile" class="color-selector-section">
           <h3 class="color-selector-title">Цвет игрока</h3>
@@ -155,7 +155,7 @@
                 </div>
                 <div class="game-complexity">
                   <span class="complexity-label">Сложность:</span>
-                  <span class="complexity-value">{{ game.complexity.toFixed(2) }}</span>
+                  <span class="complexity-value">{{ calculateDifficulty(game.width, game.height, game.mines) }}</span>
                 </div>
               </div>
               <div class="game-time-info">
@@ -196,6 +196,7 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getProfile, getProfileByUsername, updateColor, getTopGames, getRecentGames, type UserProfile, type TopGame, type RecentGame } from '@/api/profile'
 import { getErrorMessage } from '@/utils/errorHandler'
+import { calculateDifficulty } from '@/utils/ratingCalculator'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -251,7 +252,7 @@ const loadProfile = async () => {
   try {
     loading.value = true
     error.value = ''
-    
+
     // Проверяем, есть ли username в параметрах роута
     const username = route.params.username as string
     if (username) {
@@ -310,11 +311,11 @@ const loadRecentGames = async (username?: string) => {
 
 const selectColor = async (color: string) => {
   if (selectedColor.value === color) return
-  
+
   selectedColor.value = color
   savingColor.value = true
   colorError.value = ''
-  
+
   try {
     await updateColor(color)
     // Обновляем профиль после сохранения
@@ -338,7 +339,7 @@ const clearColor = async () => {
   selectedColor.value = ''
   savingColor.value = true
   colorError.value = ''
-  
+
   try {
     await updateColor('')
     // Обновляем профиль после сохранения
