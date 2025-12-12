@@ -109,6 +109,7 @@ type Room struct {
 	Rows          int                `json:"rows"`
 	Cols          int                `json:"cols"`
 	Mines         int                `json:"mines"`
+	NoGuessing    bool               `json:"noGuessing"` // Режим без угадываний
 	CreatorID     int                `json:"creatorId"` // ID создателя комнаты (0 для гостей)
 	Players       map[string]*Player `json:"-"`
 	GameState     *GameState         `json:"-"`
@@ -146,18 +147,19 @@ func (rm *RoomManager) SetServer(server *Server) {
 	rm.server = server
 }
 
-func NewRoom(id, name, password string, rows, cols, mines int, creatorID int) *Room {
+func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, noGuessing bool) *Room {
 	return &Room{
-		ID:        id,
-		Name:      name,
-		Password:  password,
-		Rows:      rows,
-		Cols:      cols,
-		Mines:     mines,
-		CreatorID: creatorID,
-		Players:   make(map[string]*Player),
-		GameState: NewGameState(rows, cols, mines),
-		CreatedAt: time.Now(),
+		ID:         id,
+		Name:       name,
+		Password:   password,
+		Rows:       rows,
+		Cols:       cols,
+		Mines:      mines,
+		NoGuessing: noGuessing,
+		CreatorID:  creatorID,
+		Players:    make(map[string]*Player),
+		GameState:  NewGameState(rows, cols, mines, noGuessing),
+		CreatedAt:  time.Now(),
 	}
 }
 
@@ -172,7 +174,83 @@ func NewServer(roomManager *RoomManager, db *database.DB) *Server {
 	return server
 }
 
-func NewGameState(rows, cols, mines int) *GameState {
+func NewGameState(rows, cols, mines int, noGuessing bool) *GameState {
+	maxAttempts := 100 // Максимальное количество попыток генерации
+	attempts := 0
+
+	for attempts < maxAttempts {
+		gs := &GameState{
+			Rows:          rows,
+			Cols:          cols,
+			Mines:         mines,
+			GameOver:      false,
+			GameWon:       false,
+			Revealed:      0,
+			HintsUsed:     0,
+			LoserPlayerID: "",
+			LoserNickname: "",
+			Board:         make([][]Cell, rows),
+			flagSetInfo:   make(map[int]FlagInfo),
+		}
+
+		// Инициализация поля
+		for i := range gs.Board {
+			gs.Board[i] = make([]Cell, cols)
+		}
+
+		// Размещение мин
+		mathrand.Seed(time.Now().UnixNano() + int64(attempts))
+		minesPlaced := 0
+		for minesPlaced < mines {
+			row := mathrand.Intn(rows)
+			col := mathrand.Intn(cols)
+			if !gs.Board[row][col].IsMine {
+				gs.Board[row][col].IsMine = true
+				minesPlaced++
+			}
+		}
+
+		// Подсчет соседних мин
+		for i := 0; i < rows; i++ {
+			for j := 0; j < cols; j++ {
+				if !gs.Board[i][j].IsMine {
+					count := 0
+					for di := -1; di <= 1; di++ {
+						for dj := -1; dj <= 1; dj++ {
+							ni, nj := i+di, j+dj
+							if ni >= 0 && ni < rows && nj >= 0 && nj < cols {
+								if gs.Board[ni][nj].IsMine {
+									count++
+								}
+							}
+						}
+					}
+					gs.Board[i][j].NeighborMines = count
+				}
+			}
+		}
+
+		// Если режим без угадываний, проверяем решаемость поля
+		if noGuessing {
+			if isSolvableWithoutGuessing(gs) {
+				return gs
+			}
+			attempts++
+			continue
+		}
+
+		// Если режим с угадываниями, возвращаем первое сгенерированное поле
+		return gs
+	}
+
+	// Если не удалось сгенерировать поле без угадываний за maxAttempts попыток,
+	// возвращаем последнее сгенерированное поле (или можно вернуть ошибку)
+	// Для простоты возвращаем обычное поле
+	return generateRandomBoard(rows, cols, mines)
+}
+
+// generateRandomBoard создает случайное поле (используется как fallback)
+func generateRandomBoard(rows, cols, mines int) *GameState {
 	gs := &GameState{
 		Rows:          rows,
 		Cols:          cols,
@@ -187,12 +265,10 @@ func NewGameState(rows, cols, mines int) *GameState {
 		flagSetInfo:   make(map[int]FlagInfo),
 	}
 
-	// Инициализация поля
 	for i := range gs.Board {
 		gs.Board[i] = make([]Cell, cols)
 	}
 
-	// Размещение мин
 	mathrand.Seed(time.Now().UnixNano())
 	minesPlaced := 0
 	for minesPlaced < mines {
@@ -204,7 +280,6 @@ func NewGameState(rows, cols, mines int) *GameState {
 		}
 	}
 
-	// Подсчет соседних мин
 	for i := 0; i < rows; i++ {
 		for j := 0; j < cols; j++ {
 			if !gs.Board[i][j].IsMine {
@@ -227,17 +302,148 @@ func NewGameState(rows, cols, mines int) *GameState {
 	return gs
 }
 
-func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int) *Room {
+// isSolvableWithoutGuessing проверяет, можно ли решить поле без угадываний
+func isSolvableWithoutGuessing(gs *GameState) bool {
+	// Создаем копию доски для симуляции
+	revealed := make([][]bool, gs.Rows)
+	for i := range revealed {
+		revealed[i] = make([]bool, gs.Cols)
+	}
+
+	// Находим все ячейки с нулевым количеством соседних мин (безопасные стартовые точки)
+	queue := []struct{ row, col int }{}
+	for i := 0; i < gs.Rows; i++ {
+		for j := 0; j < gs.Cols; j++ {
+			if !gs.Board[i][j].IsMine && gs.Board[i][j].NeighborMines == 0 {
+				queue = append(queue, struct{ row, col int }{i, j})
+				revealed[i][j] = true
+			}
+		}
+	}
+
+	// Если нет безопасных стартовых точек, поле может требовать угадываний
+	if len(queue) == 0 {
+		// Проверяем, есть ли хотя бы одна ячейка, которую можно открыть логически
+		// (ячейка, где все соседи с минами уже определены)
+		return false
+	}
+
+	// Симулируем открытие ячеек
+	for len(queue) > 0 {
+		cell := queue[0]
+		queue = queue[1:]
+
+		// Открываем соседние ячейки
+		for di := -1; di <= 1; di++ {
+			for dj := -1; dj <= 1; dj++ {
+				if di == 0 && dj == 0 {
+					continue
+				}
+				ni, nj := cell.row+di, cell.col+dj
+				if ni >= 0 && ni < gs.Rows && nj >= 0 && nj < gs.Cols {
+					if !revealed[ni][nj] && !gs.Board[ni][nj].IsMine {
+						revealed[ni][nj] = true
+						if gs.Board[ni][nj].NeighborMines == 0 {
+							queue = append(queue, struct{ row, col int }{ni, nj})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Теперь проверяем, можно ли открыть оставшиеся ячейки логически
+	changed := true
+	for changed {
+		changed = false
+		for i := 0; i < gs.Rows; i++ {
+			for j := 0; j < gs.Cols; j++ {
+				if revealed[i][j] || gs.Board[i][j].IsMine {
+					continue
+				}
+
+				// Проверяем, можно ли открыть эту ячейку логически
+				// Ячейку можно открыть, если все ее соседи с минами уже определены
+				canReveal := true
+				neighborFlags := 0
+				neighborUnknown := 0
+
+				for di := -1; di <= 1; di++ {
+					for dj := -1; dj <= 1; dj++ {
+						if di == 0 && dj == 0 {
+							continue
+						}
+						ni, nj := i+di, j+dj
+						if ni >= 0 && ni < gs.Rows && nj >= 0 && nj < gs.Cols {
+							if revealed[ni][nj] {
+								if gs.Board[ni][nj].IsMine {
+									neighborFlags++
+								} else if gs.Board[ni][nj].NeighborMines > 0 {
+									// Проверяем, все ли мины вокруг этой соседней ячейки определены
+									neighborMines := gs.Board[ni][nj].NeighborMines
+									countedMines := 0
+									for ddi := -1; ddi <= 1; ddi++ {
+										for ddj := -1; ddj <= 1; ddj++ {
+											if ddi == 0 && ddj == 0 {
+												continue
+											}
+											nni, nnj := ni+ddi, nj+ddj
+											if nni >= 0 && nni < gs.Rows && nnj >= 0 && nnj < gs.Cols {
+												if revealed[nni][nnj] && gs.Board[nni][nnj].IsMine {
+													countedMines++
+												}
+											}
+										}
+									}
+									if countedMines < neighborMines {
+										canReveal = false
+									}
+								}
+							} else {
+								neighborUnknown++
+							}
+						}
+					}
+				}
+
+				// Если все соседи с минами определены, можно открыть эту ячейку
+				if canReveal && neighborUnknown == 0 {
+					revealed[i][j] = true
+					changed = true
+					if gs.Board[i][j].NeighborMines == 0 {
+						queue = append(queue, struct{ row, col int }{i, j})
+					}
+				}
+			}
+		}
+	}
+
+	// Проверяем, все ли не-минные ячейки открыты
+	totalCells := gs.Rows * gs.Cols
+	revealedCount := 0
+	for i := 0; i < gs.Rows; i++ {
+		for j := 0; j < gs.Cols; j++ {
+			if revealed[i][j] {
+				revealedCount++
+			}
+		}
+	}
+
+	// Поле решаемо без угадываний, если все не-минные ячейки можно открыть логически
+	return revealedCount == totalCells-gs.Mines
+}
+
+func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int, noGuessing bool) *Room {
 	roomID := utils.GenerateID()
-	room := NewRoom(roomID, name, password, rows, cols, mines, creatorID)
+	room := NewRoom(roomID, name, password, rows, cols, mines, creatorID, noGuessing)
 	rm.mu.Lock()
 	rm.rooms[roomID] = room
 	rm.mu.Unlock()
-	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d)", name, roomID, creatorID)
+	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, NoGuessing: %v)", name, roomID, creatorID, noGuessing)
 	return room
 }
 
-func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, cols, mines int) error {
+func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, cols, mines int, noGuessing bool) error {
 	rm.mu.RLock()
 	room, exists := rm.rooms[roomID]
 	rm.mu.RUnlock()
@@ -260,12 +466,13 @@ func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, co
 	room.Rows = rows
 	room.Cols = cols
 	room.Mines = mines
+	room.NoGuessing = noGuessing
 
 	// Пересоздаем игровое поле с новыми параметрами
-	room.GameState = NewGameState(rows, cols, mines)
+	room.GameState = NewGameState(rows, cols, mines, noGuessing)
 	room.StartTime = nil // Сбрасываем время начала игры
 
-	log.Printf("Комната обновлена: %s (ID: %s)", name, roomID)
+	log.Printf("Комната обновлена: %s (ID: %s, NoGuessing: %v)", name, roomID, noGuessing)
 	return nil
 }
 
@@ -290,6 +497,7 @@ func (rm *RoomManager) GetRoomsList() []map[string]interface{} {
 			"rows":        room.Rows,
 			"cols":        room.Cols,
 			"mines":       room.Mines,
+			"noGuessing":  room.NoGuessing,
 			"players":     playerCount,
 			"createdAt":   room.CreatedAt,
 			"creatorId":   room.CreatorID,
@@ -541,7 +749,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		case "newGame":
 			room.mu.Lock()
-			room.GameState = NewGameState(room.Rows, room.Cols, room.Mines)
+			room.GameState = NewGameState(room.Rows, room.Cols, room.Mines, room.NoGuessing)
 			room.StartTime = nil // Сбрасываем время начала игры
 			room.mu.Unlock()
 			log.Printf("Новая игра начата")
@@ -1347,11 +1555,12 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name     string `json:"name"`
-		Password string `json:"password"`
-		Rows     int    `json:"rows"`
-		Cols     int    `json:"cols"`
-		Mines    int    `json:"mines"`
+		Name        string `json:"name"`
+		Password    string `json:"password"`
+		Rows        int    `json:"rows"`
+		Cols        int    `json:"cols"`
+		Mines       int    `json:"mines"`
+		NoGuessing  bool   `json:"noGuessing"`
 	}
 
 	if err := utils.DecodeJSON(r, &req); err != nil {
@@ -1372,7 +1581,7 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	room := s.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID)
+	room := s.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID, req.NoGuessing)
 	utils.JSONResponse(w, http.StatusOK, map[string]interface{}{
 		"id":          room.ID,
 		"name":        room.Name,
@@ -1380,6 +1589,7 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		"rows":        room.Rows,
 		"cols":        room.Cols,
 		"mines":       room.Mines,
+		"noGuessing":  room.NoGuessing,
 		"creatorId":   room.CreatorID,
 	})
 }
@@ -1424,6 +1634,7 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 		"rows":        room.Rows,
 		"cols":        room.Cols,
 		"mines":       room.Mines,
+		"noGuessing":  room.NoGuessing,
 		"creatorId":   room.CreatorID,
 	}
 	room.mu.RUnlock()
@@ -1467,6 +1678,12 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 	rows := int(rowsFloat)
 	cols := int(colsFloat)
 	mines := int(minesFloat)
+	noGuessing := false
+	if ng, exists := reqMap["noGuessing"]; exists {
+		if ngBool, ok := ng.(bool); ok {
+			noGuessing = ngBool
+		}
+	}
 
 	// Проверяем, было ли передано поле password
 	passwordProvided := false
@@ -1510,7 +1727,7 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 	// Если passwordProvided == true, используем переданное значение (может быть пустой строкой для удаления)
 
 	// Обновляем комнату
-	if err := s.roomManager.UpdateRoom(roomID, name, password, rows, cols, mines); err != nil {
+	if err := s.roomManager.UpdateRoom(roomID, name, password, rows, cols, mines, noGuessing); err != nil {
 		utils.JSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1525,6 +1742,7 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 		"rows":        room.Rows,
 		"cols":        room.Cols,
 		"mines":       room.Mines,
+		"noGuessing":  room.NoGuessing,
 		"creatorId":   room.CreatorID,
 	}
 	room.mu.RUnlock()

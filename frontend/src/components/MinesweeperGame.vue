@@ -13,6 +13,7 @@
       </div>
       <div class="game-actions">
         <button
+          v-if="!room?.noGuessing"
           @click="handleHint"
           class="hint-button"
           :disabled="(gameState?.hu ?? 0) >= 3 || !gameState || gameState.go || gameState.gw || !hasClosedCells"
@@ -309,7 +310,7 @@ import Chat from '@/components/Chat.vue'
 const props = defineProps<{
   wsClient: IWebSocketClient | null
   nickname: string
-  room?: { id: string; creatorId?: number } | null
+  room?: { id: string; creatorId?: number; noGuessing?: boolean } | null
 }>()
 
 const emit = defineEmits<{

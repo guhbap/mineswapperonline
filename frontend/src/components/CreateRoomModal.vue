@@ -110,6 +110,20 @@
           />
         </div>
 
+        <div class="form-group">
+          <label class="form-label">
+            <input
+              v-model="form.noGuessing"
+              type="checkbox"
+              class="form-checkbox"
+            />
+            Режим без угадываний
+          </label>
+          <div class="form-hint">
+            В этом режиме поле генерируется так, чтобы все ячейки можно было открыть логически, без необходимости угадывать
+          </div>
+        </div>
+
         <div v-if="error" class="form-error">{{ error }}</div>
 
         <div class="modal__actions">
@@ -134,7 +148,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  submit: [data: { name: string; password?: string; rows: number; cols: number; mines: number }]
+  submit: [data: { name: string; password?: string; rows: number; cols: number; mines: number; noGuessing: boolean }]
   cancel: []
 }>()
 
@@ -144,6 +158,7 @@ const form = ref({
   cols: 16,
   mines: 40,
   password: '',
+  noGuessing: false,
 })
 
 const hasPassword = ref(false)
@@ -214,6 +229,7 @@ const handleSubmit = () => {
     rows: form.value.rows,
     cols: form.value.cols,
     mines: form.value.mines,
+    noGuessing: form.value.noGuessing,
     ...(hasPassword.value && form.value.password ? { password: form.value.password } : {}),
   }
 
@@ -234,6 +250,7 @@ const handleCancel = () => {
     cols: 16,
     mines: 40,
     password: '',
+    noGuessing: false,
   }
   hasPassword.value = false
 }

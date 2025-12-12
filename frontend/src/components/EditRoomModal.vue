@@ -110,6 +110,20 @@
           />
         </div>
 
+        <div class="form-group">
+          <label class="form-label">
+            <input
+              v-model="form.noGuessing"
+              type="checkbox"
+              class="form-checkbox"
+            />
+            Режим без угадываний
+          </label>
+          <div class="form-hint">
+            В этом режиме поле генерируется так, чтобы все ячейки можно было открыть логически, без необходимости угадывать
+          </div>
+        </div>
+
         <div class="form-warning">
           ⚠️ Внимание: изменение параметров комнаты пересоздаст игровое поле. Текущий прогресс будет потерян.
         </div>
@@ -150,6 +164,7 @@ const form = ref({
   cols: 16,
   mines: 40,
   password: '',
+  noGuessing: false,
 })
 
 const hasPassword = ref(false)
@@ -166,6 +181,7 @@ watch(() => props.show, (isShowing) => {
       cols: props.room.cols,
       mines: props.room.mines,
       password: '',
+      noGuessing: props.room.noGuessing ?? false,
     }
     hasPassword.value = props.room.hasPassword
   }
@@ -223,6 +239,7 @@ const handleSubmit = async () => {
       rows: form.value.rows,
       cols: form.value.cols,
       mines: form.value.mines,
+      noGuessing: form.value.noGuessing,
     }
     
     // Обрабатываем пароль:
