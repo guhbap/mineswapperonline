@@ -102,7 +102,7 @@
               'cell--mine': cellData.cell.r && cellData.cell.m,
               'cell--flagged': cellData.cell.f,
               'cell--show-mine': (gameState?.go || gameState?.gw) && cellData.cell.m && !cellData.cell.r,
-              'cell--safe': isSafeCell(cellData.rowIndex, cellData.colIndex) && !cellData.cell.r && !cellData.cell.f,
+              'cell--safe': room?.noGuessing && isSafeCell(cellData.rowIndex, cellData.colIndex) && !cellData.cell.r && !cellData.cell.f,
               'cell--blocked': isCellBlocked(cellData.rowIndex, cellData.colIndex),
             }
           ]"
@@ -144,7 +144,7 @@
           </svg>
           <!-- Зеленый крестик для безопасных ячеек -->
           <svg
-            v-if="isSafeCell(cellData.rowIndex, cellData.colIndex) && !cellData.cell.r && !cellData.cell.f"
+            v-if="room?.noGuessing && isSafeCell(cellData.rowIndex, cellData.colIndex) && !cellData.cell.r && !cellData.cell.f"
             class="cell-safe-marker"
             viewBox="0 0 24 24"
             width="20"

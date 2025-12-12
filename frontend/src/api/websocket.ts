@@ -28,6 +28,7 @@ export interface WebSocketMessage {
     gw: boolean // gameWon
     rv: number // revealed
     hu: number // hintsUsed
+    sc?: Array<{ r: number; c: number }> // safeCells - безопасные ячейки для режима без угадываний
     lpid?: string // loserPlayerId
     ln?: string // loserNickname
   }
