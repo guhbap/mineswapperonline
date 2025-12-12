@@ -29,23 +29,29 @@
           <label class="form-label">Размер поля</label>
           <div class="form-row">
             <div class="form-col">
-              <label class="form-label-small">Строки</label>
+              <label class="form-label-small">
+                Строки: <span class="range-value">{{ form.rows }}</span>
+              </label>
               <input
                 v-model.number="form.rows"
-                type="number"
-                class="form-input"
+                type="range"
+                class="form-range"
                 min="5"
                 max="50"
+                step="1"
               />
             </div>
             <div class="form-col">
-              <label class="form-label-small">Столбцы</label>
+              <label class="form-label-small">
+                Столбцы: <span class="range-value">{{ form.cols }}</span>
+              </label>
               <input
                 v-model.number="form.cols"
-                type="number"
-                class="form-input"
+                type="range"
+                class="form-range"
                 min="5"
                 max="50"
+                step="1"
               />
             </div>
           </div>
@@ -308,7 +314,16 @@ const handleOverlayClick = () => {
   font-weight: 500;
   color: var(--text-secondary);
   font-size: 0.75rem;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.range-value {
+  font-weight: 600;
+  color: #667eea;
+  font-size: 0.875rem;
 }
 
 .form-input-wrapper {
@@ -381,6 +396,63 @@ const handleOverlayClick = () => {
 .form-hint {
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+.form-range {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  margin: 0.5rem 0;
+}
+
+.form-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease-in-out;
+}
+
+.form-range::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease-in-out;
+}
+
+.form-range::-moz-range-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+}
+
+.form-range:focus {
+  outline: none;
+}
+
+.form-range:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.form-range:focus::-moz-range-thumb {
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
 }
 
 .rating-status {
