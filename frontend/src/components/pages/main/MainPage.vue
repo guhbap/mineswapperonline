@@ -37,9 +37,9 @@
         </div>
       </div>
       <div v-if="!isDescriptionVisible" class="game-description-toggle-wrapper">
-        <a @click.prevent="toggleDescription" class="game-description__link game-description__link--show">
+        <!-- <a @click.prevent="toggleDescription" class="game-description__link game-description__link--show">
           Показать описание игры
-        </a>
+        </a> -->
       </div>
       <RoomsList
         @create="showCreateModal = true"
