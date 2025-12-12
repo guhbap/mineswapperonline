@@ -118,6 +118,8 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { generateRandomName } from '@/utils/nameGenerator'
 import { calculateMaxRatingGain, isComplexitySufficient } from '@/utils/ratingCalculator'
 import { useAuthStore } from '@/stores/auth'
+import { getErrorMessage } from '@/utils/errorHandler'
+import { createRoom } from '@/api/rooms'
 
 const props = defineProps<{
   show: boolean
@@ -189,11 +191,13 @@ const isValid = computed(() => {
   )
 })
 
-const handleSubmit = () => {
+const handleSubmit = async () => {
   if (!isValid.value) {
     error.value = 'Заполните все поля корректно'
     return
   }
+
+  error.value = ''
 
   const data = {
     name: form.value.name.trim(),
@@ -203,8 +207,13 @@ const handleSubmit = () => {
     ...(hasPassword.value && form.value.password ? { password: form.value.password } : {}),
   }
 
-  emit('submit', data)
-  error.value = ''
+  try {
+    await createRoom(data)
+    emit('submit', data)
+    error.value = ''
+  } catch (err: any) {
+    error.value = getErrorMessage(err, 'Ошибка создания комнаты')
+  }
 }
 
 const generateRoomName = () => {

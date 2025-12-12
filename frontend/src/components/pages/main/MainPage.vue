@@ -191,6 +191,7 @@ const handleCreateRoom = async (data: { name: string; password?: string; rows: n
     // Если гость - показываем модалку для ввода никнейма
   } catch (error) {
     console.error('Ошибка создания комнаты:', error)
+    // Ошибка обрабатывается в CreateRoomModal
   }
 }
 
