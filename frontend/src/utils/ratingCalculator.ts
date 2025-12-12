@@ -8,6 +8,9 @@ const K = 32.0 // K-factor for player rating updates
 const RREF = 1500.0 // rating for reference field (16x16,40)
 const MIN_S = 0.01
 const MAX_S = 0.99
+// MinComplexityRatio - минимальная сложность относительно референсного поля (25% от Dref)
+// Поля с меньшей сложностью не дают рейтинг, чтобы предотвратить фарм на очень простых полях
+const MIN_COMPLEXITY_RATIO = 0.25
 
 // Вычисляет сложность D = A * (M/A)^alpha
 function computeD(width: number, height: number, mines: number): number {
@@ -74,5 +77,19 @@ export function calculateMaxRating(
 ): number {
   const maxGain = calculateMaxRatingGain(width, height, mines, currentRating)
   return currentRating + maxGain
+}
+
+// Проверяет, достаточно ли сложности поля для получения рейтинга
+// Возвращает true, если сложность поля >= MinComplexityRatio * Dref
+export function isComplexitySufficient(
+  width: number,
+  height: number,
+  mines: number
+): boolean {
+  const Dref = computeDref()
+  if (Dref <= 0) return false
+  const D = computeD(width, height, mines)
+  const minComplexity = Dref * MIN_COMPLEXITY_RATIO
+  return D >= minComplexity
 }
 

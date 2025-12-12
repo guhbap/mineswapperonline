@@ -63,10 +63,22 @@
           <div class="form-hint">Максимум: {{ maxMines }}</div>
         </div>
 
-        <div v-if="maxRatingGain > 0" class="form-group rating-info">
-          <div class="rating-info__label">Максимальный прирост рейтинга:</div>
-          <div class="rating-info__value">+{{ Math.round(maxRatingGain) }}</div>
-          <div class="rating-info__hint">При идеальном прохождении</div>
+        <div class="form-group rating-status" :class="{ 'rating-status--rated': isRatedGame, 'rating-status--unrated': !isRatedGame }">
+          <div class="rating-status__icon">
+            <span v-if="isRatedGame">⭐</span>
+            <span v-else>⚪</span>
+          </div>
+          <div class="rating-status__content">
+            <div class="rating-status__label">
+              {{ isRatedGame ? 'Рейтинговая игра' : 'Нерейтинговая игра' }}
+            </div>
+            <div v-if="isRatedGame && maxRatingGain > 0" class="rating-status__gain">
+              Макс. прирост: +{{ Math.round(maxRatingGain) }}
+            </div>
+            <div v-else-if="!isRatedGame" class="rating-status__hint">
+              Поле слишком простое для получения рейтинга
+            </div>
+          </div>
         </div>
 
         <div class="form-group">
@@ -104,7 +116,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { generateRandomName } from '@/utils/nameGenerator'
-import { calculateMaxRatingGain } from '@/utils/ratingCalculator'
+import { calculateMaxRatingGain, isComplexitySufficient } from '@/utils/ratingCalculator'
 import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{
@@ -146,7 +158,16 @@ const maxMines = computed(() => {
   return form.value.rows * form.value.cols - 1
 })
 
+const isRatedGame = computed(() => {
+  return isComplexitySufficient(
+    form.value.cols,
+    form.value.rows,
+    form.value.mines
+  )
+})
+
 const maxRatingGain = computed(() => {
+  if (!isRatedGame.value) return 0
   const currentRating = authStore.user?.rating || 1500.0
   return calculateMaxRatingGain(
     form.value.cols,
@@ -360,29 +381,59 @@ const handleOverlayClick = () => {
   color: var(--text-secondary);
 }
 
-.rating-info {
+.rating-status {
   padding: 1rem;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
   border-radius: 0.5rem;
-  border: 2px solid rgba(102, 126, 234, 0.3);
-  text-align: center;
+  border: 2px solid;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
-.rating-info__label {
+.rating-status--rated {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  border-color: rgba(102, 126, 234, 0.3);
+}
+
+.rating-status--unrated {
+  background: rgba(107, 114, 128, 0.1);
+  border-color: rgba(107, 114, 128, 0.3);
+}
+
+.rating-status__icon {
+  font-size: 2rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.rating-status__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.rating-status__label {
   font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.rating-status--rated .rating-status__label {
+  color: #667eea;
+}
+
+.rating-status--unrated .rating-status__label {
   color: var(--text-secondary);
-  margin-bottom: 0.5rem;
+}
+
+.rating-status__gain {
+  font-size: 0.875rem;
+  color: #22c55e;
   font-weight: 500;
 }
 
-.rating-info__value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #22c55e;
-  margin-bottom: 0.25rem;
-}
-
-.rating-info__hint {
+.rating-status__hint {
   font-size: 0.75rem;
   color: var(--text-secondary);
   font-style: italic;
