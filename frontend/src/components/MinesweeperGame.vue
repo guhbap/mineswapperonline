@@ -167,13 +167,9 @@
             stroke-width="1.5"
           />
         </svg>
-        <router-link
-          :to="`/profile/${cursor.nickname}`"
-          class="cursor-label cursor-label--link"
-          @click.stop
-        >
+        <span class="cursor-label">
           {{ cursor.nickname || 'Игрок' }}
-        </router-link>
+        </span>
       </div>
       </div>
 
@@ -1016,7 +1012,7 @@ onUnmounted(() => {
 }
 
 .remote-cursor--hovered {
-  opacity: 0.5;
+  opacity: 0.2;
 }
 
 .cursor-icon {
@@ -1039,11 +1035,7 @@ onUnmounted(() => {
   text-decoration: none;
   display: inline-block;
   transition: opacity 0.2s;
-  pointer-events: auto;
-}
-
-.cursor-label--link:hover {
-  opacity: 0.8;
+  pointer-events: none;
 }
 
 .loser-link {
