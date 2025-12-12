@@ -1,6 +1,18 @@
 // Утилита для расчета максимального рейтинга
 // Использует те же формулы, что и backend/internal/rating/rating.go
 
+// Вычисляет сложность поля по формуле: (M / (W * H)) * sqrt(W^2 + H^2)
+// где M - количество мин, W - ширина (cols), H - высота (rows)
+export function calculateDifficulty(width: number, height: number, mines: number): number {
+  const totalCells = width * height
+  if (totalCells <= 0) return 0
+  
+  const density = mines / totalCells
+  const diagonal = Math.sqrt(width * width + height * height)
+  
+  return density * diagonal
+}
+
 const ALPHA = 0.7 // exponent for density in D
 const BETA = 0.5 // exponent in expected time
 const C = 4.0 // base time multiplier

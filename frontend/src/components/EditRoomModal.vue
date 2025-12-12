@@ -67,6 +67,10 @@
             :max="maxMines"
           />
           <div class="form-hint">Максимум: {{ maxMines }}</div>
+          <div class="difficulty-info">
+            <span class="difficulty-label">Сложность поля:</span>
+            <span class="difficulty-value">{{ difficulty.toFixed(2) }}</span>
+          </div>
         </div>
 
         <div class="form-group rating-status" :class="{ 'rating-status--rated': isRatedGame, 'rating-status--unrated': !isRatedGame }">
@@ -126,7 +130,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { generateRandomName } from '@/utils/nameGenerator'
-import { calculateMaxRatingGain, isComplexitySufficient } from '@/utils/ratingCalculator'
+import { calculateMaxRatingGain, isComplexitySufficient, calculateDifficulty } from '@/utils/ratingCalculator'
 import { useAuthStore } from '@/stores/auth'
 import { updateRoom, type Room } from '@/api/rooms'
 
@@ -169,6 +173,10 @@ watch(() => props.show, (isShowing) => {
 
 const maxMines = computed(() => {
   return form.value.rows * form.value.cols - 1
+})
+
+const difficulty = computed(() => {
+  return calculateDifficulty(form.value.cols, form.value.rows, form.value.mines)
 })
 
 const isRatedGame = computed(() => {
@@ -415,6 +423,28 @@ const handleOverlayClick = () => {
 .form-hint {
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+.difficulty-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--bg-tertiary);
+  border-radius: 0.5rem;
+}
+
+.difficulty-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.difficulty-value {
+  font-size: 1rem;
+  color: #667eea;
+  font-weight: 700;
 }
 
 .form-warning {
