@@ -11,6 +11,7 @@ import (
 
 	"minesweeperonline/internal/config"
 	"minesweeperonline/internal/database"
+	"minesweeperonline/internal/game"
 	"minesweeperonline/internal/handlers"
 	"minesweeperonline/internal/middleware"
 	"minesweeperonline/internal/utils"
@@ -181,34 +182,53 @@ func NewServer(roomManager *RoomManager, db *database.DB) *Server {
 }
 
 func NewGameState(rows, cols, mines int, fairMode bool) *GameState {
-	maxAttempts := 100 // Максимальное количество попыток генерации
-	attempts := 0
-	// Если режим без угадываний, проверяем решаемость поля
-	if fairMode {
-		// todo use kaboom algo for board generation
+	gs := &GameState{
+		Rows:          rows,
+		Cols:          cols,
+		Mines:         mines,
+		GameOver:      false,
+		GameWon:       false,
+		Revealed:      0,
+		HintsUsed:     0,
+		LoserPlayerID: "",
+		LoserNickname: "",
+		Board:         make([][]Cell, rows),
+		flagSetInfo:   make(map[int]FlagInfo),
 	}
-	for attempts < maxAttempts {
-		gs := &GameState{
-			Rows:          rows,
-			Cols:          cols,
-			Mines:         mines,
-			GameOver:      false,
-			GameWon:       false,
-			Revealed:      0,
-			HintsUsed:     0,
-			LoserPlayerID: "",
-			LoserNickname: "",
-			Board:         make([][]Cell, rows),
-			flagSetInfo:   make(map[int]FlagInfo),
-		}
 
-		// Инициализация поля
-		for i := range gs.Board {
-			gs.Board[i] = make([]Cell, cols)
-		}
+	// Инициализация поля
+	for i := range gs.Board {
+		gs.Board[i] = make([]Cell, cols)
+	}
 
-		// Размещение мин (алгоритм kaboom: размещаем случайно, затем проверяем решаемость)
-		mathrand.Seed(time.Now().UnixNano() + int64(attempts))
+	// Если режим без угадываний, используем алгоритм kaboom для генерации решаемого поля
+	if fairMode {
+		maxAttempts := 100
+		mineBoard, success := game.GenerateSolvableBoard(rows, cols, mines, maxAttempts)
+		if success {
+			// Копируем мины из сгенерированного поля
+			for i := 0; i < rows; i++ {
+				for j := 0; j < cols; j++ {
+					gs.Board[i][j].IsMine = mineBoard[i][j]
+				}
+			}
+		} else {
+			// Если не удалось сгенерировать решаемое поле, используем обычную генерацию
+			log.Printf("Не удалось сгенерировать решаемое поле за %d попыток, используем обычную генерацию", maxAttempts)
+			mathrand.Seed(time.Now().UnixNano())
+			minesPlaced := 0
+			for minesPlaced < mines {
+				row := mathrand.Intn(rows)
+				col := mathrand.Intn(cols)
+				if !gs.Board[row][col].IsMine {
+					gs.Board[row][col].IsMine = true
+					minesPlaced++
+				}
+			}
+		}
+	} else {
+		// Обычная генерация для не-fairMode
+		mathrand.Seed(time.Now().UnixNano())
 		minesPlaced := 0
 		for minesPlaced < mines {
 			row := mathrand.Intn(rows)
@@ -218,33 +238,29 @@ func NewGameState(rows, cols, mines int, fairMode bool) *GameState {
 				minesPlaced++
 			}
 		}
+	}
 
-		// Подсчет соседних мин
-		for i := 0; i < rows; i++ {
-			for j := 0; j < cols; j++ {
-				if !gs.Board[i][j].IsMine {
-					count := 0
-					for di := -1; di <= 1; di++ {
-						for dj := -1; dj <= 1; dj++ {
-							ni, nj := i+di, j+dj
-							if ni >= 0 && ni < rows && nj >= 0 && nj < cols {
-								if gs.Board[ni][nj].IsMine {
-									count++
-								}
+	// Подсчет соседних мин
+	for i := 0; i < rows; i++ {
+		for j := 0; j < cols; j++ {
+			if !gs.Board[i][j].IsMine {
+				count := 0
+				for di := -1; di <= 1; di++ {
+					for dj := -1; dj <= 1; dj++ {
+						ni, nj := i+di, j+dj
+						if ni >= 0 && ni < rows && nj >= 0 && nj < cols {
+							if gs.Board[ni][nj].IsMine {
+								count++
 							}
 						}
 					}
-					gs.Board[i][j].NeighborMines = count
 				}
+				gs.Board[i][j].NeighborMines = count
 			}
 		}
-
 	}
 
-	// Если не удалось сгенерировать поле без угадываний за maxAttempts попыток,
-	// возвращаем последнее сгенерированное поле (или можно вернуть ошибку)
-	// Для простоты возвращаем обычное поле
-	return generateRandomBoard(rows, cols, mines)
+	return gs
 }
 
 // generateRandomBoard создает случайное поле (используется как fallback)
@@ -731,15 +747,16 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		cell.IsFlagged = !cell.IsFlagged
 		log.Printf("Флаг переключен: row=%d, col=%d, flagged=%v", row, col, cell.IsFlagged)
 
+		room.GameState.mu.Unlock()
+
 		// В режиме без угадываний пересчитываем безопасные клетки после установки/снятия флага
 		room.mu.RLock()
 		fairMode := room.FairMode
 		room.mu.RUnlock()
 		if fairMode {
-			// todo use kaboom algo for board generation
+			s.updateSafeCells(room)
 		}
 
-		room.GameState.mu.Unlock()
 		s.broadcastGameState(room)
 
 		// Отправляем сервисное сообщение в чат
@@ -895,8 +912,11 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		room.mu.RLock()
 		fairMode := room.FairMode
 		room.mu.RUnlock()
+
+		// Разблокируем GameState перед вызовом updateSafeCells (она сама заблокирует)
+		room.GameState.mu.Unlock()
 		if fairMode {
-			// todo use kaboom algo for board generation
+			s.updateSafeCells(room)
 		}
 
 		// Отправляем сервисное сообщение об открытии поля
@@ -964,7 +984,7 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 	}
 
 	log.Printf("Отправка обновленного состояния игры после клика")
-	room.GameState.mu.Unlock() // Разблокируем перед broadcastGameState
+	// GameState уже разблокирован выше (перед updateSafeCells или в конце блока else)
 	s.broadcastGameState(room)
 }
 
@@ -1381,6 +1401,38 @@ func (s *Server) sendPlayerListToPlayer(room *Room, targetPlayer *Player) {
 	if err := targetPlayer.Conn.WriteJSON(msgData); err != nil {
 		log.Printf("Ошибка отправки списка игроков: %v", err)
 	}
+}
+
+// updateSafeCells обновляет список безопасных ячеек используя алгоритм kaboom
+func (s *Server) updateSafeCells(room *Room) {
+	room.GameState.mu.Lock()
+	defer room.GameState.mu.Unlock()
+
+	// Преобразуем Board в формат для CalculateSafeCells
+	boardInfo := make([][]game.CellInfo, room.GameState.Rows)
+	for i := 0; i < room.GameState.Rows; i++ {
+		boardInfo[i] = make([]game.CellInfo, room.GameState.Cols)
+		for j := 0; j < room.GameState.Cols; j++ {
+			boardInfo[i][j] = game.CellInfo{
+				IsRevealed:    room.GameState.Board[i][j].IsRevealed,
+				NeighborMines: room.GameState.Board[i][j].NeighborMines,
+			}
+		}
+	}
+
+	// Вычисляем безопасные ячейки
+	safeCellPositions := game.CalculateSafeCells(boardInfo, room.GameState.Rows, room.GameState.Cols, room.GameState.Mines)
+
+	// Преобразуем в формат SafeCell
+	room.GameState.SafeCells = make([]SafeCell, len(safeCellPositions))
+	for i, pos := range safeCellPositions {
+		room.GameState.SafeCells[i] = SafeCell{
+			Row: pos.Row,
+			Col: pos.Col,
+		}
+	}
+
+	log.Printf("Обновлены безопасные ячейки: %d ячеек", len(room.GameState.SafeCells))
 }
 
 func (s *Server) broadcastPlayerList(room *Room) {
