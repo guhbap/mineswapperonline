@@ -179,15 +179,18 @@ func isValidHexColor(color string) bool {
 // won - whether the player won
 // Rating is updated if:
 // 1. Player won AND
-// 2. Either this is a new field (no previous best result for this exact field) OR
-//    the field is more complex than any previous field the player has played OR
-//    the player improved or worsened their time on this exact field
+// 2. One of the following:
+//    - First game ever (no previous results)
+//    - Playing more complex field than any previous
+//    - Improving or worsening time on already played field
 // Rating increases for:
-// - First time playing a field
+// - First game ever
 // - Playing more complex fields
 // - Improving time on a field
 // Rating decreases for:
 // - Worsening time on a field (compared to best result)
+// Rating is NOT given for:
+// - Playing less complex fields than previously played (prevents farming easy fields)
 // This prevents farming rating on easy fields and penalizes worse performance
 func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool) error {
 	// Get current player rating
@@ -208,6 +211,15 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 	shouldUpdateRating := false
 
 	if won {
+		// First, check if player has any previous results at all
+		var maxComplexity sql.NullFloat64
+		err = h.db.QueryRow(
+			"SELECT MAX(complexity) FROM user_best_results WHERE user_id = $1",
+			userID,
+		).Scan(&maxComplexity)
+
+		hasPreviousResults := err == nil && maxComplexity.Valid
+
 		// Get best result for this exact field
 		var bestTime sql.NullFloat64
 		var bestComplexity sql.NullFloat64
@@ -216,49 +228,36 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 			userID, width, height, mines,
 		).Scan(&bestTime, &bestComplexity)
 
-		if err == sql.ErrNoRows {
-			// No previous result for this field - give rating
+		hasResultForThisField := err == nil && bestTime.Valid && bestComplexity.Valid
+
+		if !hasPreviousResults {
+			// First game ever - give rating
 			shouldUpdateRating = true
-			log.Printf("First time playing field %dx%d with %d mines - giving rating", width, height, mines)
-		} else if err != nil {
-			log.Printf("Error getting best result: %v", err)
-			// On error, don't update rating to be safe
-		} else {
-			// We have a previous result for this field
-			if bestTime.Valid && bestComplexity.Valid {
-				// Check if this is an improvement (better time) or degradation (worse time)
-				if gameTime < bestTime.Float64 {
-					shouldUpdateRating = true
-					log.Printf("Improved time on field %dx%d with %d mines: %.2f -> %.2f (rating increase)", width, height, mines, bestTime.Float64, gameTime)
-				} else if gameTime > bestTime.Float64 {
-					// Worse time - rating should decrease
-					shouldUpdateRating = true
-					log.Printf("Worse time on field %dx%d with %d mines: %.2f -> %.2f (rating decrease)", width, height, mines, bestTime.Float64, gameTime)
-				} else {
-					// Same time - no rating change
-					log.Printf("Same time on field %dx%d with %d mines: %.2f (no rating change)", width, height, mines, gameTime)
-				}
-			}
-		}
-
-		// Also check if this is the most complex field the player has played
-		if !shouldUpdateRating {
-			var maxComplexity sql.NullFloat64
-			err = h.db.QueryRow(
-				"SELECT MAX(complexity) FROM user_best_results WHERE user_id = $1",
-				userID,
-			).Scan(&maxComplexity)
-
-			if err != nil && err != sql.ErrNoRows {
-				log.Printf("Error getting max complexity: %v", err)
-			} else if err == sql.ErrNoRows || !maxComplexity.Valid {
-				// No previous results at all - give rating
+			log.Printf("First game ever on field %dx%d with %d mines - giving rating", width, height, mines)
+		} else if hasResultForThisField {
+			// We have a previous result for this exact field
+			// Check if this is an improvement (better time) or degradation (worse time)
+			if gameTime < bestTime.Float64 {
 				shouldUpdateRating = true
-				log.Printf("First game ever - giving rating")
-			} else if currentComplexity > maxComplexity.Float64 {
-				// This is a more complex field than any previous - give rating
+				log.Printf("Improved time on field %dx%d with %d mines: %.2f -> %.2f (rating increase)", width, height, mines, bestTime.Float64, gameTime)
+			} else if gameTime > bestTime.Float64 {
+				// Worse time - rating should decrease
+				shouldUpdateRating = true
+				log.Printf("Worse time on field %dx%d with %d mines: %.2f -> %.2f (rating decrease)", width, height, mines, bestTime.Float64, gameTime)
+			} else {
+				// Same time - no rating change
+				log.Printf("Same time on field %dx%d with %d mines: %.2f (no rating change)", width, height, mines, gameTime)
+			}
+		} else {
+			// No result for this exact field, but player has played other fields
+			// Only give rating if this field is more complex than any previous
+			if currentComplexity > maxComplexity.Float64 {
 				shouldUpdateRating = true
 				log.Printf("Playing more complex field: %.2f > %.2f - giving rating", currentComplexity, maxComplexity.Float64)
+			} else {
+				// This field is less complex than previous fields - no rating
+				log.Printf("Field %dx%d with %d mines (complexity %.2f) is less complex than max (%.2f) - no rating", 
+					width, height, mines, currentComplexity, maxComplexity.Float64)
 			}
 		}
 
