@@ -13,6 +13,9 @@ const (
 	Rref  = 1500.0 // rating for reference field (16x16,40)
 	MinS  = 0.01
 	MaxS  = 0.99
+	// MinComplexityRatio - минимальная сложность относительно референсного поля (25% от Dref)
+	// Поля с меньшей сложностью не дают рейтинг, чтобы предотвратить фарм на очень простых полях
+	MinComplexityRatio = 0.25
 )
 
 // computeD returns complexity D = A * (M/A)^alpha
@@ -74,6 +77,17 @@ func ComputeDref() float64 {
 // ComputeComplexity computes complexity D for a field (exported version of computeD)
 func ComputeComplexity(w, h, m float64) float64 {
 	return computeD(w, h, m)
+}
+
+// IsComplexitySufficient проверяет, достаточно ли сложности поля для получения рейтинга
+// Возвращает true, если сложность поля >= MinComplexityRatio * Dref
+func IsComplexitySufficient(w, h, m float64, Dref float64) bool {
+	if Dref <= 0 {
+		return false
+	}
+	D := computeD(w, h, m)
+	minComplexity := Dref * MinComplexityRatio
+	return D >= minComplexity
 }
 
 // UpdatePlayerRating performs one update, returns new rating and delta

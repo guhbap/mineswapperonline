@@ -206,6 +206,38 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 
 	// Compute complexity of current field
 	currentComplexity := rating.ComputeComplexity(float64(width), float64(height), float64(mines))
+	Dref := rating.ComputeDref()
+
+	// Check if field complexity is sufficient for rating (prevents farming on very easy fields)
+	if !rating.IsComplexitySufficient(float64(width), float64(height), float64(mines), Dref) {
+		log.Printf("Field %dx%d with %d mines (complexity %.2f) is too simple (min required: %.2f) - no rating", 
+			width, height, mines, currentComplexity, Dref*rating.MinComplexityRatio)
+		// Still update statistics but not rating
+		if won {
+			_, err = h.db.Exec(
+				`INSERT INTO user_stats (user_id, games_played, games_won, updated_at) 
+				 VALUES ($1, 1, 1, CURRENT_TIMESTAMP)
+				 ON CONFLICT (user_id) 
+				 DO UPDATE SET 
+					games_played = user_stats.games_played + 1,
+					games_won = user_stats.games_won + 1,
+					updated_at = CURRENT_TIMESTAMP`,
+				userID,
+			)
+		} else {
+			_, err = h.db.Exec(
+				`INSERT INTO user_stats (user_id, games_played, games_lost, updated_at) 
+				 VALUES ($1, 1, 1, CURRENT_TIMESTAMP)
+				 ON CONFLICT (user_id) 
+				 DO UPDATE SET 
+					games_played = user_stats.games_played + 1,
+					games_lost = user_stats.games_lost + 1,
+					updated_at = CURRENT_TIMESTAMP`,
+				userID,
+			)
+		}
+		return err
+	}
 
 	// Check if we should update rating
 	shouldUpdateRating := false
@@ -263,8 +295,6 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 
 		// Update rating if conditions are met
 		if shouldUpdateRating {
-			Dref := rating.ComputeDref()
-			
 			// Calculate rating change using current game time
 			// The formula automatically gives:
 			// - Positive delta for better performance (faster time = higher S)
