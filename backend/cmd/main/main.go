@@ -570,8 +570,10 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			// Отвечаем pong на ping сообщение
 			pongMsg := Message{Type: "pong"}
 			player.mu.Lock()
-			if err := player.Conn.WriteJSON(pongMsg); err != nil {
-				log.Printf("Ошибка отправки pong игроку %s: %v", playerID, err)
+			if player.Conn != nil {
+				if err := player.Conn.WriteJSON(pongMsg); err != nil {
+					log.Printf("Ошибка отправки pong игроку %s: %v", playerID, err)
+				}
 			}
 			player.mu.Unlock()
 			continue
@@ -836,7 +838,7 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			}
 		}
 
-		// Пересчитываем соседние мины только для измененных ячеек
+		// Пересчитываем соседние мины для всех измененных ячеек (включая открытые)
 		for pos := range changedCells {
 			i, j := pos[0], pos[1]
 			if !room.GameState.Board[i][j].IsMine {
@@ -1374,10 +1376,12 @@ func (s *Server) broadcastGameState(room *Room) {
 	defer room.mu.RUnlock()
 	for id, player := range room.Players {
 		player.mu.Lock()
-		if err := player.Conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
-			log.Printf("Ошибка отправки состояния игры игроку %s: %v", id, err)
-		} else {
-			log.Printf("Состояние игры отправлено игроку %s (binary)", id)
+		if player.Conn != nil {
+			if err := player.Conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
+				log.Printf("Ошибка отправки состояния игры игроку %s: %v", id, err)
+			} else {
+				log.Printf("Состояние игры отправлено игроку %s (binary)", id)
+			}
 		}
 		player.mu.Unlock()
 	}
@@ -1399,10 +1403,12 @@ func (s *Server) broadcastToOthers(room *Room, senderID string, msg Message) {
 	for id, player := range room.Players {
 		if id != senderID {
 			player.mu.Lock()
-			if err := player.Conn.WriteJSON(msg); err != nil {
-				log.Printf("Ошибка отправки сообщения игроку %s: %v", id, err)
-			} else {
-				sentCount++
+			if player.Conn != nil {
+				if err := player.Conn.WriteJSON(msg); err != nil {
+					log.Printf("Ошибка отправки сообщения игроку %s: %v", id, err)
+				} else {
+					sentCount++
+				}
 			}
 			player.mu.Unlock()
 		}
@@ -1415,8 +1421,10 @@ func (s *Server) broadcastToAll(room *Room, msg Message) {
 	defer room.mu.RUnlock()
 	for id, player := range room.Players {
 		player.mu.Lock()
-		if err := player.Conn.WriteJSON(msg); err != nil {
-			log.Printf("Ошибка отправки сообщения чата игроку %s: %v", id, err)
+		if player.Conn != nil {
+			if err := player.Conn.WriteJSON(msg); err != nil {
+				log.Printf("Ошибка отправки сообщения чата игроку %s: %v", id, err)
+			}
 		}
 		player.mu.Unlock()
 	}
@@ -1443,8 +1451,10 @@ func (s *Server) sendPlayerListToPlayer(room *Room, targetPlayer *Player) {
 
 	targetPlayer.mu.Lock()
 	defer targetPlayer.mu.Unlock()
-	if err := targetPlayer.Conn.WriteJSON(msgData); err != nil {
-		log.Printf("Ошибка отправки списка игроков: %v", err)
+	if targetPlayer.Conn != nil {
+		if err := targetPlayer.Conn.WriteJSON(msgData); err != nil {
+			log.Printf("Ошибка отправки списка игроков: %v", err)
+		}
 	}
 }
 
@@ -1544,7 +1554,24 @@ func (s *Server) determineMinePlacement(room *Room, clickRow, clickCol int) [][]
 	}
 
 	// Создаем решатель
-	solver := game.MakeSolver(lm, room.GameState.Mines)
+	// Важно: учитываем уже размещенные мины (только для неоткрытых ячеек)
+	// Подсчитываем количество уже размещенных мин среди неоткрытых ячеек
+	placedMines := 0
+	for i := 0; i < room.GameState.Rows; i++ {
+		for j := 0; j < room.GameState.Cols; j++ {
+			if !room.GameState.Board[i][j].IsRevealed && room.GameState.Board[i][j].IsMine {
+				placedMines++
+			}
+		}
+	}
+
+	// Общее количество мин минус уже размещенные = оставшиеся мины для размещения
+	remainingMines := room.GameState.Mines - placedMines
+	if remainingMines < 0 {
+		remainingMines = 0
+	}
+
+	solver := game.MakeSolver(lm, remainingMines)
 
 	// Проверяем, на границе ли клик
 	boundaryIdx := -1
@@ -1627,8 +1654,10 @@ func (s *Server) broadcastPlayerList(room *Room) {
 	defer room.mu.RUnlock()
 	for _, player := range room.Players {
 		player.mu.Lock()
-		if err := player.Conn.WriteJSON(msgData); err != nil {
-			log.Printf("Ошибка отправки списка игроков: %v", err)
+		if player.Conn != nil {
+			if err := player.Conn.WriteJSON(msgData); err != nil {
+				log.Printf("Ошибка отправки списка игроков: %v", err)
+			}
 		}
 		player.mu.Unlock()
 	}
