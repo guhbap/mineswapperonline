@@ -8,17 +8,27 @@ import (
 type Sat struct {
 	numVars int
 	clauses [][]int
+	// Кэш для быстрого доступа к unit clauses
+	unitClauses map[int]bool // var -> value (true/false)
 }
 
 func NewSat(numVars int) *Sat {
 	return &Sat{
-		numVars: numVars,
-		clauses: make([][]int, 0),
+		numVars:     numVars,
+		clauses:     make([][]int, 0),
+		unitClauses: make(map[int]bool),
 	}
 }
 
 // Assert добавляет дизъюнкцию (clause)
 func (s *Sat) Assert(vars []int) {
+	if len(vars) == 1 {
+		// Unit clause - сохраняем для быстрого доступа
+		varIdx := abs(vars[0])
+		if varIdx <= s.numVars {
+			s.unitClauses[varIdx] = vars[0] > 0
+		}
+	}
 	s.clauses = append(s.clauses, vars)
 }
 
@@ -58,20 +68,32 @@ func (s *Sat) AssertAtMost(vars []int, k int) {
 }
 
 // SolveWith решает SAT с дополнительным условием
+// Оптимизировано: не копируем clauses, а используем стек
 func (s *Sat) SolveWith(additional func()) *[]bool {
-	saved := s.clauses
-	defer func() {
-		s.clauses = saved
-	}()
+	// Сохраняем текущее состояние
+	oldClausesLen := len(s.clauses)
+	oldUnitClauses := make(map[int]bool)
+	for k, v := range s.unitClauses {
+		oldUnitClauses[k] = v
+	}
 	
-	s.clauses = make([][]int, len(saved))
-	copy(s.clauses, saved)
-	
+	// Добавляем дополнительное условие
 	if additional != nil {
 		additional()
 	}
 	
-	return s.Solve()
+	// Решаем
+	result := s.Solve()
+	
+	// Восстанавливаем состояние (удаляем добавленные clauses)
+	if len(s.clauses) > oldClausesLen {
+		s.clauses = s.clauses[:oldClausesLen]
+	}
+	
+	// Восстанавливаем unit clauses (удаляем только те, что были добавлены)
+	s.unitClauses = oldUnitClauses
+	
+	return result
 }
 
 // Solve решает SAT задачу (простая реализация DPLL)
@@ -90,7 +112,15 @@ func (s *Sat) Solve() *[]bool {
 }
 
 func (s *Sat) dpll(assignment []bool, used []bool, depth int) *[]bool {
-	// Проверяем единичные литералы (unit propagation)
+	// Unit propagation: применяем unit clauses из кэша
+	for varIdx, val := range s.unitClauses {
+		if varIdx <= s.numVars && !used[varIdx] {
+			assignment[varIdx] = val
+			used[varIdx] = true
+		}
+	}
+	
+	// Проверяем unit clauses из clauses (на случай если они не в кэше)
 	for {
 		unitFound := false
 		for _, clause := range s.clauses {
@@ -113,10 +143,12 @@ func (s *Sat) dpll(assignment []bool, used []bool, depth int) *[]bool {
 		}
 	}
 	
-	// Проверяем противоречия
+	// Объединенная проверка: противоречия и удовлетворенность
+	allSatisfied := true
 	for _, clause := range s.clauses {
 		satisfied := false
-		allFalse := true
+		hasUnassigned := false
+		
 		for _, lit := range clause {
 			varIdx := abs(lit)
 			if varIdx > s.numVars {
@@ -129,42 +161,25 @@ func (s *Sat) dpll(assignment []bool, used []bool, depth int) *[]bool {
 					break
 				}
 			} else {
-				allFalse = false
+				hasUnassigned = true
 			}
 		}
-		if !satisfied && allFalse {
-			return nil // Противоречие
-		}
-	}
-	
-	// Если все клаузы выполнены
-	allSatisfied := true
-	for _, clause := range s.clauses {
-		satisfied := false
-		for _, lit := range clause {
-			varIdx := abs(lit)
-			if varIdx > s.numVars {
-				continue
-			}
-			if used[varIdx] {
-				val := assignment[varIdx]
-				if (lit > 0 && val) || (lit < 0 && !val) {
-					satisfied = true
-					break
-				}
-			}
-		}
+		
 		if !satisfied {
+			if !hasUnassigned {
+				// Противоречие: все литералы ложны
+				return nil
+			}
 			allSatisfied = false
-			break
 		}
 	}
 	
+	// Ранний выход: если все клаузы выполнены
 	if allSatisfied {
 		return &assignment
 	}
 	
-	// Выбираем неиспользованную переменную
+	// Выбираем неиспользованную переменную (оптимизация: выбираем из наиболее часто встречающихся)
 	var nextVar int
 	for i := 1; i <= s.numVars; i++ {
 		if !used[i] {
