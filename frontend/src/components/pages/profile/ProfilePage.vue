@@ -142,6 +142,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getProfile, getProfileByUsername, updateColor, getTopGames, type UserProfile, type TopGame } from '@/api/profile'
+import { getErrorMessage } from '@/utils/errorHandler'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -212,7 +213,7 @@ const loadProfile = async () => {
       await loadTopGames()
     }
   } catch (err: any) {
-    error.value = err.response?.data || 'Ошибка загрузки профиля'
+    error.value = getErrorMessage(err, 'Ошибка загрузки профиля')
     console.error('Ошибка загрузки профиля:', err)
   } finally {
     loading.value = false
@@ -226,7 +227,7 @@ const loadTopGames = async (username?: string) => {
     const games = await getTopGames(username)
     topGames.value = games || []
   } catch (err: any) {
-    topGamesError.value = err.response?.data || 'Ошибка загрузки игр'
+    topGamesError.value = getErrorMessage(err, 'Ошибка загрузки игр')
     topGames.value = [] // Убеждаемся, что это всегда массив
     console.error('Ошибка загрузки топ-10 игр:', err)
   } finally {
@@ -252,7 +253,7 @@ const selectColor = async (color: string) => {
       authStore.user.color = color
     }
   } catch (err: any) {
-    colorError.value = err.response?.data || 'Ошибка сохранения цвета'
+    colorError.value = getErrorMessage(err, 'Ошибка сохранения цвета')
     // Откатываем выбор
     selectedColor.value = profile.value?.user.color || ''
   } finally {
@@ -276,7 +277,7 @@ const clearColor = async () => {
       authStore.user.color = undefined
     }
   } catch (err: any) {
-    colorError.value = err.response?.data || 'Ошибка сохранения цвета'
+    colorError.value = getErrorMessage(err, 'Ошибка сохранения цвета')
     // Откатываем выбор
     selectedColor.value = profile.value?.user.color || ''
   } finally {

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { User } from '@/api/auth'
 import { login, register, getMe } from '@/api/auth'
+import { getErrorMessage } from '@/utils/errorHandler'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
@@ -35,7 +36,7 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('token', response.token)
       return response
     } catch (err: any) {
-      error.value = err.response?.data || err.message || 'Login failed'
+      error.value = getErrorMessage(err, 'Ошибка входа')
       throw err
     } finally {
       loading.value = false
@@ -52,7 +53,7 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('token', response.token)
       return response
     } catch (err: any) {
-      error.value = err.response?.data || err.message || 'Registration failed'
+      error.value = getErrorMessage(err, 'Ошибка регистрации')
       throw err
     } finally {
       loading.value = false

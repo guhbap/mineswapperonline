@@ -37,6 +37,7 @@
 import { ref } from 'vue'
 import type { Room } from '@/api/rooms'
 import { joinRoom } from '@/api/rooms'
+import { getErrorMessage } from '@/utils/errorHandler'
 
 const props = defineProps<{
   show: boolean
@@ -68,14 +69,7 @@ const handleSubmit = async () => {
     error.value = ''
     password.value = ''
   } catch (err: any) {
-    // Обрабатываем ошибку пароля или другие ошибки
-    if (err.response?.status === 401) {
-      error.value = 'Неверный пароль'
-    } else if (err.response?.status === 404) {
-      error.value = 'Комната не найдена'
-    } else {
-      error.value = err.response?.data?.error || err.response?.data || 'Ошибка подключения к комнате'
-    }
+    error.value = getErrorMessage(err, 'Ошибка подключения к комнате')
   }
 }
 

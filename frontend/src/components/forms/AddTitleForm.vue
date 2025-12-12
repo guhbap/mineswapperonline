@@ -89,6 +89,7 @@ import CheckBox from '../inputs/CheckBox.vue'
 import PictureList from '../PictureList.vue'
 import api from '@/api'
 import { useDataStore } from '@/stores/dataStore'
+import { getErrorMessage } from '@/utils/errorHandler'
 
 const props = defineProps<{
   titleUuid?: string
@@ -221,9 +222,7 @@ const handleSubmit = async () => {
       throw new Error(response.data?.message || 'Неизвестная ошибка')
     }
   } catch (err: unknown) {
-    const axiosError = err as { response?: { data?: { message?: string } }; message?: string }
-    error.value =
-      axiosError.response?.data?.message || axiosError.message || 'Произошла ошибка при сохранении'
+    error.value = getErrorMessage(err, 'Произошла ошибка при сохранении')
     success.value = false
   } finally {
     loading.value = false

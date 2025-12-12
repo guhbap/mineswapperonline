@@ -40,6 +40,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import TextInput from '@/components/inputs/TextInput.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
+import { getErrorMessage } from '@/utils/errorHandler'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -57,7 +58,7 @@ const handleSubmit = async () => {
     await authStore.loginUser(username.value, password.value)
     router.push('/')
   } catch (err: any) {
-    error.value = err.response?.data || 'Ошибка входа. Проверьте данные.'
+    error.value = getErrorMessage(err, 'Ошибка входа. Проверьте данные.')
   } finally {
     loading.value = false
   }

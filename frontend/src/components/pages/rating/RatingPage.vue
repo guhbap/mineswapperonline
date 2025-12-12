@@ -63,6 +63,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { getLeaderboard, type LeaderboardEntry } from '@/api/profile'
+import { getErrorMessage } from '@/utils/errorHandler'
 
 const leaderboard = ref<LeaderboardEntry[]>([])
 const loading = ref(true)
@@ -74,7 +75,7 @@ const loadLeaderboard = async () => {
   try {
     leaderboard.value = await getLeaderboard()
   } catch (err: any) {
-    error.value = err.response?.data?.error || 'Ошибка загрузки рейтинга'
+    error.value = getErrorMessage(err, 'Ошибка загрузки рейтинга')
     console.error('Error loading leaderboard:', err)
   } finally {
     loading.value = false

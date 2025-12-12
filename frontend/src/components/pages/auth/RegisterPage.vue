@@ -56,6 +56,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import TextInput from '@/components/inputs/TextInput.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
+import { getErrorMessage } from '@/utils/errorHandler'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -92,7 +93,7 @@ const handleSubmit = async () => {
     await authStore.registerUser(username.value, email.value, password.value)
     router.push('/')
   } catch (err: any) {
-    error.value = err.response?.data || 'Ошибка регистрации. Попробуйте снова.'
+    error.value = getErrorMessage(err, 'Ошибка регистрации. Попробуйте снова.')
   } finally {
     loading.value = false
   }
