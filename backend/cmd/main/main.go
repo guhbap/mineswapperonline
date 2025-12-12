@@ -739,17 +739,23 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		cell.IsFlagged = !cell.IsFlagged
 		log.Printf("Флаг переключен: row=%d, col=%d, flagged=%v", row, col, cell.IsFlagged)
 
-		// В режиме training пересчитываем подсказки после установки/снятия флага (в fair подсказки только при проигрыше)
+		// В режиме training пересчитываем подсказки асинхронно после установки/снятия флага (в fair подсказки только при проигрыше)
 		room.mu.RLock()
 		gameMode := room.GameMode
 		room.mu.RUnlock()
 
 		room.GameState.mu.Unlock()
-		if gameMode == "training" {
-			s.calculateCellHints(room)
-		}
-
 		s.broadcastGameState(room)
+
+		// Выполняем асинхронно, чтобы не блокировать ответ
+		if gameMode == "training" {
+			go func() {
+				room.GameState.mu.Lock()
+				defer room.GameState.mu.Unlock()
+				s.calculateCellHints(room)
+				s.broadcastGameState(room)
+			}()
+		}
 
 		// Отправляем сервисное сообщение в чат
 		if nickname != "" {
@@ -803,32 +809,52 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		mineGrid := s.determineMinePlacement(room, row, col)
 		room.GameState.mu.Lock()
 
-		// Применяем размещение мин
+		// Применяем размещение мин и собираем измененные ячейки
+		changedCells := make(map[[2]int]bool)
 		for i := 0; i < room.GameState.Rows; i++ {
 			for j := 0; j < room.GameState.Cols; j++ {
 				if !room.GameState.Board[i][j].IsRevealed {
+					oldMine := room.GameState.Board[i][j].IsMine
 					room.GameState.Board[i][j].IsMine = mineGrid[i][j]
-				}
-			}
-		}
-
-		// Пересчитываем соседние мины для всех ячеек
-		for i := 0; i < room.GameState.Rows; i++ {
-			for j := 0; j < room.GameState.Cols; j++ {
-				if !room.GameState.Board[i][j].IsMine {
-					count := 0
-					for di := -1; di <= 1; di++ {
-						for dj := -1; dj <= 1; dj++ {
-							ni, nj := i+di, j+dj
-							if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
-								if room.GameState.Board[ni][nj].IsMine {
-									count++
+					// Если статус мины изменился, помечаем эту ячейку и всех её соседей для пересчета
+					if oldMine != mineGrid[i][j] {
+						changedCells[[2]int{i, j}] = true
+						// Помечаем соседей для пересчета
+						for di := -1; di <= 1; di++ {
+							for dj := -1; dj <= 1; dj++ {
+								if di == 0 && dj == 0 {
+									continue
+								}
+								ni, nj := i+di, j+dj
+								if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
+									changedCells[[2]int{ni, nj}] = true
 								}
 							}
 						}
 					}
-					room.GameState.Board[i][j].NeighborMines = count
 				}
+			}
+		}
+
+		// Пересчитываем соседние мины только для измененных ячеек
+		for pos := range changedCells {
+			i, j := pos[0], pos[1]
+			if !room.GameState.Board[i][j].IsMine {
+				count := 0
+				for di := -1; di <= 1; di++ {
+					for dj := -1; dj <= 1; dj++ {
+						if di == 0 && dj == 0 {
+							continue
+						}
+						ni, nj := i+di, j+dj
+						if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
+							if room.GameState.Board[ni][nj].IsMine {
+								count++
+							}
+						}
+					}
+				}
+				room.GameState.Board[i][j].NeighborMines = count
 			}
 		}
 
@@ -921,14 +947,18 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			s.revealNeighbors(room, row, col)
 		}
 
-		// В режимах training и fair пересчитываем подсказки после каждого открытия
+		// В режиме training пересчитываем подсказки асинхронно после каждого открытия (в fair подсказки только при проигрыше)
 		room.mu.RLock()
 		gameMode := room.GameMode
 		room.mu.RUnlock()
-		if gameMode == "training" || gameMode == "fair" {
-			room.GameState.mu.Unlock()
-			s.calculateCellHints(room)
-			room.GameState.mu.Lock()
+		if gameMode == "training" {
+			// Выполняем асинхронно, чтобы не блокировать ответ
+			go func() {
+				room.GameState.mu.Lock()
+				defer room.GameState.mu.Unlock()
+				s.calculateCellHints(room)
+				s.broadcastGameState(room)
+			}()
 		}
 
 		// Отправляем сервисное сообщение об открытии поля
