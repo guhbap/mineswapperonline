@@ -313,143 +313,177 @@ func generateRandomBoard(rows, cols, mines int) *GameState {
 // isSolvableWithoutGuessing проверяет, можно ли решить поле без угадываний
 // Возвращает true и список безопасных ячеек, если поле решаемо, иначе false и nil
 func isSolvableWithoutGuessing(gs *GameState) (bool, []SafeCell) {
-	// Создаем копию доски для симуляции
-	revealed := make([][]bool, gs.Rows)
-	for i := range revealed {
-		revealed[i] = make([]bool, gs.Cols)
+	rows, cols := gs.Rows, gs.Cols
+
+	// Состояния клеток в симуляции:
+	// revealed[i][j] — открыта ли клетка
+	// flagged[i][j] — помечена ли клетка как мина
+	revealed := make([][]bool, rows)
+	flagged := make([][]bool, rows)
+	for i := 0; i < rows; i++ {
+		revealed[i] = make([]bool, cols)
+		flagged[i] = make([]bool, cols)
 	}
 
-	// Находим все ячейки с нулевым количеством соседних мин (безопасные стартовые точки)
-	queue := []struct{ row, col int }{}
-	for i := 0; i < gs.Rows; i++ {
-		for j := 0; j < gs.Cols; j++ {
+	// Список безопасных клеток, которые были логически открыты
+	safeCells := []SafeCell{}
+
+	// --- 1. Найти начальные нули (их всегда можно открыть логически) ---
+	queue := []struct{ r, c int }{}
+
+	for i := 0; i < rows; i++ {
+		for j := 0; j < cols; j++ {
 			if !gs.Board[i][j].IsMine && gs.Board[i][j].NeighborMines == 0 {
-				queue = append(queue, struct{ row, col int }{i, j})
 				revealed[i][j] = true
+				queue = append(queue, struct{ r, c int }{i, j})
+				safeCells = append(safeCells, SafeCell{Row: i, Col: j})
 			}
 		}
 	}
 
-	// Собираем все безопасные ячейки (те, которые можно открыть логически)
-	safeCells := make([]SafeCell, 0)
-
-	// Если нет безопасных стартовых точек, поле может требовать угадываний
+	// Если нет нулей — решение может потребовать угадываний
 	if len(queue) == 0 {
-		// Проверяем, есть ли хотя бы одна ячейка, которую можно открыть логически
-		// (ячейка, где все соседи с минами уже определены)
 		return false, nil
 	}
 
-	// Добавляем начальные безопасные ячейки
-	for _, cell := range queue {
-		safeCells = append(safeCells, SafeCell{Row: cell.row, Col: cell.col})
-	}
-
-	// Симулируем открытие ячеек
+	// BFS: раскрытие всех нулевых областей
 	for len(queue) > 0 {
-		cell := queue[0]
+		cur := queue[0]
 		queue = queue[1:]
 
-		// Открываем соседние ячейки
 		for di := -1; di <= 1; di++ {
 			for dj := -1; dj <= 1; dj++ {
 				if di == 0 && dj == 0 {
 					continue
 				}
-				ni, nj := cell.row+di, cell.col+dj
-				if ni >= 0 && ni < gs.Rows && nj >= 0 && nj < gs.Cols {
-					if !revealed[ni][nj] && !gs.Board[ni][nj].IsMine {
-						revealed[ni][nj] = true
-						if gs.Board[ni][nj].NeighborMines == 0 {
-							queue = append(queue, struct{ row, col int }{ni, nj})
-						}
+				ni, nj := cur.r+di, cur.c+dj
+				if ni < 0 || ni >= rows || nj < 0 || nj >= cols {
+					continue
+				}
+
+				if !revealed[ni][nj] && !gs.Board[ni][nj].IsMine {
+					revealed[ni][nj] = true
+					safeCells = append(safeCells, SafeCell{Row: ni, Col: nj})
+
+					if gs.Board[ni][nj].NeighborMines == 0 {
+						queue = append(queue, struct{ r, c int }{ni, nj})
 					}
 				}
 			}
 		}
 	}
 
-	// Теперь проверяем, можно ли открыть оставшиеся ячейки логически
+	// --- 2. Логический решатель (до стабилизации) ---
 	changed := true
+
 	for changed {
 		changed = false
-		for i := 0; i < gs.Rows; i++ {
-			for j := 0; j < gs.Cols; j++ {
-				if revealed[i][j] || gs.Board[i][j].IsMine {
+
+		for i := 0; i < rows; i++ {
+			for j := 0; j < cols; j++ {
+
+				if !revealed[i][j] || gs.Board[i][j].IsMine {
 					continue
 				}
 
-				// Проверяем, можно ли открыть эту ячейку логически
-				// Ячейку можно открыть, если все ее соседи с минами уже определены
-				canReveal := true
-				neighborFlags := 0
-				neighborUnknown := 0
+				num := gs.Board[i][j].NeighborMines
 
+				hidden := [][2]int{}
+				flaggedCount := 0
+
+				// собираем инфу о соседях
 				for di := -1; di <= 1; di++ {
 					for dj := -1; dj <= 1; dj++ {
 						if di == 0 && dj == 0 {
 							continue
 						}
 						ni, nj := i+di, j+dj
-						if ni >= 0 && ni < gs.Rows && nj >= 0 && nj < gs.Cols {
-							if revealed[ni][nj] {
-								if gs.Board[ni][nj].IsMine {
-									neighborFlags++
-								} else if gs.Board[ni][nj].NeighborMines > 0 {
-									// Проверяем, все ли мины вокруг этой соседней ячейки определены
-									neighborMines := gs.Board[ni][nj].NeighborMines
-									countedMines := 0
-									for ddi := -1; ddi <= 1; ddi++ {
-										for ddj := -1; ddj <= 1; ddj++ {
-											if ddi == 0 && ddj == 0 {
-												continue
-											}
-											nni, nnj := ni+ddi, nj+ddj
-											if nni >= 0 && nni < gs.Rows && nnj >= 0 && nnj < gs.Cols {
-												if revealed[nni][nnj] && gs.Board[nni][nnj].IsMine {
-													countedMines++
-												}
-											}
-										}
-									}
-									if countedMines < neighborMines {
-										canReveal = false
-									}
-								}
-							} else {
-								neighborUnknown++
-							}
+						if ni < 0 || ni >= rows || nj < 0 || nj >= cols {
+							continue
+						}
+
+						if flagged[ni][nj] {
+							flaggedCount++
+						} else if !revealed[ni][nj] {
+							hidden = append(hidden, [2]int{ni, nj})
 						}
 					}
 				}
 
-				// Если все соседи с минами определены, можно открыть эту ячейку
-				if canReveal && neighborUnknown == 0 {
-					revealed[i][j] = true
-					changed = true
-					// Добавляем в список безопасных ячеек
-					safeCells = append(safeCells, SafeCell{Row: i, Col: j})
-					if gs.Board[i][j].NeighborMines == 0 {
-						queue = append(queue, struct{ row, col int }{i, j})
+				hiddenCount := len(hidden)
+
+				// --- Правило флажка ---
+				if hiddenCount > 0 && flaggedCount+hiddenCount == num {
+					for _, pos := range hidden {
+						r, c := pos[0], pos[1]
+						if !flagged[r][c] {
+							flagged[r][c] = true
+							changed = true
+						}
+					}
+					continue
+				}
+
+				// --- Правило открытия ---
+				if hiddenCount > 0 && flaggedCount == num {
+					for _, pos := range hidden {
+						r, c := pos[0], pos[1]
+						if !revealed[r][c] {
+							revealed[r][c] = true
+							safeCells = append(safeCells, SafeCell{Row: r, Col: c})
+							changed = true
+
+							// если это ноль — расширяем
+							if gs.Board[r][c].NeighborMines == 0 {
+								queue = append(queue, struct{ r, c int }{r, c})
+							}
+						}
+					}
+					continue
+				}
+			}
+		}
+
+		// продлеваем BFS для новых открытых нулей
+		for len(queue) > 0 {
+			cur := queue[0]
+			queue = queue[1:]
+
+			for di := -1; di <= 1; di++ {
+				for dj := -1; dj <= 1; dj++ {
+					if di == 0 && dj == 0 {
+						continue
+					}
+					ni, nj := cur.r+di, cur.c+dj
+					if ni < 0 || ni >= rows || nj < 0 || nj >= cols {
+						continue
+					}
+
+					if !revealed[ni][nj] && !gs.Board[ni][nj].IsMine {
+						revealed[ni][nj] = true
+						safeCells = append(safeCells, SafeCell{Row: ni, Col: nj})
+
+						if gs.Board[ni][nj].NeighborMines == 0 {
+							queue = append(queue, struct{ r, c int }{ni, nj})
+						}
 					}
 				}
 			}
 		}
 	}
 
-	// Проверяем, все ли не-минные ячейки открыты
-	totalCells := gs.Rows * gs.Cols
-	revealedCount := 0
-	for i := 0; i < gs.Rows; i++ {
-		for j := 0; j < gs.Cols; j++ {
+	// --- 3. Проверка: все безопасные клетки раскрыты? ---
+	totalSafe := rows*cols - gs.Mines
+	countRevealed := 0
+	for i := 0; i < rows; i++ {
+		for j := 0; j < cols; j++ {
 			if revealed[i][j] {
-				revealedCount++
+				countRevealed++
 			}
 		}
 	}
 
-	// Поле решаемо без угадываний, если все не-минные ячейки можно открыть логически
-	if revealedCount == totalCells-gs.Mines {
+	if countRevealed == totalSafe {
 		return true, safeCells
 	}
 	return false, nil
