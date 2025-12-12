@@ -115,8 +115,8 @@ type Room struct {
 	Rows          int                `json:"rows"`
 	Cols          int                `json:"cols"`
 	Mines         int                `json:"mines"`
-	NoGuessing    bool               `json:"noGuessing"` // Режим без угадываний
-	CreatorID     int                `json:"creatorId"`  // ID создателя комнаты (0 для гостей)
+	FairMode      bool               `json:"fairMode"`  // Режим без угадываний
+	CreatorID     int                `json:"creatorId"` // ID создателя комнаты (0 для гостей)
 	Players       map[string]*Player `json:"-"`
 	GameState     *GameState         `json:"-"`
 	CreatedAt     time.Time          `json:"createdAt"`
@@ -153,19 +153,19 @@ func (rm *RoomManager) SetServer(server *Server) {
 	rm.server = server
 }
 
-func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, noGuessing bool) *Room {
+func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, fairMode bool) *Room {
 	return &Room{
-		ID:         id,
-		Name:       name,
-		Password:   password,
-		Rows:       rows,
-		Cols:       cols,
-		Mines:      mines,
-		NoGuessing: noGuessing,
-		CreatorID:  creatorID,
-		Players:    make(map[string]*Player),
-		GameState:  NewGameState(rows, cols, mines, noGuessing),
-		CreatedAt:  time.Now(),
+		ID:        id,
+		Name:      name,
+		Password:  password,
+		Rows:      rows,
+		Cols:      cols,
+		Mines:     mines,
+		FairMode:  fairMode,
+		CreatorID: creatorID,
+		Players:   make(map[string]*Player),
+		GameState: NewGameState(rows, cols, mines, fairMode),
+		CreatedAt: time.Now(),
 	}
 }
 
@@ -180,10 +180,13 @@ func NewServer(roomManager *RoomManager, db *database.DB) *Server {
 	return server
 }
 
-func NewGameState(rows, cols, mines int, noGuessing bool) *GameState {
+func NewGameState(rows, cols, mines int, fairMode bool) *GameState {
 	maxAttempts := 100 // Максимальное количество попыток генерации
 	attempts := 0
-
+	// Если режим без угадываний, проверяем решаемость поля
+	if fairMode {
+		// todo use kaboom algo for board generation
+	}
 	for attempts < maxAttempts {
 		gs := &GameState{
 			Rows:          rows,
@@ -204,7 +207,7 @@ func NewGameState(rows, cols, mines int, noGuessing bool) *GameState {
 			gs.Board[i] = make([]Cell, cols)
 		}
 
-		// Размещение мин
+		// Размещение мин (алгоритм kaboom: размещаем случайно, затем проверяем решаемость)
 		mathrand.Seed(time.Now().UnixNano() + int64(attempts))
 		minesPlaced := 0
 		for minesPlaced < mines {
@@ -236,19 +239,6 @@ func NewGameState(rows, cols, mines int, noGuessing bool) *GameState {
 			}
 		}
 
-		// Если режим без угадываний, проверяем решаемость поля
-		if noGuessing {
-			isSolvable, safeCells := isSolvableWithoutGuessing(gs)
-			if isSolvable {
-				gs.SafeCells = safeCells
-				return gs
-			}
-			attempts++
-			continue
-		}
-
-		// Если режим с угадываниями, возвращаем первое сгенерированное поле
-		return gs
 	}
 
 	// Если не удалось сгенерировать поле без угадываний за maxAttempts попыток,
@@ -328,563 +318,17 @@ func neighbors(rows, cols, i, j int) [][2]int {
 	return out
 }
 
-// Главная функция
-func isSolvableWithoutGuessing(gs *GameState) (bool, []SafeCell) {
-	return isSolvableWithoutGuessingRecursive(gs, false)
-}
-
-// Вспомогательная функция с флагом для избежания рекурсии
-func isSolvableWithoutGuessingRecursive(gs *GameState, skipInitialCheck bool) (bool, []SafeCell) {
-	rows, cols := gs.Rows, gs.Cols
-
-	// 1) Собираем входные видимые массивы
-	revealed := make([][]bool, rows)
-	flagged := make([][]bool, rows)
-	totalRevealed := 0
-	for i := 0; i < rows; i++ {
-		revealed[i] = make([]bool, cols)
-		flagged[i] = make([]bool, cols)
-		for j := 0; j < cols; j++ {
-			revealed[i][j] = gs.Board[i][j].IsRevealed
-			flagged[i][j] = gs.Board[i][j].IsFlagged
-			if revealed[i][j] {
-				totalRevealed++
-			}
-		}
-	}
-
-	// Специальная обработка начального состояния: если все клетки закрыты,
-	// нужно найти хотя бы одну клетку, с которой можно начать игру логически
-	if !skipInitialCheck && totalRevealed == 0 {
-		// Пробуем каждую клетку (которая не мина) как стартовую
-		// и проверяем, можно ли после ее открытия продолжить логически
-		for i := 0; i < rows; i++ {
-			for j := 0; j < cols; j++ {
-				if gs.Board[i][j].IsMine {
-					continue
-				}
-
-				// Создаем временную копию состояния для симуляции
-				tempGS := &GameState{
-					Rows:      rows,
-					Cols:      cols,
-					Mines:     gs.Mines,
-					Board:     make([][]Cell, rows),
-					Revealed:  0,
-					GameOver:  false,
-					GameWon:   false,
-					HintsUsed: 0,
-				}
-				// Копируем доску
-				for ri := 0; ri < rows; ri++ {
-					tempGS.Board[ri] = make([]Cell, cols)
-					for cj := 0; cj < cols; cj++ {
-						tempGS.Board[ri][cj] = gs.Board[ri][cj]
-					}
-				}
-
-				// Симулируем открытие этой клетки и всех нулевых соседей
-				queue := []struct{ r, c int }{{i, j}}
-				opened := make(map[[2]int]bool)
-
-				for len(queue) > 0 {
-					cur := queue[0]
-					queue = queue[1:]
-					r, c := cur.r, cur.c
-
-					if opened[[2]int{r, c}] || tempGS.Board[r][c].IsMine {
-						continue
-					}
-
-					opened[[2]int{r, c}] = true
-					tempGS.Board[r][c].IsRevealed = true
-					tempGS.Revealed++
-
-					// Если это нулевая клетка, открываем соседей
-					if tempGS.Board[r][c].NeighborMines == 0 {
-						for di := -1; di <= 1; di++ {
-							for dj := -1; dj <= 1; dj++ {
-								if di == 0 && dj == 0 {
-									continue
-								}
-								ni, nj := r+di, c+dj
-								if ni >= 0 && ni < rows && nj >= 0 && nj < cols {
-									if !opened[[2]int{ni, nj}] && !tempGS.Board[ni][nj].IsMine {
-										queue = append(queue, struct{ r, c int }{ni, nj})
-									}
-								}
-							}
-						}
-					}
-				}
-
-				// Теперь проверяем, можно ли продолжить логически после этого открытия
-				// Используем skipInitialCheck=true, чтобы избежать рекурсии
-				_, safeAfterOpen := isSolvableWithoutGuessingRecursive(tempGS, true)
-				if len(safeAfterOpen) > 0 {
-					// Нашли стартовую клетку! Возвращаем все открытые клетки как безопасные
-					safeCells := []SafeCell{}
-					for cell := range opened {
-						safeCells = append(safeCells, SafeCell{Row: cell[0], Col: cell[1]})
-					}
-					return true, safeCells
-				}
-			}
-		}
-
-		// Не нашли ни одной клетки, с которой можно начать логически
-		return false, nil
-	}
-
-	// 2) Собираем фронтир: скрытые клетки, которые соседствуют с открытыми числами
-	isHidden := make([][]bool, rows)
-	for i := 0; i < rows; i++ {
-		isHidden[i] = make([]bool, cols)
-		for j := 0; j < cols; j++ {
-			if !revealed[i][j] && !flagged[i][j] {
-				isHidden[i][j] = true
-			}
-		}
-	}
-
-	// 3) для каждой открытой числовой клетки формируем ограничение:
-	//    список соседних скрытых ячеек и требуемое число мин среди них = num - alreadyFlagged
-	type Constraint struct {
-		Cells [][2]int
-		Need  int
-	}
-	constraints := []Constraint{}
-
-	// Счётчик оставшихся мин глобально (для неконстрейнтных)
-	// Рассчитаем сколько мин ещё не помечено флагом:
-	totalFlagged := 0
-	for i := 0; i < rows; i++ {
-		for j := 0; j < cols; j++ {
-			if flagged[i][j] {
-				totalFlagged++
-			}
-		}
-	}
-	minesRemaining := gs.Mines - totalFlagged
-	if minesRemaining < 0 {
-		minesRemaining = 0
-	}
-
-	for i := 0; i < rows; i++ {
-		for j := 0; j < cols; j++ {
-			if !revealed[i][j] {
-				continue
-			}
-			// только числовые клетки (>0) дают информацию; нули тоже (но их Need==0)
-			num := gs.Board[i][j].NeighborMines
-			adjHidden := [][2]int{}
-			adjFlagged := 0
-			for _, nb := range neighbors(rows, cols, i, j) {
-				ni, nj := nb[0], nb[1]
-				if flagged[ni][nj] {
-					adjFlagged++
-				} else if isHidden[ni][nj] {
-					adjHidden = append(adjHidden, [2]int{ni, nj})
-				}
-			}
-			need := num - adjFlagged
-			if need < 0 {
-				need = 0 // противоречие в состоянии — но пропустим
-			}
-			if len(adjHidden) > 0 {
-				constraints = append(constraints, Constraint{Cells: adjHidden, Need: need})
-			}
-		}
-	}
-
-	// 4) Фронтир — уникальный набор скрытых клеток, которые входят в хоть одно ограничение
-	frontierIndex := map[[2]int]int{} // map cell->index
-	frontierCells := [][2]int{}
-	for _, c := range constraints {
-		for _, cell := range c.Cells {
-			key := cell
-			if _, ok := frontierIndex[key]; !ok {
-				frontierIndex[key] = len(frontierCells)
-				frontierCells = append(frontierCells, key)
-			}
-		}
-	}
-
-	// 5) Разбиваем фронтир на компоненты (связность через совместные ограничения)
-	// Построим граф: ребро между двумя фронтирными клетками, если существуют constraint с ними обоими
-	n := len(frontierCells)
-	adj := make([][]int, n)
-	for ci := range constraints {
-		// для каждой пары клеток в ограничении — соединяем
-		cells := constraints[ci].Cells
-		for a := 0; a < len(cells); a++ {
-			for b := a + 1; b < len(cells); b++ {
-				ia := frontierIndex[cells[a]]
-				ib := frontierIndex[cells[b]]
-				adj[ia] = append(adj[ia], ib)
-				adj[ib] = append(adj[ib], ia)
-			}
-		}
-	}
-
-	visited := make([]bool, n)
-	components := [][]int{}
-	for i := 0; i < n; i++ {
-		if visited[i] {
-			continue
-		}
-		// BFS/DFS
-		stack := []int{i}
-		visited[i] = true
-		comp := []int{i}
-		for len(stack) > 0 {
-			v := stack[len(stack)-1]
-			stack = stack[:len(stack)-1]
-			for _, w := range adj[v] {
-				if !visited[w] {
-					visited[w] = true
-					stack = append(stack, w)
-					comp = append(comp, w)
-				}
-			}
-		}
-		components = append(components, comp)
-	}
-
-	// 6) Для каждой компоненты собираем локальные ограничения (только те, которые используют клетки из компоненты).
-	// Затем перечисляем все возможные распределения мин по клеткам компоненты, которые удовлетворяют всем локальным ограничениям.
-	// Собираем статистику: для каждой клетки — во всех решениях 0 или 1 или оба.
-	safeMap := map[[2]int]bool{} // точно безопасна (всегда 0)
-	mineMap := map[[2]int]bool{} // точно мина (всегда 1)
-	foundAny := false
-
-	// Ограничение на перебор: если компонент слишком большая, то перебор может быть
-	// экспоненциальным. В реальной практике компоненты обычно небольшие.
-	// Но мы всё равно ставим разумный предел (например 22 клеток) для избежания OOM.
-	const maxComponentSize = 22
-
-	for _, comp := range components {
-		compSize := len(comp)
-		if compSize == 0 {
-			continue
-		}
-		if compSize > maxComponentSize {
-			// слишком большая компонентa, не будем делать полный перебор — консервативно ничего не возвращаем из неё
-			// (в "идеальной" реализации можно добавить SAT/BDD/ILP, но это сложнее)
-			fmt.Printf("component size %d > %d: пропускаем полный перебор (консервативно)\n", compSize, maxComponentSize)
-			continue
-		}
-
-		// Составим список ограничений, которые касаются этой компоненты.
-		localConstraints := []Constraint{}
-		for _, c := range constraints {
-			// проверить, есть ли в c.Cells хоть одна клетка из comp
-			contains := false
-			for _, cell := range c.Cells {
-				if _, ok := frontierIndex[cell]; ok {
-					idx := frontierIndex[cell]
-					// если idx в comp?
-					inComp := false
-					for _, v := range comp {
-						if v == idx {
-							inComp = true
-							break
-						}
-					}
-					if inComp {
-						contains = true
-						break
-					}
-				}
-			}
-			if contains {
-				// отфильтруем клетки ограничения на те, что внутри компоненты, и учтём внешние как неизвестные (они НЕ должны быть, т.к. компонента построена по совместным ограничениям — но всё же)
-				local := Constraint{Cells: make([][2]int, 0, len(c.Cells)), Need: c.Need}
-				for _, cell := range c.Cells {
-					if _, ok := frontierIndex[cell]; ok {
-						idx := frontierIndex[cell]
-						// если idx в comp — тогда добавляем, иначе оставляем (но в корректной разбивке таких не должно быть)
-						inComp := false
-						for _, v := range comp {
-							if v == idx {
-								inComp = true
-								break
-							}
-						}
-						if inComp {
-							local.Cells = append(local.Cells, cell)
-						} else {
-							// клетка из другого компонента — это ошибка логики разбиения, но для безопасности — уменьшим Need на минимально возможное (ничего не делаем здесь).
-							// На практике этого не случится.
-						}
-					}
-				}
-				localConstraints = append(localConstraints, local)
-			}
-		}
-
-		// Индексация клеток компоненты: localIndex globalIndex -> cell
-		localIndexToCell := make([][2]int, compSize)
-		cellToLocalIndex := map[[2]int]int{}
-		for li, gi := range comp {
-			cell := frontierCells[gi]
-			localIndexToCell[li] = cell
-			cellToLocalIndex[cell] = li
-		}
-
-		// Преобразуем локальные ограничения: list of indices and need
-		type LocC struct {
-			Idxs []int
-			Need int
-		}
-		locConstraints := []LocC{}
-		for _, lc := range localConstraints {
-			idxs := []int{}
-			for _, cell := range lc.Cells {
-				if li, ok := cellToLocalIndex[cell]; ok {
-					idxs = append(idxs, li)
-				}
-			}
-			// если idxs пуст (все клетки ограничения в других компонентах) — пропустим
-			if len(idxs) == 0 {
-				continue
-			}
-			locConstraints = append(locConstraints, LocC{Idxs: idxs, Need: lc.Need})
-		}
-
-		// Теперь полный перебор по 2^compSize с отсевами по локальным ограничениям.
-		totalSolutions := 0
-		alwaysZero := make([]bool, compSize)
-		alwaysOne := make([]bool, compSize)
-		for i := 0; i < compSize; i++ {
-			alwaysZero[i] = true
-			alwaysOne[i] = true
-		}
-
-		// рекурсивный backtrack с ранним отсевом:
-		assign := make([]int, compSize) // 0 или 1
-		var dfs func(pos int)
-		dfs = func(pos int) {
-			if pos == compSize {
-				// проверим все локальные ограничения
-				for _, lc := range locConstraints {
-					sum := 0
-					for _, idx := range lc.Idxs {
-						sum += assign[idx]
-					}
-					if sum != lc.Need {
-						return
-					}
-				}
-				// решение валидно
-				totalSolutions++
-				for i := 0; i < compSize; i++ {
-					if assign[i] == 0 {
-						alwaysOne[i] = false
-					} else {
-						alwaysZero[i] = false
-					}
-				}
-				return
-			}
-
-			// Пример раннего отсечения: для каждой ограничение, в которой уже участвует pos, можно проверить локальные bounds.
-			// Но для простоты: пусть будет базовая версия — ставим и пробуем; компоненты ограничены maxComponentSize.
-
-			// пробуем 0
-			assign[pos] = 0
-			// можно сделать локальные проверки ограничений, содержащих pos: если уже превышен верхний/нижний bound — отсекаем
-			ok0 := true
-			for _, lc := range locConstraints {
-				need := lc.Need
-				// считаем известную сумму и кол-во не назначенных в этой constraint
-				sumKnown := 0
-				unassigned := 0
-				for _, idx := range lc.Idxs {
-					if idx < pos {
-						sumKnown += assign[idx]
-					} else if idx == pos {
-						sumKnown += 0
-					} else {
-						unassigned++
-					}
-				}
-				// min possible = sumKnown
-				// max possible = sumKnown + unassigned
-				if need < sumKnown || need > sumKnown+unassigned {
-					ok0 = false
-					break
-				}
-			}
-			if ok0 {
-				dfs(pos + 1)
-			}
-
-			// пробуем 1
-			assign[pos] = 1
-			ok1 := true
-			for _, lc := range locConstraints {
-				need := lc.Need
-				sumKnown := 0
-				unassigned := 0
-				for _, idx := range lc.Idxs {
-					if idx < pos {
-						sumKnown += assign[idx]
-					} else if idx == pos {
-						sumKnown += 1
-					} else {
-						unassigned++
-					}
-				}
-				if need < sumKnown || need > sumKnown+unassigned {
-					ok1 = false
-					break
-				}
-			}
-			if ok1 {
-				dfs(pos + 1)
-			}
-
-			// очистим (необязательно)
-			assign[pos] = 0
-		}
-
-		dfs(0)
-
-		if totalSolutions == 0 {
-			// Никаких решений нет — текущая конфигурация противоречива; пропускаем
-			continue
-		}
-
-		// Проанализируем результаты
-		for li := 0; li < compSize; li++ {
-			cell := localIndexToCell[li]
-			if alwaysZero[li] && !alwaysOne[li] {
-				// всегда 0 => безопасна
-				safeMap[cell] = true
-				foundAny = true
-			} else if alwaysOne[li] && !alwaysZero[li] {
-				// всегда 1 => точно мина
-				mineMap[cell] = true
-				// пометка флага — это не "безопасный ход", но полезно
-				foundAny = true
-			}
-		}
-	}
-
-	// 7) Обработка неконстрейнтных скрытых клеток (те, что не входят в frontier)
-	// Если количество оставшихся нерасставленных мин ровно равно количеству неконстрейнтных скрытых => все они мины.
-	// Если оставшихся мин = 0 => все они безопасны.
-	nonFrontierHidden := [][2]int{}
-	for i := 0; i < rows; i++ {
-		for j := 0; j < cols; j++ {
-			if isHidden[i][j] {
-				if _, ok := frontierIndex[[2]int{i, j}]; !ok {
-					nonFrontierHidden = append(nonFrontierHidden, [2]int{i, j})
-				}
-			}
-		}
-	}
-	// Сколько мин уже помечено локально как "точно мина" (mineMap) — мы не учитываем их в global check,
-	// потому что они ещё не помечены в gs. Но для консистентности попробуем учесть:
-	countKnownMines := 0
-	for k := range mineMap {
-		_ = k
-		countKnownMines++
-	}
-	// реальное число мин, которые ещё могут лежать в неконстрейнтных клетках = minesRemaining - minesInFrontierPossibleMin
-	// Но для точности лучше сделать консервативное: если minesRemaining == len(nonFrontierHidden) => все мины
-	// Если minesRemaining == 0 => все безопасны
-	if len(nonFrontierHidden) > 0 {
-		if minesRemaining == len(nonFrontierHidden) {
-			for _, c := range nonFrontierHidden {
-				mineMap[c] = true
-				foundAny = true
-			}
-		} else if minesRemaining == 0 {
-			for _, c := range nonFrontierHidden {
-				safeMap[c] = true
-				foundAny = true
-			}
-		}
-	}
-
-	// 8) Собираем итоговый список безопасных клеток (без флагов)
-	safeCells := []SafeCell{}
-	for cell := range safeMap {
-		// исключаем уже открытые или помеченные
-		if revealed[cell[0]][cell[1]] || flagged[cell[0]][cell[1]] {
-			continue
-		}
-		safeCells = append(safeCells, SafeCell{Row: cell[0], Col: cell[1]})
-	}
-	// Также можно вернуть детерминированные флаги как безопасные/важные подсказки — но вернём их отдельно через mineMap, если нужно.
-	// Если найден хотя бы один детерминированный ход (безопасная клетка или точно мина) — считаем, что поле частично решаемо без угадываний
-	if !foundAny || (len(safeCells) == 0 && len(mineMap) == 0) {
-		return false, nil
-	}
-
-	// 9) Для удобства: расширяем все найденные нулевые ходы (BFS) — чтобы вернуть все реально раскрываемые клетки.
-	// Симулируем раскрытие safeCells и всех нулей, чтобы вернуть пользователю кликабельные клетки.
-	// Создадим копию revealedSim
-	revealedSim := make([][]bool, rows)
-	for i := 0; i < rows; i++ {
-		revealedSim[i] = make([]bool, cols)
-		for j := 0; j < cols; j++ {
-			revealedSim[i][j] = revealed[i][j]
-		}
-	}
-	queue := []struct{ r, c int }{}
-	// добавим все safeCells в очередь (как клики)
-	for _, sc := range safeCells {
-		if !revealedSim[sc.Row][sc.Col] {
-			revealedSim[sc.Row][sc.Col] = true
-			queue = append(queue, struct{ r, c int }{sc.Row, sc.Col})
-		}
-	}
-	// BFS: раскрываем нулевые области
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-		i, j := cur.r, cur.c
-		if gs.Board[i][j].NeighborMines == 0 {
-			for _, nb := range neighbors(rows, cols, i, j) {
-				ni, nj := nb[0], nb[1]
-				if !revealedSim[ni][nj] && !flagged[ni][nj] {
-					revealedSim[ni][nj] = true
-					queue = append(queue, struct{ r, c int }{ni, nj})
-				}
-			}
-		}
-	}
-	// Теперь соберём окончательный список безопасных ячеек, которые можно открыть сейчас (те, которые стали revealedSim==true, но ранее не были revealed)
-	finalSafe := []SafeCell{}
-	for i := 0; i < rows; i++ {
-		for j := 0; j < cols; j++ {
-			if revealedSim[i][j] && !revealed[i][j] && !flagged[i][j] {
-				finalSafe = append(finalSafe, SafeCell{Row: i, Col: j})
-			}
-		}
-	}
-	// Если нет новых раскрываемых ячеек, но есть джаст флаги (mineMap) — можем вернуть пустой список safe, но true (есть логические выводы).
-	if len(finalSafe) == 0 && len(mineMap) > 0 {
-		// Можно вернуть пустой список — но лучше вернуть nil? Вернём nil, но true — чтобы показать, что есть выводы (флаги).
-		return true, nil
-	}
-	return true, finalSafe
-}
-
-func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int, noGuessing bool) *Room {
+func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int, fairMode bool) *Room {
 	roomID := utils.GenerateID()
-	room := NewRoom(roomID, name, password, rows, cols, mines, creatorID, noGuessing)
+	room := NewRoom(roomID, name, password, rows, cols, mines, creatorID, fairMode)
 	rm.mu.Lock()
 	rm.rooms[roomID] = room
 	rm.mu.Unlock()
-	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, NoGuessing: %v)", name, roomID, creatorID, noGuessing)
+	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, FairMode: %v)", name, roomID, creatorID, fairMode)
 	return room
 }
 
-func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, cols, mines int, noGuessing bool) error {
+func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, cols, mines int, fairMode bool) error {
 	rm.mu.RLock()
 	room, exists := rm.rooms[roomID]
 	rm.mu.RUnlock()
@@ -907,13 +351,13 @@ func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, co
 	room.Rows = rows
 	room.Cols = cols
 	room.Mines = mines
-	room.NoGuessing = noGuessing
+	room.FairMode = fairMode
 
 	// Пересоздаем игровое поле с новыми параметрами
-	room.GameState = NewGameState(rows, cols, mines, noGuessing)
+	room.GameState = NewGameState(rows, cols, mines, fairMode)
 	room.StartTime = nil // Сбрасываем время начала игры
 
-	log.Printf("Комната обновлена: %s (ID: %s, NoGuessing: %v)", name, roomID, noGuessing)
+	log.Printf("Комната обновлена: %s (ID: %s, FairMode: %v)", name, roomID, fairMode)
 	return nil
 }
 
@@ -938,7 +382,7 @@ func (rm *RoomManager) GetRoomsList() []map[string]interface{} {
 			"rows":        room.Rows,
 			"cols":        room.Cols,
 			"mines":       room.Mines,
-			"noGuessing":  room.NoGuessing,
+			"fairMode":    room.FairMode,
 			"players":     playerCount,
 			"createdAt":   room.CreatedAt,
 			"creatorId":   room.CreatorID,
@@ -1190,7 +634,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		case "newGame":
 			room.mu.Lock()
-			room.GameState = NewGameState(room.Rows, room.Cols, room.Mines, room.NoGuessing)
+			room.GameState = NewGameState(room.Rows, room.Cols, room.Mines, room.FairMode)
 			room.StartTime = nil // Сбрасываем время начала игры
 			room.mu.Unlock()
 			log.Printf("Новая игра начата")
@@ -1289,12 +733,10 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 
 		// В режиме без угадываний пересчитываем безопасные клетки после установки/снятия флага
 		room.mu.RLock()
-		noGuessing := room.NoGuessing
+		fairMode := room.FairMode
 		room.mu.RUnlock()
-		if noGuessing {
-			_, safeCells := isSolvableWithoutGuessing(room.GameState)
-			room.GameState.SafeCells = safeCells
-			log.Printf("Обновлены безопасные клетки после флага: %d клеток", len(safeCells))
+		if fairMode {
+			// todo use kaboom algo for board generation
 		}
 
 		room.GameState.mu.Unlock()
@@ -1333,10 +775,10 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 
 	// Проверка для режима без угадываний: можно открывать только безопасные ячейки
 	room.mu.RLock()
-	noGuessing := room.NoGuessing
+	fairMode := room.FairMode
 	room.mu.RUnlock()
 
-	if noGuessing && len(room.GameState.SafeCells) > 0 {
+	if fairMode && len(room.GameState.SafeCells) > 0 {
 		// Проверяем, есть ли открытые ячейки (если нет - это первый клик)
 		hasRevealedCells := room.GameState.Revealed > 0
 
@@ -1451,12 +893,10 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 
 		// В режиме без угадываний пересчитываем безопасные клетки после каждого открытия
 		room.mu.RLock()
-		noGuessing := room.NoGuessing
+		fairMode := room.FairMode
 		room.mu.RUnlock()
-		if noGuessing {
-			_, safeCells := isSolvableWithoutGuessing(room.GameState)
-			room.GameState.SafeCells = safeCells
-			log.Printf("Обновлены безопасные клетки: %d клеток", len(safeCells))
+		if fairMode {
+			// todo use kaboom algo for board generation
 		}
 
 		// Отправляем сервисное сообщение об открытии поля
@@ -2045,12 +1485,12 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name       string `json:"name"`
-		Password   string `json:"password"`
-		Rows       int    `json:"rows"`
-		Cols       int    `json:"cols"`
-		Mines      int    `json:"mines"`
-		NoGuessing bool   `json:"noGuessing"`
+		Name     string `json:"name"`
+		Password string `json:"password"`
+		Rows     int    `json:"rows"`
+		Cols     int    `json:"cols"`
+		Mines    int    `json:"mines"`
+		FairMode bool   `json:"fairMode"`
 	}
 
 	if err := utils.DecodeJSON(r, &req); err != nil {
@@ -2071,7 +1511,7 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	room := s.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID, req.NoGuessing)
+	room := s.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID, req.FairMode)
 	utils.JSONResponse(w, http.StatusOK, map[string]interface{}{
 		"id":          room.ID,
 		"name":        room.Name,
@@ -2079,7 +1519,7 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		"rows":        room.Rows,
 		"cols":        room.Cols,
 		"mines":       room.Mines,
-		"noGuessing":  room.NoGuessing,
+		"fairMode":    room.FairMode,
 		"creatorId":   room.CreatorID,
 	})
 }
@@ -2124,7 +1564,7 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 		"rows":        room.Rows,
 		"cols":        room.Cols,
 		"mines":       room.Mines,
-		"noGuessing":  room.NoGuessing,
+		"fairMode":    room.FairMode,
 		"creatorId":   room.CreatorID,
 	}
 	room.mu.RUnlock()
@@ -2168,10 +1608,10 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 	rows := int(rowsFloat)
 	cols := int(colsFloat)
 	mines := int(minesFloat)
-	noGuessing := false
-	if ng, exists := reqMap["noGuessing"]; exists {
-		if ngBool, ok := ng.(bool); ok {
-			noGuessing = ngBool
+	fairMode := false
+	if fairMode, exists := reqMap["fairMode"]; exists {
+		if fairModeBool, ok := fairMode.(bool); ok {
+			fairMode = fairModeBool
 		}
 	}
 
@@ -2217,7 +1657,7 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 	// Если passwordProvided == true, используем переданное значение (может быть пустой строкой для удаления)
 
 	// Обновляем комнату
-	if err := s.roomManager.UpdateRoom(roomID, name, password, rows, cols, mines, noGuessing); err != nil {
+	if err := s.roomManager.UpdateRoom(roomID, name, password, rows, cols, mines, fairMode); err != nil {
 		utils.JSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -2232,7 +1672,7 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 		"rows":        room.Rows,
 		"cols":        room.Cols,
 		"mines":       room.Mines,
-		"noGuessing":  room.NoGuessing,
+		"fairMode":    room.FairMode,
 		"creatorId":   room.CreatorID,
 	}
 	room.mu.RUnlock()

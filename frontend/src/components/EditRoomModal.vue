@@ -113,11 +113,11 @@
         <div class="form-group">
           <label class="form-label">
             <input
-              v-model="form.noGuessing"
+              v-model="form.fairMode"
               type="checkbox"
               class="form-checkbox"
             />
-            Режим без угадываний
+            Режим справедливости
           </label>
           <div class="form-hint">
             В этом режиме поле генерируется так, чтобы все ячейки можно было открыть логически, без необходимости угадывать
@@ -164,7 +164,7 @@ const form = ref({
   cols: 16,
   mines: 40,
   password: '',
-  noGuessing: false,
+  fairMode: false,
 })
 
 const hasPassword = ref(false)
@@ -181,7 +181,7 @@ watch(() => props.show, (isShowing) => {
       cols: props.room.cols,
       mines: props.room.mines,
       password: '',
-      noGuessing: props.room.noGuessing ?? false,
+      fairMode: props.room.fairMode ?? false,
     }
     hasPassword.value = props.room.hasPassword
   }
@@ -239,9 +239,9 @@ const handleSubmit = async () => {
       rows: form.value.rows,
       cols: form.value.cols,
       mines: form.value.mines,
-      noGuessing: form.value.noGuessing,
+      fairMode: form.value.fairMode,
     }
-    
+
     // Обрабатываем пароль:
     // - Если пользователь убрал галочку пароля - отправляем пустую строку (удаляем пароль)
     // - Если пользователь установил галочку и ввел пароль - отправляем новый пароль

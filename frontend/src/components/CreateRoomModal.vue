@@ -113,11 +113,11 @@
         <div class="form-group">
           <label class="form-label">
             <input
-              v-model="form.noGuessing"
+              v-model="form.fairMode"
               type="checkbox"
               class="form-checkbox"
             />
-            Режим без угадываний
+            Режим справедливости
           </label>
           <div class="form-hint">
             В этом режиме поле генерируется так, чтобы все ячейки можно было открыть логически, без необходимости угадывать
@@ -148,7 +148,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  submit: [data: { name: string; password?: string; rows: number; cols: number; mines: number; noGuessing: boolean }]
+  submit: [data: { name: string; password?: string; rows: number; cols: number; mines: number; fairMode: boolean }]
   cancel: []
 }>()
 
@@ -158,7 +158,7 @@ const form = ref({
   cols: 16,
   mines: 40,
   password: '',
-  noGuessing: false,
+  fairMode: false,
 })
 
 const hasPassword = ref(false)
@@ -229,7 +229,7 @@ const handleSubmit = () => {
     rows: form.value.rows,
     cols: form.value.cols,
     mines: form.value.mines,
-    noGuessing: form.value.noGuessing,
+    fairMode: form.value.fairMode,
     ...(hasPassword.value && form.value.password ? { password: form.value.password } : {}),
   }
 
@@ -250,7 +250,7 @@ const handleCancel = () => {
     cols: 16,
     mines: 40,
     password: '',
-    noGuessing: false,
+    fairMode: false,
   }
   hasPassword.value = false
 }
