@@ -193,7 +193,17 @@ func isValidHexColor(color string) bool {
 // Rating is NOT given for:
 // - Playing less complex fields than previously played (prevents farming easy fields)
 // This prevents farming rating on easy fields and penalizes worse performance
-func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool) error {
+type GameParticipant struct {
+	UserID   int
+	Nickname string
+	Color    string
+}
+
+func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool, participants []GameParticipant) error {
+	// Если participants не передан, используем пустой слайс
+	if participants == nil {
+		participants = []GameParticipant{}
+	}
 	// Get current player rating
 	var currentRating float64
 	err := h.db.QueryRow(
@@ -288,13 +298,28 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 			}
 
 			// Сохраняем игру в историю (только если был начислен рейтинг)
-			_, err = h.db.Exec(
+			var gameHistoryID int
+			err = h.db.QueryRow(
 				`INSERT INTO user_game_history (user_id, width, height, mines, game_time, rating_gain, rating_before, rating_after, complexity, attempt_points)
-				 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+				 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+				 RETURNING id`,
 				userID, width, height, mines, gameTime, reward, currentRating, newRating, currentComplexity, P,
-			)
+			).Scan(&gameHistoryID)
 			if err != nil {
 				log.Printf("Error saving game to history: %v", err)
+			} else if len(participants) > 0 {
+				// Сохраняем участников игры
+				for _, participant := range participants {
+					_, err = h.db.Exec(
+						`INSERT INTO game_participants (game_history_id, user_id, nickname, color)
+						 VALUES ($1, $2, $3, $4)
+						 ON CONFLICT (game_history_id, user_id) DO NOTHING`,
+						gameHistoryID, participant.UserID, participant.Nickname, participant.Color,
+					)
+					if err != nil {
+						log.Printf("Error saving game participant: %v", err)
+					}
+				}
 			}
 
 			// Update or insert best result with new BestP
@@ -555,6 +580,118 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 
 	if err = rows.Err(); err != nil {
 		log.Printf("Error iterating game history rows: %v", err)
+		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	utils.JSONResponse(w, http.StatusOK, games)
+}
+
+// GetRecentGames возвращает последние 10 игр пользователя с информацией об участниках
+func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) {
+	// Получаем userID из параметра или из контекста (для своего профиля)
+	var userID int
+	var err error
+
+	username := r.URL.Query().Get("username")
+	if username != "" {
+		// Получаем userID по username
+		user, err := h.findUserByUsername(username)
+		if err != nil {
+			utils.JSONError(w, http.StatusNotFound, "User not found")
+			return
+		}
+		userID = user.ID
+	} else {
+		// Используем userID из контекста (свой профиль)
+		userIDValue := r.Context().Value("userID")
+		if userIDValue == nil {
+			utils.JSONError(w, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+		userID = userIDValue.(int)
+	}
+
+	// Получаем последние 10 игр
+	rows, err := h.db.Query(
+		`SELECT id, width, height, mines, game_time, rating_gain, rating_before, rating_after, complexity, attempt_points, created_at
+		 FROM user_game_history
+		 WHERE user_id = $1
+		 ORDER BY created_at DESC
+		 LIMIT 10`,
+		userID,
+	)
+	if err != nil {
+		log.Printf("Error querying recent games: %v", err)
+		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	defer rows.Close()
+
+	type GameParticipantInfo struct {
+		UserID   int    `json:"userId"`
+		Nickname string `json:"nickname"`
+		Color    string `json:"color,omitempty"`
+	}
+
+	type RecentGame struct {
+		ID            int                 `json:"id"`
+		Width         int                 `json:"width"`
+		Height        int                 `json:"height"`
+		Mines         int                 `json:"mines"`
+		GameTime      float64             `json:"gameTime"`
+		RatingGain    float64             `json:"ratingGain"`
+		RatingBefore  float64             `json:"ratingBefore"`
+		RatingAfter   float64             `json:"ratingAfter"`
+		Complexity    float64             `json:"complexity"`
+		AttemptPoints float64             `json:"attemptPoints"`
+		CreatedAt     string              `json:"createdAt"`
+		Participants  []GameParticipantInfo `json:"participants"`
+	}
+
+	var games []RecentGame
+	for rows.Next() {
+		var game RecentGame
+		var createdAt time.Time
+		err := rows.Scan(
+			&game.ID, &game.Width, &game.Height, &game.Mines,
+			&game.GameTime, &game.RatingGain, &game.RatingBefore, &game.RatingAfter,
+			&game.Complexity, &game.AttemptPoints, &createdAt,
+		)
+		if err != nil {
+			log.Printf("Error scanning recent game: %v", err)
+			continue
+		}
+		game.CreatedAt = createdAt.Format(time.RFC3339)
+		game.Participants = []GameParticipantInfo{} // Инициализируем пустой слайс
+
+		// Получаем участников игры
+		participantRows, err := h.db.Query(
+			`SELECT user_id, nickname, color
+			 FROM game_participants
+			 WHERE game_history_id = $1`,
+			game.ID,
+		)
+		if err == nil {
+			for participantRows.Next() {
+				var participant GameParticipantInfo
+				var color sql.NullString
+				err := participantRows.Scan(&participant.UserID, &participant.Nickname, &color)
+				if err == nil {
+					if color.Valid {
+						participant.Color = color.String
+					}
+					game.Participants = append(game.Participants, participant)
+				}
+			}
+			participantRows.Close()
+		}
+
+		games = append(games, game)
+	}
+
+	if err = rows.Err(); err != nil {
+		log.Printf("Error iterating recent games rows: %v", err)
 		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}

@@ -716,7 +716,23 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 
 			// Записываем поражение в БД (поражения не влияют на рейтинг)
 			if userID > 0 && s.profileHandler != nil {
-				if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false); err != nil {
+				// Собираем список участников игры
+				participants := make([]handlers.GameParticipant, 0)
+				room.mu.RLock()
+				for _, p := range room.Players {
+					p.mu.Lock()
+					if p.UserID > 0 {
+						participants = append(participants, handlers.GameParticipant{
+							UserID:   p.UserID,
+							Nickname: p.Nickname,
+							Color:    p.Color,
+						})
+					}
+					p.mu.Unlock()
+				}
+				room.mu.RUnlock()
+				
+				if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, participants); err != nil {
 					log.Printf("Ошибка записи результата игры: %v", err)
 				}
 			}
@@ -782,13 +798,29 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			}
 			loserID := room.GameState.LoserPlayerID
 			
+			// Собираем список участников игры
+			participants := make([]handlers.GameParticipant, 0)
+			for _, p := range room.Players {
+				p.mu.Lock()
+				if p.UserID > 0 {
+					participants = append(participants, handlers.GameParticipant{
+						UserID:   p.UserID,
+						Nickname: p.Nickname,
+						Color:    p.Color,
+					})
+				}
+				p.mu.Unlock()
+			}
+			
 			// Записываем победу для всех игроков в комнате, которые не проиграли
 			for _, p := range room.Players {
 				// Записываем победу только для игроков, которые не проиграли
 				if p.ID != loserID && p.UserID > 0 && s.profileHandler != nil {
-					if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true); err != nil {
+					p.mu.Lock()
+					if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, participants); err != nil {
 						log.Printf("Ошибка записи результата игры: %v", err)
 					}
+					p.mu.Unlock()
 				}
 			}
 			room.mu.RUnlock()
@@ -992,12 +1024,28 @@ func (s *Server) handleHint(room *Room, playerID string, hint *Hint) {
 			}
 			loserID := room.GameState.LoserPlayerID
 
+			// Собираем список участников игры
+			participants := make([]handlers.GameParticipant, 0)
+			for _, p := range room.Players {
+				p.mu.Lock()
+				if p.UserID > 0 {
+					participants = append(participants, handlers.GameParticipant{
+						UserID:   p.UserID,
+						Nickname: p.Nickname,
+						Color:    p.Color,
+					})
+				}
+				p.mu.Unlock()
+			}
+
 			// Записываем победу для всех игроков в комнате, которые не проиграли
 			for _, p := range room.Players {
 				if p.ID != loserID && p.UserID > 0 && s.profileHandler != nil {
-					if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true); err != nil {
+					p.mu.Lock()
+					if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, participants); err != nil {
 						log.Printf("Ошибка записи результата игры: %v", err)
 					}
+					p.mu.Unlock()
 				}
 			}
 			room.mu.RUnlock()
@@ -1283,6 +1331,10 @@ func main() {
 	r.HandleFunc("/profile/top-games", profileHandler.GetTopGames).Methods("GET", "OPTIONS").Queries("username", "{username}")
 	// Защищенный маршрут для получения своих топ-10 игр (без параметра username)
 	protected.HandleFunc("/profile/top-games", profileHandler.GetTopGames).Methods("GET", "OPTIONS")
+	// Публичный маршрут для получения последних 10 игр по username (только с параметром username)
+	r.HandleFunc("/profile/recent-games", profileHandler.GetRecentGames).Methods("GET", "OPTIONS").Queries("username", "{username}")
+	// Защищенный маршрут для получения своих последних 10 игр (без параметра username)
+	protected.HandleFunc("/profile/recent-games", profileHandler.GetRecentGames).Methods("GET", "OPTIONS")
 
 	log.Printf("Сервер запущен на :%s", cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, middleware.CORSMiddleware(router)))

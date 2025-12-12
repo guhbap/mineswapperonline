@@ -133,6 +133,59 @@
           </div>
         </div>
       </div>
+
+      <div class="recent-games-section">
+        <h3 class="recent-games-title">Последние 10 игр</h3>
+        <div v-if="recentGamesLoading" class="recent-games-loading">Загрузка...</div>
+        <div v-else-if="recentGamesError" class="recent-games-error">{{ recentGamesError }}</div>
+        <div v-else-if="!recentGames || recentGames.length === 0" class="recent-games-empty">
+          Пока нет сыгранных игр
+        </div>
+        <div v-else class="recent-games-list">
+          <div
+            v-for="game in recentGames"
+            :key="game.id"
+            class="recent-game-item"
+          >
+            <div class="game-main-info">
+              <div class="game-field-info">
+                <div class="game-field">
+                  <span class="game-field-size">{{ game.height }}×{{ game.width }}</span>
+                  <span class="game-mines">💣 {{ game.mines }}</span>
+                </div>
+                <div class="game-complexity">
+                  <span class="complexity-label">Сложность:</span>
+                  <span class="complexity-value">{{ game.complexity.toFixed(2) }}</span>
+                </div>
+              </div>
+              <div class="game-time-info">
+                <div class="game-time">⏱️ {{ formatTime(game.gameTime) }}</div>
+                <div class="game-date">{{ formatDate(game.createdAt) }}</div>
+              </div>
+            </div>
+            <div v-if="game.participants && game.participants.length > 0" class="game-participants">
+              <div class="participants-label">Участники:</div>
+              <div class="participants-list">
+                <span
+                  v-for="(participant, index) in game.participants"
+                  :key="participant.userId"
+                  class="participant-badge"
+                  :style="participant.color ? { borderColor: participant.color } : {}"
+                >
+                  {{ participant.nickname }}
+                  <span v-if="index < game.participants.length - 1" class="participant-separator">,</span>
+                </span>
+              </div>
+            </div>
+            <div v-if="game.ratingGain > 0" class="game-rating-info">
+              <div class="rating-gain">+{{ Math.round(game.ratingGain) }}</div>
+              <div class="rating-change">
+                {{ Math.round(game.ratingBefore) }} → {{ Math.round(game.ratingAfter) }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </main>
 </template>
@@ -141,7 +194,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { getProfile, getProfileByUsername, updateColor, getTopGames, type UserProfile, type TopGame } from '@/api/profile'
+import { getProfile, getProfileByUsername, updateColor, getTopGames, getRecentGames, type UserProfile, type TopGame, type RecentGame } from '@/api/profile'
 import { getErrorMessage } from '@/utils/errorHandler'
 
 const route = useRoute()
@@ -156,6 +209,9 @@ const colorError = ref('')
 const topGames = ref<TopGame[]>([])
 const topGamesLoading = ref(false)
 const topGamesError = ref('')
+const recentGames = ref<RecentGame[]>([])
+const recentGamesLoading = ref(false)
+const recentGamesError = ref('')
 
 const colorOptions = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
@@ -204,6 +260,7 @@ const loadProfile = async () => {
       profile.value = await getProfileByUsername(username)
       // Загружаем топ-10 игр для этого пользователя (публичный запрос с username)
       await loadTopGames(username)
+      await loadRecentGames(username)
     } else {
       // Загружаем свой профиль
       isOwnProfile.value = true
@@ -211,6 +268,7 @@ const loadProfile = async () => {
       selectedColor.value = profile.value?.user.color || ''
       // Загружаем топ-10 игр для себя (защищенный запрос без username)
       await loadTopGames()
+      await loadRecentGames()
     }
   } catch (err: any) {
     error.value = getErrorMessage(err, 'Ошибка загрузки профиля')
@@ -232,6 +290,21 @@ const loadTopGames = async (username?: string) => {
     console.error('Ошибка загрузки топ-10 игр:', err)
   } finally {
     topGamesLoading.value = false
+  }
+}
+
+const loadRecentGames = async (username?: string) => {
+  try {
+    recentGamesLoading.value = true
+    recentGamesError.value = ''
+    const games = await getRecentGames(username)
+    recentGames.value = games || []
+  } catch (err: any) {
+    recentGamesError.value = getErrorMessage(err, 'Ошибка загрузки последних игр')
+    recentGames.value = [] // Убеждаемся, что это всегда массив
+    console.error('Ошибка загрузки последних игр:', err)
+  } finally {
+    recentGamesLoading.value = false
   }
 }
 
@@ -738,6 +811,155 @@ onMounted(() => {
   .game-details {
     flex-direction: column;
     gap: 0.5rem;
+  }
+}
+
+.recent-games-section {
+  background: var(--bg-primary);
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+.recent-games-title {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+
+.recent-games-loading,
+.recent-games-error,
+.recent-games-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+}
+
+.recent-games-error {
+  color: #dc2626;
+}
+
+.recent-games-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.recent-game-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: var(--bg-secondary);
+  border-radius: 0.75rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+  border-left: 4px solid #667eea;
+}
+
+.recent-game-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
+.game-main-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.game-field-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.game-complexity {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.complexity-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.complexity-value {
+  color: #667eea;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.game-time-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.game-participants {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.participants-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.participants-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.participant-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.375rem 0.75rem;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-color);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.participant-separator {
+  margin-left: 0.25rem;
+  color: var(--text-secondary);
+}
+
+.game-rating-info {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+  text-align: right;
+}
+
+@media (max-width: 768px) {
+  .recent-game-item {
+    gap: 0.75rem;
+  }
+
+  .game-main-info {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .game-time-info {
+    text-align: left;
+  }
+
+  .game-rating-info {
+    text-align: left;
   }
 }
 </style>

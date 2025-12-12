@@ -78,3 +78,32 @@ export async function getTopGames(username?: string): Promise<TopGame[]> {
   return response.data
 }
 
+export interface GameParticipant {
+  userId: number
+  nickname: string
+  color?: string
+}
+
+export interface RecentGame {
+  id: number
+  width: number
+  height: number
+  mines: number
+  gameTime: number
+  ratingGain: number
+  ratingBefore: number
+  ratingAfter: number
+  complexity: number
+  attemptPoints: number
+  createdAt: string
+  participants: GameParticipant[]
+}
+
+export async function getRecentGames(username?: string): Promise<RecentGame[]> {
+  const url = username 
+    ? `${API_BASE}/profile/recent-games?username=${encodeURIComponent(username)}`
+    : `${API_BASE}/profile/recent-games`
+  const response = await axios.get<RecentGame[]>(url)
+  return response.data
+}
+

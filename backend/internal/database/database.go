@@ -85,6 +85,14 @@ func (db *DB) InitSchema() error {
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_user_game_history_user_id_rating_gain ON user_game_history(user_id, rating_gain DESC);`,
+		`CREATE TABLE IF NOT EXISTS game_participants (
+			game_history_id INTEGER REFERENCES user_game_history(id) ON DELETE CASCADE,
+			user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+			nickname VARCHAR(100) NOT NULL,
+			color VARCHAR(7),
+			PRIMARY KEY (game_history_id, user_id)
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_game_participants_game_history_id ON game_participants(game_history_id);`,
 	}
 
 	for _, query := range queries {
