@@ -71,6 +71,11 @@ func ComputeDref() float64 {
 	return computeD(16.0, 16.0, 40.0)
 }
 
+// ComputeComplexity computes complexity D for a field (exported version of computeD)
+func ComputeComplexity(w, h, m float64) float64 {
+	return computeD(w, h, m)
+}
+
 // UpdatePlayerRating performs one update, returns new rating and delta
 func UpdatePlayerRating(w, h, m, T, Rpl float64, Dref float64) (newR float64, delta float64) {
 	Rp := computeRp(w, h, m, Dref)

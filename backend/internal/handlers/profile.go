@@ -177,6 +177,15 @@ func isValidHexColor(color string) bool {
 // width, height, mines - dimensions of the game field
 // gameTime - time taken to complete the game in seconds
 // won - whether the player won
+// Rating is only updated if:
+// 1. Player won AND
+// 2. Either this is a new field (no previous best result for this exact field) OR
+//    the field is more complex than any previous field the player has played OR
+//    the player improved their time on this exact field
+// This prevents farming rating on easy fields by requiring either:
+// - Playing new fields
+// - Playing progressively more complex fields
+// - Improving performance on already played fields
 func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool) error {
 	// Get current player rating
 	var currentRating float64
@@ -189,28 +198,112 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 		currentRating = 1500.0 // Default rating
 	}
 
-	// Compute Dref (reference complexity for 16x16, 40 mines)
-	Dref := rating.ComputeDref()
+	// Compute complexity of current field
+	currentComplexity := rating.ComputeComplexity(float64(width), float64(height), float64(mines))
 
-	// Update rating only if game was won (lost games don't affect rating)
-	var newRating float64
+	// Check if we should update rating
+	shouldUpdateRating := false
+	var newRating float64 = currentRating
+
 	if won {
-		newRating, _ = rating.UpdatePlayerRating(
-			float64(width), float64(height), float64(mines),
-			gameTime, currentRating, Dref,
-		)
-	} else {
-		// For lost games, we could implement a penalty, but for now keep the same rating
-		newRating = currentRating
-	}
+		// Get best result for this exact field
+		var bestTime sql.NullFloat64
+		var bestComplexity sql.NullFloat64
+		err = h.db.QueryRow(
+			"SELECT best_time, complexity FROM user_best_results WHERE user_id = $1 AND width = $2 AND height = $3 AND mines = $4",
+			userID, width, height, mines,
+		).Scan(&bestTime, &bestComplexity)
 
-	// Update user rating in database
-	_, err = h.db.Exec(
-		"UPDATE users SET rating = $1 WHERE id = $2",
-		newRating, userID,
-	)
-	if err != nil {
-		log.Printf("Error updating player rating: %v", err)
+		if err == sql.ErrNoRows {
+			// No previous result for this field - give rating
+			shouldUpdateRating = true
+			log.Printf("First time playing field %dx%d with %d mines - giving rating", width, height, mines)
+		} else if err != nil {
+			log.Printf("Error getting best result: %v", err)
+			// On error, don't update rating to be safe
+		} else {
+			// We have a previous result for this field
+			if bestTime.Valid && bestComplexity.Valid {
+				// Check if this is an improvement (better time)
+				if gameTime < bestTime.Float64 {
+					shouldUpdateRating = true
+					log.Printf("Improved time on field %dx%d with %d mines: %.2f -> %.2f", width, height, mines, bestTime.Float64, gameTime)
+				} else {
+					log.Printf("No improvement on field %dx%d with %d mines: %.2f >= %.2f (no rating)", width, height, mines, gameTime, bestTime.Float64)
+				}
+			}
+		}
+
+		// Also check if this is the most complex field the player has played
+		if !shouldUpdateRating {
+			var maxComplexity sql.NullFloat64
+			err = h.db.QueryRow(
+				"SELECT MAX(complexity) FROM user_best_results WHERE user_id = $1",
+				userID,
+			).Scan(&maxComplexity)
+
+			if err != nil && err != sql.ErrNoRows {
+				log.Printf("Error getting max complexity: %v", err)
+			} else if err == sql.ErrNoRows || !maxComplexity.Valid {
+				// No previous results at all - give rating
+				shouldUpdateRating = true
+				log.Printf("First game ever - giving rating")
+			} else if currentComplexity > maxComplexity.Float64 {
+				// This is a more complex field than any previous - give rating
+				shouldUpdateRating = true
+				log.Printf("Playing more complex field: %.2f > %.2f - giving rating", currentComplexity, maxComplexity.Float64)
+			}
+		}
+
+		// Update rating if conditions are met
+		if shouldUpdateRating {
+			Dref := rating.ComputeDref()
+			newRating, _ = rating.UpdatePlayerRating(
+				float64(width), float64(height), float64(mines),
+				gameTime, currentRating, Dref,
+			)
+
+			// Update user rating in database
+			_, err = h.db.Exec(
+				"UPDATE users SET rating = $1 WHERE id = $2",
+				newRating, userID,
+			)
+			if err != nil {
+				log.Printf("Error updating player rating: %v", err)
+			}
+
+			// Update or insert best result
+			_, err = h.db.Exec(
+				`INSERT INTO user_best_results (user_id, width, height, mines, best_time, complexity, updated_at)
+				 VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+				 ON CONFLICT (user_id, width, height, mines)
+				 DO UPDATE SET 
+					best_time = LEAST(user_best_results.best_time, $5),
+					complexity = $6,
+					updated_at = CURRENT_TIMESTAMP`,
+				userID, width, height, mines, gameTime, currentComplexity,
+			)
+			if err != nil {
+				log.Printf("Error updating best result: %v", err)
+			}
+		} else {
+			// Still update best result even if rating doesn't change (for tracking)
+			_, err = h.db.Exec(
+				`INSERT INTO user_best_results (user_id, width, height, mines, best_time, complexity, updated_at)
+				 VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+				 ON CONFLICT (user_id, width, height, mines)
+				 DO UPDATE SET 
+					best_time = LEAST(user_best_results.best_time, $5),
+					updated_at = CURRENT_TIMESTAMP`,
+				userID, width, height, mines, gameTime, currentComplexity,
+			)
+			if err != nil {
+				log.Printf("Error updating best result: %v", err)
+			}
+		}
+	} else {
+		// For lost games, don't update rating or best results
+		log.Printf("Game lost - no rating update")
 	}
 
 	// Update game statistics

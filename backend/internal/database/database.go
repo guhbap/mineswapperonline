@@ -58,6 +58,16 @@ func (db *DB) InitSchema() error {
 			expires_at TIMESTAMP NOT NULL,
 			PRIMARY KEY (user_id, session_token)
 		);`,
+		`CREATE TABLE IF NOT EXISTS user_best_results (
+			user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+			width INTEGER NOT NULL,
+			height INTEGER NOT NULL,
+			mines INTEGER NOT NULL,
+			best_time DOUBLE PRECISION NOT NULL,
+			complexity DOUBLE PRECISION NOT NULL,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (user_id, width, height, mines)
+		);`,
 	}
 
 	for _, query := range queries {
