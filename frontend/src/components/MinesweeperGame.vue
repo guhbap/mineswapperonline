@@ -11,9 +11,19 @@
           <span class="info-value">{{ gameState?.rv || 0 }}</span>
         </div>
       </div>
-      <button @click="handleNewGame" class="new-game-button">
-        Новая игра
-      </button>
+      <div class="game-actions">
+        <button 
+          @click="handleHint" 
+          class="hint-button"
+          :disabled="hintsUsed >= 3 || !gameState || gameState.go || gameState.gw || !hasClosedCells"
+          :title="hintsUsed >= 3 ? 'Подсказки закончились' : `Подсказки: ${3 - hintsUsed}/3`"
+        >
+          💡 Подсказка ({{ 3 - hintsUsed }})
+        </button>
+        <button @click="handleNewGame" class="new-game-button">
+          Новая игра
+        </button>
+      </div>
     </header>
 
     <div v-if="!gameState" class="loading-message">
@@ -275,6 +285,9 @@ const authStore = useAuthStore()
 const gameStartTime = ref<number | null>(null)
 const ratingChange = ref<number | null>(null)
 
+// Отслеживание подсказок
+const hintsUsed = ref(0)
+
 // Определение мобильного устройства
 const isMobile = computed(() => {
   return window.innerWidth <= 768
@@ -360,12 +373,56 @@ const handleCellClick = (row: number, col: number, isRightClick: boolean = false
   props.wsClient.sendCellClick(row, col, isRightClick)
 }
 
+// Проверяем, есть ли закрытые ячейки для подсказки
+const hasClosedCells = computed(() => {
+  if (!gameState.value?.b) return false
+  for (const row of gameState.value.b) {
+    for (const cell of row) {
+      if (!cell.r && !cell.f) {
+        return true
+      }
+    }
+  }
+  return false
+})
+
+const handleHint = () => {
+  if (!props.wsClient?.isConnected()) return
+  if (hintsUsed.value >= 3) return
+  if (gameState.value?.go || gameState.value?.gw) return
+  if (!hasClosedCells.value) return
+
+  // Находим все закрытые ячейки (не открытые и не с флагом)
+  const closedCells: Array<{ row: number; col: number }> = []
+  if (gameState.value?.b) {
+    for (let row = 0; row < gameState.value.b.length; row++) {
+      for (let col = 0; col < gameState.value.b[row].length; col++) {
+        const cell = gameState.value.b[row][col]
+        if (!cell.r && !cell.f) {
+          closedCells.push({ row, col })
+        }
+      }
+    }
+  }
+
+  if (closedCells.length === 0) return
+
+  // Выбираем случайную закрытую ячейку
+  const randomIndex = Math.floor(Math.random() * closedCells.length)
+  const selectedCell = closedCells[randomIndex]
+
+  // Отправляем запрос на подсказку
+  props.wsClient.sendHint(selectedCell.row, selectedCell.col)
+  hintsUsed.value++
+}
+
 const handleNewGame = () => {
   if (!props.wsClient?.isConnected()) return
   props.wsClient.sendNewGame()
-  // Сбрасываем время начала игры и изменение рейтинга
+  // Сбрасываем время начала игры, изменение рейтинга и подсказки
   gameStartTime.value = null
   ratingChange.value = null
+  hintsUsed.value = 0
 }
 
 const handleMessage = (msg: WebSocketMessage) => {
@@ -397,6 +454,7 @@ const handleMessage = (msg: WebSocketMessage) => {
     if (!msg.gameState.gw && !msg.gameState.go && gameState.value.rv === 0) {
       gameStartTime.value = null
       ratingChange.value = null
+      hintsUsed.value = 0
     }
   } else if (msg.type === 'cursor' && msg.cursor) {
     // playerId может быть на верхнем уровне или внутри cursor (pid)
@@ -566,6 +624,12 @@ onUnmounted(() => {
   transition: background 0.3s ease;
 }
 
+.game-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
 @media (max-width: 768px) {
   .game-header {
     flex-direction: column;
@@ -617,6 +681,28 @@ onUnmounted(() => {
 .new-game-button:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.hint-button {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+}
+
+.hint-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+.hint-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .game-board-wrapper {
@@ -1088,6 +1174,13 @@ onUnmounted(() => {
     font-size: 1.2rem;
   }
 
+  .game-actions {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .hint-button,
   .new-game-button {
     width: 100%;
     padding: 0.75rem 1rem;

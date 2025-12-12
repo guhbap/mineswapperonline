@@ -77,6 +77,7 @@ type Message struct {
 	Color     string          `json:"color,omitempty"`
 	Cursor    *CursorPosition `json:"cursor,omitempty"`
 	CellClick *CellClick      `json:"cellClick,omitempty"`
+	Hint      *Hint           `json:"hint,omitempty"`
 	GameState *GameState      `json:"gameState,omitempty"`
 	Chat      *ChatMessage    `json:"chat,omitempty"`
 }
@@ -93,6 +94,11 @@ type CellClick struct {
 	Row  int  `json:"row"`
 	Col  int  `json:"col"`
 	Flag bool `json:"flag"`
+}
+
+type Hint struct {
+	Row int `json:"row"`
+	Col int `json:"col"`
 }
 
 type Room struct {
@@ -487,6 +493,12 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				log.Printf("Клик обработан, состояние игры обновлено")
 			}
 
+		case "hint":
+			if msg.Hint != nil {
+				log.Printf("Обработка подсказки: row=%d, col=%d", msg.Hint.Row, msg.Hint.Col)
+				s.handleHint(room, playerID, msg.Hint)
+			}
+
 		case "newGame":
 			room.mu.Lock()
 			room.GameState = NewGameState(room.Rows, room.Cols, room.Mines)
@@ -835,6 +847,132 @@ func (s *Server) revealNeighbors(room *Room, row, col int) {
 					}
 				}
 			}
+		}
+	}
+}
+
+func (s *Server) handleHint(room *Room, playerID string, hint *Hint) {
+	room.GameState.mu.Lock()
+
+	if room.GameState.GameOver || room.GameState.GameWon {
+		log.Printf("Игра уже окончена, подсказка игнорируется")
+		room.GameState.mu.Unlock()
+		return
+	}
+
+	row, col := hint.Row, hint.Col
+	if row < 0 || row >= room.GameState.Rows || col < 0 || col >= room.GameState.Cols {
+		log.Printf("Некорректные координаты подсказки: row=%d, col=%d", row, col)
+		room.GameState.mu.Unlock()
+		return
+	}
+
+	cell := &room.GameState.Board[row][col]
+
+	// Проверяем, что ячейка закрыта и не имеет флага
+	if cell.IsRevealed || cell.IsFlagged {
+		log.Printf("Ячейка уже открыта или помечена флагом: row=%d, col=%d", row, col)
+		room.GameState.mu.Unlock()
+		return
+	}
+
+	// Получаем информацию об игроке для сервисных сообщений
+	room.mu.RLock()
+	player := room.Players[playerID]
+	var nickname string
+	var playerColor string
+	if player != nil {
+		player.mu.Lock()
+		nickname = player.Nickname
+		playerColor = player.Color
+		player.mu.Unlock()
+	}
+	room.mu.RUnlock()
+
+	// Если там мина - ставим флаг, иначе открываем
+	if cell.IsMine {
+		// Ставим флаг
+		cell.IsFlagged = true
+		cell.FlagColor = playerColor
+		log.Printf("Подсказка: поставлен флаг на мине row=%d, col=%d", row, col)
+		room.GameState.mu.Unlock()
+		s.broadcastGameState(room)
+
+		// Отправляем сервисное сообщение в чат
+		if nickname != "" {
+			chatMsg := Message{
+				Type:     "chat",
+				PlayerID: playerID,
+				Nickname: nickname,
+				Color:    playerColor,
+				Chat: &ChatMessage{
+					Text:     fmt.Sprintf("%s использовал подсказку и поставил флаг на (%d, %d) 💡", nickname, row+1, col+1),
+					IsSystem: true,
+					Action:   "hint",
+					Row:      row,
+					Col:      col,
+				},
+			}
+			s.broadcastToAll(room, chatMsg)
+		}
+	} else {
+		// Открываем ячейку
+		cell.IsRevealed = true
+		room.GameState.Revealed++
+		log.Printf("Подсказка: открыта ячейка row=%d, col=%d, neighborMines=%d", row, col, cell.NeighborMines)
+
+		// Автоматическое открытие соседних пустых ячеек
+		if cell.NeighborMines == 0 {
+			log.Printf("Открытие соседних ячеек для row=%d, col=%d", row, col)
+			s.revealNeighbors(room, row, col)
+		}
+
+		// Проверка победы
+		totalCells := room.GameState.Rows * room.GameState.Cols
+		if room.GameState.Revealed == totalCells-room.GameState.Mines {
+			room.GameState.GameWon = true
+			log.Printf("Победа! Все ячейки открыты!")
+
+			// Вычисляем время игры
+			room.mu.RLock()
+			var gameTime float64
+			if room.StartTime != nil {
+				gameTime = time.Since(*room.StartTime).Seconds()
+			} else {
+				gameTime = 0.0
+			}
+			loserID := room.GameState.LoserPlayerID
+
+			// Записываем победу для всех игроков в комнате, которые не проиграли
+			for _, p := range room.Players {
+				if p.ID != loserID && p.UserID > 0 && s.profileHandler != nil {
+					if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true); err != nil {
+						log.Printf("Ошибка записи результата игры: %v", err)
+					}
+				}
+			}
+			room.mu.RUnlock()
+		}
+
+		room.GameState.mu.Unlock()
+		s.broadcastGameState(room)
+
+		// Отправляем сервисное сообщение в чат
+		if nickname != "" {
+			chatMsg := Message{
+				Type:     "chat",
+				PlayerID: playerID,
+				Nickname: nickname,
+				Color:    playerColor,
+				Chat: &ChatMessage{
+					Text:     fmt.Sprintf("%s использовал подсказку и открыл поле на (%d, %d) 💡", nickname, row+1, col+1),
+					IsSystem: true,
+					Action:   "hint",
+					Row:      row,
+					Col:      col,
+				},
+			}
+			s.broadcastToAll(room, chatMsg)
 		}
 	}
 }

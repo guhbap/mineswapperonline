@@ -15,6 +15,10 @@ export interface WebSocketMessage {
     col: number
     flag: boolean
   }
+  hint?: {
+    row: number
+    col: number
+  }
   gameState?: {
     b: Cell[][] // board
     r: number // rows
@@ -54,6 +58,7 @@ export interface IWebSocketClient {
   sendNickname(nickname: string): void
   sendCursor(x: number, y: number): void
   sendCellClick(row: number, col: number, flag: boolean): void
+  sendHint(row: number, col: number): void
   sendNewGame(): void
   disconnect(): void
   isConnected(): boolean
@@ -275,6 +280,10 @@ export class WebSocketClient implements IWebSocketClient {
 
   sendCellClick(row: number, col: number, flag: boolean) {
     this.send({ type: 'cellClick', cellClick: { row, col, flag } })
+  }
+
+  sendHint(row: number, col: number) {
+    this.send({ type: 'hint', hint: { row, col } })
   }
 
   sendNewGame() {
