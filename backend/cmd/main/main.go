@@ -310,183 +310,476 @@ func generateRandomBoard(rows, cols, mines int) *GameState {
 	return gs
 }
 
-// isSolvableWithoutGuessing проверяет, можно ли решить поле без угадываний
-// Возвращает true и список безопасных ячеек, если поле решаемо, иначе false и nil
+// Вспомогательная функция: получить соседей
+func neighbors(rows, cols, i, j int) [][2]int {
+	out := [][2]int{}
+	for di := -1; di <= 1; di++ {
+		for dj := -1; dj <= 1; dj++ {
+			if di == 0 && dj == 0 {
+				continue
+			}
+			ni, nj := i+di, j+dj
+			if ni < 0 || ni >= rows || nj < 0 || nj >= cols {
+				continue
+			}
+			out = append(out, [2]int{ni, nj})
+		}
+	}
+	return out
+}
+
+// Главная функция
 func isSolvableWithoutGuessing(gs *GameState) (bool, []SafeCell) {
 	rows, cols := gs.Rows, gs.Cols
 
-	// Состояния клеток в симуляции:
-	// revealed[i][j] — открыта ли клетка
-	// flagged[i][j] — помечена ли клетка как мина
+	// 1) Собираем входные видимые массивы
 	revealed := make([][]bool, rows)
 	flagged := make([][]bool, rows)
 	for i := 0; i < rows; i++ {
 		revealed[i] = make([]bool, cols)
 		flagged[i] = make([]bool, cols)
+		for j := 0; j < cols; j++ {
+			revealed[i][j] = gs.Board[i][j].IsRevealed
+			flagged[i][j] = gs.Board[i][j].IsFlagged
+		}
 	}
 
-	// Список безопасных клеток, которые были логически открыты
-	safeCells := []SafeCell{}
-
-	// --- 1. Найти начальные нули (их всегда можно открыть логически) ---
-	queue := []struct{ r, c int }{}
-
+	// 2) Собираем фронтир: скрытые клетки, которые соседствуют с открытыми числами
+	isHidden := make([][]bool, rows)
 	for i := 0; i < rows; i++ {
+		isHidden[i] = make([]bool, cols)
 		for j := 0; j < cols; j++ {
-			if !gs.Board[i][j].IsMine && gs.Board[i][j].NeighborMines == 0 {
-				revealed[i][j] = true
-				queue = append(queue, struct{ r, c int }{i, j})
-				safeCells = append(safeCells, SafeCell{Row: i, Col: j})
+			if !revealed[i][j] && !flagged[i][j] {
+				isHidden[i][j] = true
 			}
 		}
 	}
 
-	// Если нет нулей — решение может потребовать угадываний
-	if len(queue) == 0 {
+	// 3) для каждой открытой числовой клетки формируем ограничение:
+	//    список соседних скрытых ячеек и требуемое число мин среди них = num - alreadyFlagged
+	type Constraint struct {
+		Cells [][2]int
+		Need  int
+	}
+	constraints := []Constraint{}
+
+	// Счётчик оставшихся мин глобально (для неконстрейнтных)
+	// Рассчитаем сколько мин ещё не помечено флагом:
+	totalFlagged := 0
+	for i := 0; i < rows; i++ {
+		for j := 0; j < cols; j++ {
+			if flagged[i][j] {
+				totalFlagged++
+			}
+		}
+	}
+	minesRemaining := gs.Mines - totalFlagged
+	if minesRemaining < 0 {
+		minesRemaining = 0
+	}
+
+	for i := 0; i < rows; i++ {
+		for j := 0; j < cols; j++ {
+			if !revealed[i][j] {
+				continue
+			}
+			// только числовые клетки (>0) дают информацию; нули тоже (но их Need==0)
+			num := gs.Board[i][j].NeighborMines
+			adjHidden := [][2]int{}
+			adjFlagged := 0
+			for _, nb := range neighbors(rows, cols, i, j) {
+				ni, nj := nb[0], nb[1]
+				if flagged[ni][nj] {
+					adjFlagged++
+				} else if isHidden[ni][nj] {
+					adjHidden = append(adjHidden, [2]int{ni, nj})
+				}
+			}
+			need := num - adjFlagged
+			if need < 0 {
+				need = 0 // противоречие в состоянии — но пропустим
+			}
+			if len(adjHidden) > 0 {
+				constraints = append(constraints, Constraint{Cells: adjHidden, Need: need})
+			}
+		}
+	}
+
+	// 4) Фронтир — уникальный набор скрытых клеток, которые входят в хоть одно ограничение
+	frontierIndex := map[[2]int]int{} // map cell->index
+	frontierCells := [][2]int{}
+	for _, c := range constraints {
+		for _, cell := range c.Cells {
+			key := cell
+			if _, ok := frontierIndex[key]; !ok {
+				frontierIndex[key] = len(frontierCells)
+				frontierCells = append(frontierCells, key)
+			}
+		}
+	}
+
+	// 5) Разбиваем фронтир на компоненты (связность через совместные ограничения)
+	// Построим граф: ребро между двумя фронтирными клетками, если существуют constraint с ними обоими
+	n := len(frontierCells)
+	adj := make([][]int, n)
+	for ci := range constraints {
+		// для каждой пары клеток в ограничении — соединяем
+		cells := constraints[ci].Cells
+		for a := 0; a < len(cells); a++ {
+			for b := a + 1; b < len(cells); b++ {
+				ia := frontierIndex[cells[a]]
+				ib := frontierIndex[cells[b]]
+				adj[ia] = append(adj[ia], ib)
+				adj[ib] = append(adj[ib], ia)
+			}
+		}
+	}
+
+	visited := make([]bool, n)
+	components := [][]int{}
+	for i := 0; i < n; i++ {
+		if visited[i] {
+			continue
+		}
+		// BFS/DFS
+		stack := []int{i}
+		visited[i] = true
+		comp := []int{i}
+		for len(stack) > 0 {
+			v := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			for _, w := range adj[v] {
+				if !visited[w] {
+					visited[w] = true
+					stack = append(stack, w)
+					comp = append(comp, w)
+				}
+			}
+		}
+		components = append(components, comp)
+	}
+
+	// 6) Для каждой компоненты собираем локальные ограничения (только те, которые используют клетки из компоненты).
+	// Затем перечисляем все возможные распределения мин по клеткам компоненты, которые удовлетворяют всем локальным ограничениям.
+	// Собираем статистику: для каждой клетки — во всех решениях 0 или 1 или оба.
+	safeMap := map[[2]int]bool{} // точно безопасна (всегда 0)
+	mineMap := map[[2]int]bool{} // точно мина (всегда 1)
+	foundAny := false
+
+	// Ограничение на перебор: если компонент слишком большая, то перебор может быть
+	// экспоненциальным. В реальной практике компоненты обычно небольшие.
+	// Но мы всё равно ставим разумный предел (например 22 клеток) для избежания OOM.
+	const maxComponentSize = 22
+
+	for _, comp := range components {
+		compSize := len(comp)
+		if compSize == 0 {
+			continue
+		}
+		if compSize > maxComponentSize {
+			// слишком большая компонентa, не будем делать полный перебор — консервативно ничего не возвращаем из неё
+			// (в "идеальной" реализации можно добавить SAT/BDD/ILP, но это сложнее)
+			fmt.Printf("component size %d > %d: пропускаем полный перебор (консервативно)\n", compSize, maxComponentSize)
+			continue
+		}
+
+		// Составим список ограничений, которые касаются этой компоненты.
+		localConstraints := []Constraint{}
+		for _, c := range constraints {
+			// проверить, есть ли в c.Cells хоть одна клетка из comp
+			contains := false
+			for _, cell := range c.Cells {
+				if _, ok := frontierIndex[cell]; ok {
+					idx := frontierIndex[cell]
+					// если idx в comp?
+					inComp := false
+					for _, v := range comp {
+						if v == idx {
+							inComp = true
+							break
+						}
+					}
+					if inComp {
+						contains = true
+						break
+					}
+				}
+			}
+			if contains {
+				// отфильтруем клетки ограничения на те, что внутри компоненты, и учтём внешние как неизвестные (они НЕ должны быть, т.к. компонента построена по совместным ограничениям — но всё же)
+				local := Constraint{Cells: make([][2]int, 0, len(c.Cells)), Need: c.Need}
+				for _, cell := range c.Cells {
+					if _, ok := frontierIndex[cell]; ok {
+						idx := frontierIndex[cell]
+						// если idx в comp — тогда добавляем, иначе оставляем (но в корректной разбивке таких не должно быть)
+						inComp := false
+						for _, v := range comp {
+							if v == idx {
+								inComp = true
+								break
+							}
+						}
+						if inComp {
+							local.Cells = append(local.Cells, cell)
+						} else {
+							// клетка из другого компонента — это ошибка логики разбиения, но для безопасности — уменьшим Need на минимально возможное (ничего не делаем здесь).
+							// На практике этого не случится.
+						}
+					}
+				}
+				localConstraints = append(localConstraints, local)
+			}
+		}
+
+		// Индексация клеток компоненты: localIndex globalIndex -> cell
+		localIndexToCell := make([][2]int, compSize)
+		cellToLocalIndex := map[[2]int]int{}
+		for li, gi := range comp {
+			cell := frontierCells[gi]
+			localIndexToCell[li] = cell
+			cellToLocalIndex[cell] = li
+		}
+
+		// Преобразуем локальные ограничения: list of indices and need
+		type LocC struct {
+			Idxs []int
+			Need int
+		}
+		locConstraints := []LocC{}
+		for _, lc := range localConstraints {
+			idxs := []int{}
+			for _, cell := range lc.Cells {
+				if li, ok := cellToLocalIndex[cell]; ok {
+					idxs = append(idxs, li)
+				}
+			}
+			// если idxs пуст (все клетки ограничения в других компонентах) — пропустим
+			if len(idxs) == 0 {
+				continue
+			}
+			locConstraints = append(locConstraints, LocC{Idxs: idxs, Need: lc.Need})
+		}
+
+		// Теперь полный перебор по 2^compSize с отсевами по локальным ограничениям.
+		totalSolutions := 0
+		alwaysZero := make([]bool, compSize)
+		alwaysOne := make([]bool, compSize)
+		for i := 0; i < compSize; i++ {
+			alwaysZero[i] = true
+			alwaysOne[i] = true
+		}
+
+		// рекурсивный backtrack с ранним отсевом:
+		assign := make([]int, compSize) // 0 или 1
+		var dfs func(pos int)
+		dfs = func(pos int) {
+			if pos == compSize {
+				// проверим все локальные ограничения
+				for _, lc := range locConstraints {
+					sum := 0
+					for _, idx := range lc.Idxs {
+						sum += assign[idx]
+					}
+					if sum != lc.Need {
+						return
+					}
+				}
+				// решение валидно
+				totalSolutions++
+				for i := 0; i < compSize; i++ {
+					if assign[i] == 0 {
+						alwaysOne[i] = false
+					} else {
+						alwaysZero[i] = false
+					}
+				}
+				return
+			}
+
+			// Пример раннего отсечения: для каждой ограничение, в которой уже участвует pos, можно проверить локальные bounds.
+			// Но для простоты: пусть будет базовая версия — ставим и пробуем; компоненты ограничены maxComponentSize.
+
+			// пробуем 0
+			assign[pos] = 0
+			// можно сделать локальные проверки ограничений, содержащих pos: если уже превышен верхний/нижний bound — отсекаем
+			ok0 := true
+			for _, lc := range locConstraints {
+				need := lc.Need
+				// считаем известную сумму и кол-во не назначенных в этой constraint
+				sumKnown := 0
+				unassigned := 0
+				for _, idx := range lc.Idxs {
+					if idx < pos {
+						sumKnown += assign[idx]
+					} else if idx == pos {
+						sumKnown += 0
+					} else {
+						unassigned++
+					}
+				}
+				// min possible = sumKnown
+				// max possible = sumKnown + unassigned
+				if need < sumKnown || need > sumKnown+unassigned {
+					ok0 = false
+					break
+				}
+			}
+			if ok0 {
+				dfs(pos + 1)
+			}
+
+			// пробуем 1
+			assign[pos] = 1
+			ok1 := true
+			for _, lc := range locConstraints {
+				need := lc.Need
+				sumKnown := 0
+				unassigned := 0
+				for _, idx := range lc.Idxs {
+					if idx < pos {
+						sumKnown += assign[idx]
+					} else if idx == pos {
+						sumKnown += 1
+					} else {
+						unassigned++
+					}
+				}
+				if need < sumKnown || need > sumKnown+unassigned {
+					ok1 = false
+					break
+				}
+			}
+			if ok1 {
+				dfs(pos + 1)
+			}
+
+			// очистим (необязательно)
+			assign[pos] = 0
+		}
+
+		dfs(0)
+
+		if totalSolutions == 0 {
+			// Никаких решений нет — текущая конфигурация противоречива; пропускаем
+			continue
+		}
+
+		// Проанализируем результаты
+		for li := 0; li < compSize; li++ {
+			cell := localIndexToCell[li]
+			if alwaysZero[li] && !alwaysOne[li] {
+				// всегда 0 => безопасна
+				safeMap[cell] = true
+				foundAny = true
+			} else if alwaysOne[li] && !alwaysZero[li] {
+				// всегда 1 => точно мина
+				mineMap[cell] = true
+				// пометка флага — это не "безопасный ход", но полезно
+				foundAny = true
+			}
+		}
+	}
+
+	// 7) Обработка неконстрейнтных скрытых клеток (те, что не входят в frontier)
+	// Если количество оставшихся нерасставленных мин ровно равно количеству неконстрейнтных скрытых => все они мины.
+	// Если оставшихся мин = 0 => все они безопасны.
+	nonFrontierHidden := [][2]int{}
+	for i := 0; i < rows; i++ {
+		for j := 0; j < cols; j++ {
+			if isHidden[i][j] {
+				if _, ok := frontierIndex[[2]int{i, j}]; !ok {
+					nonFrontierHidden = append(nonFrontierHidden, [2]int{i, j})
+				}
+			}
+		}
+	}
+	// Сколько мин уже помечено локально как "точно мина" (mineMap) — мы не учитываем их в global check,
+	// потому что они ещё не помечены в gs. Но для консистентности попробуем учесть:
+	countKnownMines := 0
+	for k := range mineMap {
+		_ = k
+		countKnownMines++
+	}
+	// реальное число мин, которые ещё могут лежать в неконстрейнтных клетках = minesRemaining - minesInFrontierPossibleMin
+	// Но для точности лучше сделать консервативное: если minesRemaining == len(nonFrontierHidden) => все мины
+	// Если minesRemaining == 0 => все безопасны
+	if len(nonFrontierHidden) > 0 {
+		if minesRemaining == len(nonFrontierHidden) {
+			for _, c := range nonFrontierHidden {
+				mineMap[c] = true
+				foundAny = true
+			}
+		} else if minesRemaining == 0 {
+			for _, c := range nonFrontierHidden {
+				safeMap[c] = true
+				foundAny = true
+			}
+		}
+	}
+
+	// 8) Собираем итоговый список безопасных клеток (без флагов)
+	safeCells := []SafeCell{}
+	for cell := range safeMap {
+		// исключаем уже открытые или помеченные
+		if revealed[cell[0]][cell[1]] || flagged[cell[0]][cell[1]] {
+			continue
+		}
+		safeCells = append(safeCells, SafeCell{Row: cell[0], Col: cell[1]})
+	}
+	// Также можно вернуть детерминированные флаги как безопасные/важные подсказки — но вернём их отдельно через mineMap, если нужно.
+	// Если найден хотя бы один детерминированный ход (безопасная клетка или точно мина) — считаем, что поле частично решаемо без угадываний
+	if !foundAny || (len(safeCells) == 0 && len(mineMap) == 0) {
 		return false, nil
 	}
 
-	// BFS: раскрытие всех нулевых областей
+	// 9) Для удобства: расширяем все найденные нулевые ходы (BFS) — чтобы вернуть все реально раскрываемые клетки.
+	// Симулируем раскрытие safeCells и всех нулей, чтобы вернуть пользователю кликабельные клетки.
+	// Создадим копию revealedSim
+	revealedSim := make([][]bool, rows)
+	for i := 0; i < rows; i++ {
+		revealedSim[i] = make([]bool, cols)
+		for j := 0; j < cols; j++ {
+			revealedSim[i][j] = revealed[i][j]
+		}
+	}
+	queue := []struct{ r, c int }{}
+	// добавим все safeCells в очередь (как клики)
+	for _, sc := range safeCells {
+		if !revealedSim[sc.Row][sc.Col] {
+			revealedSim[sc.Row][sc.Col] = true
+			queue = append(queue, struct{ r, c int }{sc.Row, sc.Col})
+		}
+	}
+	// BFS: раскрываем нулевые области
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
-
-		for di := -1; di <= 1; di++ {
-			for dj := -1; dj <= 1; dj++ {
-				if di == 0 && dj == 0 {
-					continue
-				}
-				ni, nj := cur.r+di, cur.c+dj
-				if ni < 0 || ni >= rows || nj < 0 || nj >= cols {
-					continue
-				}
-
-				if !revealed[ni][nj] && !gs.Board[ni][nj].IsMine {
-					revealed[ni][nj] = true
-					safeCells = append(safeCells, SafeCell{Row: ni, Col: nj})
-
-					if gs.Board[ni][nj].NeighborMines == 0 {
-						queue = append(queue, struct{ r, c int }{ni, nj})
-					}
+		i, j := cur.r, cur.c
+		if gs.Board[i][j].NeighborMines == 0 {
+			for _, nb := range neighbors(rows, cols, i, j) {
+				ni, nj := nb[0], nb[1]
+				if !revealedSim[ni][nj] && !flagged[ni][nj] {
+					revealedSim[ni][nj] = true
+					queue = append(queue, struct{ r, c int }{ni, nj})
 				}
 			}
 		}
 	}
-
-	// --- 2. Логический решатель (до стабилизации) ---
-	changed := true
-
-	for changed {
-		changed = false
-
-		for i := 0; i < rows; i++ {
-			for j := 0; j < cols; j++ {
-
-				if !revealed[i][j] || gs.Board[i][j].IsMine {
-					continue
-				}
-
-				num := gs.Board[i][j].NeighborMines
-
-				hidden := [][2]int{}
-				flaggedCount := 0
-
-				// собираем инфу о соседях
-				for di := -1; di <= 1; di++ {
-					for dj := -1; dj <= 1; dj++ {
-						if di == 0 && dj == 0 {
-							continue
-						}
-						ni, nj := i+di, j+dj
-						if ni < 0 || ni >= rows || nj < 0 || nj >= cols {
-							continue
-						}
-
-						if flagged[ni][nj] {
-							flaggedCount++
-						} else if !revealed[ni][nj] {
-							hidden = append(hidden, [2]int{ni, nj})
-						}
-					}
-				}
-
-				hiddenCount := len(hidden)
-
-				// --- Правило флажка ---
-				if hiddenCount > 0 && flaggedCount+hiddenCount == num {
-					for _, pos := range hidden {
-						r, c := pos[0], pos[1]
-						if !flagged[r][c] {
-							flagged[r][c] = true
-							changed = true
-						}
-					}
-					continue
-				}
-
-				// --- Правило открытия ---
-				if hiddenCount > 0 && flaggedCount == num {
-					for _, pos := range hidden {
-						r, c := pos[0], pos[1]
-						if !revealed[r][c] {
-							revealed[r][c] = true
-							safeCells = append(safeCells, SafeCell{Row: r, Col: c})
-							changed = true
-
-							// если это ноль — расширяем
-							if gs.Board[r][c].NeighborMines == 0 {
-								queue = append(queue, struct{ r, c int }{r, c})
-							}
-						}
-					}
-					continue
-				}
-			}
-		}
-
-		// продлеваем BFS для новых открытых нулей
-		for len(queue) > 0 {
-			cur := queue[0]
-			queue = queue[1:]
-
-			for di := -1; di <= 1; di++ {
-				for dj := -1; dj <= 1; dj++ {
-					if di == 0 && dj == 0 {
-						continue
-					}
-					ni, nj := cur.r+di, cur.c+dj
-					if ni < 0 || ni >= rows || nj < 0 || nj >= cols {
-						continue
-					}
-
-					if !revealed[ni][nj] && !gs.Board[ni][nj].IsMine {
-						revealed[ni][nj] = true
-						safeCells = append(safeCells, SafeCell{Row: ni, Col: nj})
-
-						if gs.Board[ni][nj].NeighborMines == 0 {
-							queue = append(queue, struct{ r, c int }{ni, nj})
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// --- 3. Проверка: все безопасные клетки раскрыты? ---
-	totalSafe := rows*cols - gs.Mines
-	countRevealed := 0
+	// Теперь соберём окончательный список безопасных ячеек, которые можно открыть сейчас (те, которые стали revealedSim==true, но ранее не были revealed)
+	finalSafe := []SafeCell{}
 	for i := 0; i < rows; i++ {
 		for j := 0; j < cols; j++ {
-			if revealed[i][j] {
-				countRevealed++
+			if revealedSim[i][j] && !revealed[i][j] && !flagged[i][j] {
+				finalSafe = append(finalSafe, SafeCell{Row: i, Col: j})
 			}
 		}
 	}
-
-	if countRevealed == totalSafe {
-		return true, safeCells
+	// Если нет новых раскрываемых ячеек, но есть джаст флаги (mineMap) — можем вернуть пустой список safe, но true (есть логические выводы).
+	if len(finalSafe) == 0 && len(mineMap) > 0 {
+		// Можно вернуть пустой список — но лучше вернуть nil? Вернём nil, но true — чтобы показать, что есть выводы (флаги).
+		return true, nil
 	}
-	return false, nil
+	return true, finalSafe
 }
 
 func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int, noGuessing bool) *Room {
