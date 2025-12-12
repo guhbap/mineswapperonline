@@ -158,9 +158,10 @@ export function computeAttemptPoints(
   return K * DF * (S - E)
 }
 
-// Вычисляет изменение рейтинга на основе реального времени игры
+// Вычисляет очки попытки P на основе реального времени игры
 // Использует новую систему с DF (коэффициент сложности)
 // Возвращает очки попытки P (без учета BestP, так как BestP неизвестен на фронтенде)
+// Реальный reward = max(0, P - BestP), где BestP хранится на сервере
 export function calculateRatingChange(
   width: number,
   height: number,
@@ -170,10 +171,10 @@ export function calculateRatingChange(
 ): { delta: number; newRating: number } {
   // Вычисляем P (очки попытки)
   const P = computeAttemptPoints(width, height, mines, gameTime, currentRating)
-  // На фронтенде мы не знаем BestP, поэтому показываем P как максимальный возможный прирост
-  // (если BestP = 0, то reward = P)
-  const delta = Math.max(0, P) // reward не может быть отрицательным
-  const newRating = currentRating + delta
+  // На фронтенде мы не знаем BestP, поэтому показываем P
+  // Реальный reward будет рассчитан на сервере: reward = max(0, P - BestP)
+  const delta = P // Показываем P (может быть отрицательным)
+  const newRating = currentRating + Math.max(0, P) // Но новый рейтинг не может быть меньше текущего
   return { delta, newRating }
 }
 

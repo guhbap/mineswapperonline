@@ -238,13 +238,13 @@
       <p>Все мины найдены!</p>
       <div v-if="ratingChange !== null" class="rating-change">
         <div v-if="ratingChange > 0" class="rating-change__positive">
-          +{{ Math.round(ratingChange) }} рейтинга
-        </div>
-        <div v-else-if="ratingChange < 0" class="rating-change__negative">
-          {{ Math.round(ratingChange) }} рейтинга
+          +{{ Math.round(ratingChange) }} очков попытки
         </div>
         <div v-else class="rating-change__neutral">
-          Рейтинг не изменился
+          Очки попытки: {{ Math.round(ratingChange) }}
+        </div>
+        <div class="rating-change__note">
+          Финальный прирост зависит от вашего лучшего результата на этом поле
         </div>
       </div>
       <div v-else-if="gameState && !isComplexitySufficient(gameState.c, gameState.r, gameState.m)" class="rating-change">
@@ -1015,6 +1015,15 @@ onUnmounted(() => {
   font-style: italic;
   background: rgba(107, 114, 128, 0.1);
   border: 2px solid rgba(107, 114, 128, 0.3);
+}
+
+.rating-change__note {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  opacity: 0.8;
+  text-align: center;
 }
 
 .loading-message {
