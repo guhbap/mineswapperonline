@@ -54,6 +54,12 @@ type SafeCell struct {
 	Col int `json:"c"`
 }
 
+type CellHint struct {
+	Row  int    `json:"r"`
+	Col  int    `json:"c"`
+	Type string `json:"t"` // "MINE", "SAFE", "UNKNOWN"
+}
+
 type GameState struct {
 	Board         [][]Cell         `json:"b"`
 	Rows          int              `json:"r"`
@@ -62,8 +68,9 @@ type GameState struct {
 	GameOver      bool             `json:"go"`
 	GameWon       bool             `json:"gw"`
 	Revealed      int              `json:"rv"`
-	HintsUsed     int              `json:"hu"`           // Количество использованных подсказок (глобально для комнаты)
-	SafeCells     []SafeCell       `json:"sc,omitempty"` // Безопасные ячейки для режима без угадываний
+	HintsUsed     int              `json:"hu"`              // Количество использованных подсказок (глобально для комнаты)
+	SafeCells     []SafeCell       `json:"sc,omitempty"`    // Безопасные ячейки для режима без угадываний
+	CellHints     []CellHint       `json:"hints,omitempty"` // Подсказки для ячеек (показываются при проигрыше в fairMode)
 	LoserPlayerID string           `json:"lpid,omitempty"`
 	LoserNickname string           `json:"ln,omitempty"`
 	flagSetInfo   map[int]FlagInfo // Информация об установке флага для каждой ячейки (ключ: row*cols + col)
@@ -866,6 +873,16 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		}
 		log.Printf("Игра окончена - подорвалась мина! Игрок: %s (%s)", room.GameState.LoserNickname, playerID)
 
+		// В fairMode вычисляем подсказки для всех ячеек на границе
+		room.mu.RLock()
+		fairMode := room.FairMode
+		room.mu.RUnlock()
+		if fairMode {
+			room.GameState.mu.Unlock()
+			s.calculateCellHints(room)
+			room.GameState.mu.Lock()
+		}
+
 		// Отправляем сервисное сообщение о взрыве
 		if nickname != "" {
 			chatMsg := Message{
@@ -1223,6 +1240,7 @@ func (s *Server) sendGameStateToPlayer(room *Room, player *Player) {
 		Revealed:      room.GameState.Revealed,
 		HintsUsed:     room.GameState.HintsUsed,
 		SafeCells:     room.GameState.SafeCells,
+		CellHints:     room.GameState.CellHints,
 		LoserPlayerID: loserPlayerID,
 		LoserNickname: room.GameState.LoserNickname,
 	}
@@ -1269,6 +1287,7 @@ func (s *Server) broadcastGameState(room *Room) {
 		Revealed:      room.GameState.Revealed,
 		HintsUsed:     room.GameState.HintsUsed,
 		SafeCells:     room.GameState.SafeCells,
+		CellHints:     room.GameState.CellHints,
 		LoserPlayerID: loserPlayerID,
 		LoserNickname: room.GameState.LoserNickname,
 	}
@@ -1407,6 +1426,55 @@ func (s *Server) updateSafeCells(room *Room) {
 	}
 
 	log.Printf("Обновлены безопасные ячейки: %d ячеек", len(room.GameState.SafeCells))
+}
+
+// calculateCellHints вычисляет подсказки для всех ячеек на границе (показываются при проигрыше)
+func (s *Server) calculateCellHints(room *Room) {
+	room.GameState.mu.Lock()
+	defer room.GameState.mu.Unlock()
+
+	// Создаем LabelMap на основе открытых ячеек
+	lm := game.NewLabelMap(room.GameState.Cols, room.GameState.Rows)
+
+	for i := 0; i < room.GameState.Rows; i++ {
+		for j := 0; j < room.GameState.Cols; j++ {
+			if room.GameState.Board[i][j].IsRevealed {
+				lm.SetLabel(i, j, room.GameState.Board[i][j].NeighborMines)
+			}
+		}
+	}
+
+	// Создаем решатель
+	solver := game.MakeSolver(lm, room.GameState.Mines)
+
+	// Вычисляем подсказки для всех ячеек на границе
+	hints := make([]CellHint, 0)
+	boundary := lm.GetBoundary()
+	for i, pos := range boundary {
+		canBeDangerous := solver.CanBeDangerous(i)
+		canBeSafe := solver.CanBeSafe(i)
+
+		var hintType string
+		if canBeDangerous && canBeSafe {
+			hintType = "UNKNOWN"
+		} else if canBeDangerous && !canBeSafe {
+			hintType = "MINE"
+		} else if !canBeDangerous && canBeSafe {
+			hintType = "SAFE"
+		} else {
+			// Не должно происходить, но на всякий случай
+			continue
+		}
+
+		hints = append(hints, CellHint{
+			Row:  pos.Row,
+			Col:  pos.Col,
+			Type: hintType,
+		})
+	}
+
+	room.GameState.CellHints = hints
+	log.Printf("Вычислены подсказки для %d ячеек", len(hints))
 }
 
 // determineMinePlacement определяет размещение мин при клике в fairMode

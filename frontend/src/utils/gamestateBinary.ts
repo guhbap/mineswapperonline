@@ -27,6 +27,7 @@ export function decodeGameStateBinary(data: ArrayBuffer): {
   rv: number // revealed
   hu: number // hintsUsed
   sc?: Array<{ r: number; c: number }> // safeCells
+  hints?: Array<{ r: number; c: number; t: string }> // cellHints - подсказки для ячеек (MINE, SAFE, UNKNOWN)
   lpid?: string // loserPlayerId
   ln?: string // loserNickname
 } {

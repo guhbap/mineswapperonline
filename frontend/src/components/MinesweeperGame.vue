@@ -103,6 +103,9 @@
               'cell--flagged': cellData.cell.f,
               'cell--show-mine': (gameState?.go || gameState?.gw) && cellData.cell.m && !cellData.cell.r,
               'cell--blocked': isCellBlocked(cellData.rowIndex, cellData.colIndex),
+              'hint hint-mine': gameState?.go && room?.fairMode && getCellHint(cellData.rowIndex, cellData.colIndex) === 'MINE',
+              'hint hint-safe': gameState?.go && room?.fairMode && getCellHint(cellData.rowIndex, cellData.colIndex) === 'SAFE',
+              'hint hint-unknown': gameState?.go && room?.fairMode && getCellHint(cellData.rowIndex, cellData.colIndex) === 'UNKNOWN',
             }
           ]"
           @click="handleCellClick(cellData.rowIndex, cellData.colIndex, false)"
@@ -504,6 +507,13 @@ const hasClosedCells = computed(() => {
 const isSafeCell = (row: number, col: number): boolean => {
   if (!gameState.value?.sc) return false
   return gameState.value.sc.some(cell => cell.r === row && cell.c === col)
+}
+
+// Получаем тип подсказки для ячейки (показывается при проигрыше в fairMode)
+const getCellHint = (row: number, col: number): string | null => {
+  if (!gameState.value?.hints) return null
+  const hint = gameState.value.hints.find((h: { r: number; c: number; t: string }) => h.r === row && h.c === col)
+  return hint ? hint.t : null
 }
 
 // В fairMode не блокируем клики - игра сама выберет худший сценарий
@@ -1087,6 +1097,60 @@ onUnmounted(() => {
 
 .cell-flag .flag-cloth {
   fill: var(--flag-color, #dc2626);
+}
+
+/* Подсказки для ячеек (показываются при проигрыше в fairMode) */
+.cell.hint {
+  position: relative;
+}
+
+.cell.hint::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  bottom: 3px;
+  right: 3px;
+  border: 2px solid;
+  line-height: 18px;
+  font-weight: bold;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cell.hint-safe::before {
+  content: ".";
+  color: #9c9;
+  border-color: #9c9;
+}
+
+.cell.hint-unknown::before {
+  content: "?";
+  color: #da0;
+  border-color: #da0;
+}
+
+.cell.hint-mine::before {
+  content: "!";
+  color: #e77;
+  border-color: #e77;
+}
+
+[data-theme="dark"] .cell.hint-safe::before {
+  color: #22c55e;
+  border-color: #22c55e;
+}
+
+[data-theme="dark"] .cell.hint-unknown::before {
+  color: #fbbf24;
+  border-color: #fbbf24;
+}
+
+[data-theme="dark"] .cell.hint-mine::before {
+  color: #ef4444;
+  border-color: #ef4444;
 }
 
 .remote-cursor {

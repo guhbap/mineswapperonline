@@ -29,6 +29,7 @@ export interface WebSocketMessage {
     rv: number // revealed
     hu: number // hintsUsed
     sc?: Array<{ r: number; c: number }> // safeCells - безопасные ячейки для режима без угадываний
+    hints?: Array<{ r: number; c: number; t: string }> // cellHints - подсказки для ячеек (MINE, SAFE, UNKNOWN)
     lpid?: string // loserPlayerId
     ln?: string // loserNickname
   }
