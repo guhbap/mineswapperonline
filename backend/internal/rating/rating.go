@@ -19,6 +19,10 @@ const (
 	// MinMines - минимальное количество мин для получения рейтинга
 	// Предотвращает фарм на очень больших полях с малым количеством мин
 	MinMines = 10
+	// MinDensity - минимальная плотность мин (mines/area) для получения рейтинга
+	// Референсное поле (16x16, 40) имеет плотность ~0.156 (15.6%)
+	// Минимум установлен в 5% (0.05) для предотвращения фарма на больших полях с низкой плотностью
+	MinDensity = 0.05
 )
 
 // computeD returns complexity D = A * (M/A)^alpha
@@ -85,13 +89,23 @@ func ComputeComplexity(w, h, m float64) float64 {
 // IsComplexitySufficient проверяет, достаточно ли сложности поля для получения рейтинга
 // Возвращает true, если:
 // 1. Количество мин >= MinMines
-// 2. Сложность поля >= MinComplexityRatio * Dref
+// 2. Плотность мин (mines/area) >= MinDensity
+// 3. Сложность поля >= MinComplexityRatio * Dref
 func IsComplexitySufficient(w, h, m float64, Dref float64) bool {
 	if Dref <= 0 {
 		return false
 	}
 	// Проверка минимального количества мин
 	if m < MinMines {
+		return false
+	}
+	// Проверка минимальной плотности мин
+	A := w * h
+	if A <= 0 {
+		return false
+	}
+	density := m / A
+	if density < MinDensity {
 		return false
 	}
 	D := computeD(w, h, m)

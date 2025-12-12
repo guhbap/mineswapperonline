@@ -14,6 +14,10 @@ const MIN_COMPLEXITY_RATIO = 0.25
 // MinMines - минимальное количество мин для получения рейтинга
 // Предотвращает фарм на очень больших полях с малым количеством мин
 const MIN_MINES = 10
+// MinDensity - минимальная плотность мин (mines/area) для получения рейтинга
+// Референсное поле (16x16, 40) имеет плотность ~0.156 (15.6%)
+// Минимум установлен в 5% (0.05) для предотвращения фарма на больших полях с низкой плотностью
+const MIN_DENSITY = 0.05
 
 // Вычисляет сложность D = A * (M/A)^alpha
 function computeD(width: number, height: number, mines: number): number {
@@ -85,7 +89,8 @@ export function calculateMaxRating(
 // Проверяет, достаточно ли сложности поля для получения рейтинга
 // Возвращает true, если:
 // 1. Количество мин >= MinMines
-// 2. Сложность поля >= MinComplexityRatio * Dref
+// 2. Плотность мин (mines/area) >= MinDensity
+// 3. Сложность поля >= MinComplexityRatio * Dref
 export function isComplexitySufficient(
   width: number,
   height: number,
@@ -95,6 +100,11 @@ export function isComplexitySufficient(
   if (Dref <= 0) return false
   // Проверка минимального количества мин
   if (mines < MIN_MINES) return false
+  // Проверка минимальной плотности мин
+  const A = width * height
+  if (A <= 0) return false
+  const density = mines / A
+  if (density < MIN_DENSITY) return false
   const D = computeD(width, height, mines)
   const minComplexity = Dref * MIN_COMPLEXITY_RATIO
   return D >= minComplexity
