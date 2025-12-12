@@ -102,6 +102,7 @@
               'cell--mine': cellData.cell.r && cellData.cell.m,
               'cell--flagged': cellData.cell.f,
               'cell--show-mine': (gameState?.go || gameState?.gw) && cellData.cell.m && !cellData.cell.r,
+              'cell--safe': room?.fairMode && isSafeCell(cellData.rowIndex, cellData.colIndex) && !cellData.cell.r && !cellData.cell.f,
               'cell--blocked': isCellBlocked(cellData.rowIndex, cellData.colIndex),
             }
           ]"
@@ -139,6 +140,33 @@
               class="flag-cloth"
               stroke="#000"
               stroke-width="0.5"
+            />
+          </svg>
+          <!-- Зеленый крестик для безопасных ячеек -->
+          <svg
+            v-if="room?.fairMode && isSafeCell(cellData.rowIndex, cellData.colIndex) && !cellData.cell.r && !cellData.cell.f"
+            class="cell-safe-marker"
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+          >
+            <line
+              x1="6"
+              y1="6"
+              x2="18"
+              y2="18"
+              stroke="#22c55e"
+              stroke-width="3"
+              stroke-linecap="round"
+            />
+            <line
+              x1="18"
+              y1="6"
+              x2="6"
+              y2="18"
+              stroke="#22c55e"
+              stroke-width="3"
+              stroke-linecap="round"
             />
           </svg>
       </div>
@@ -1034,6 +1062,19 @@ onUnmounted(() => {
   opacity: 0.5;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+.cell--safe {
+  position: relative;
+}
+
+.cell-safe-marker {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .cell--revealed {
