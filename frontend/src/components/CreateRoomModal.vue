@@ -73,7 +73,7 @@
               {{ isRatedGame ? 'Рейтинговая игра' : 'Нерейтинговая игра' }}
             </div>
             <div v-if="isRatedGame && maxRatingGain > 0" class="rating-status__gain">
-              Макс. прирост: +{{ Math.round(maxRatingGain) }}
+              До +{{ Math.round(maxRatingGain) }} очков попытки
             </div>
             <div v-else-if="!isRatedGame" class="rating-status__hint">
               Поле слишком простое для получения рейтинга
