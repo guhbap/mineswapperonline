@@ -109,6 +109,7 @@ type Room struct {
 	Rows            int                `json:"rows"`
 	Cols            int                `json:"cols"`
 	Mines           int                `json:"mines"`
+	CreatorID       int                `json:"creatorId"` // ID создателя комнаты (0 для гостей)
 	Players         map[string]*Player `json:"-"`
 	GameState       *GameState         `json:"-"`
 	CreatedAt       time.Time          `json:"createdAt"`
@@ -145,7 +146,7 @@ func (rm *RoomManager) SetServer(server *Server) {
 	rm.server = server
 }
 
-func NewRoom(id, name, password string, rows, cols, mines int) *Room {
+func NewRoom(id, name, password string, rows, cols, mines int, creatorID int) *Room {
 	return &Room{
 		ID:        id,
 		Name:      name,
@@ -153,6 +154,7 @@ func NewRoom(id, name, password string, rows, cols, mines int) *Room {
 		Rows:      rows,
 		Cols:      cols,
 		Mines:     mines,
+		CreatorID:  creatorID,
 		Players:   make(map[string]*Player),
 		GameState: NewGameState(rows, cols, mines),
 		CreatedAt: time.Now(),
@@ -225,14 +227,46 @@ func NewGameState(rows, cols, mines int) *GameState {
 	return gs
 }
 
-func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int) *Room {
+func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int) *Room {
 	roomID := utils.GenerateID()
-	room := NewRoom(roomID, name, password, rows, cols, mines)
+	room := NewRoom(roomID, name, password, rows, cols, mines, creatorID)
 	rm.mu.Lock()
 	rm.rooms[roomID] = room
 	rm.mu.Unlock()
-	log.Printf("Создана комната: %s (ID: %s)", name, roomID)
+	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d)", name, roomID, creatorID)
 	return room
+}
+
+func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, cols, mines int) error {
+	rm.mu.RLock()
+	room, exists := rm.rooms[roomID]
+	rm.mu.RUnlock()
+	
+	if !exists {
+		return fmt.Errorf("room not found")
+	}
+	
+	room.mu.Lock()
+	defer room.mu.Unlock()
+	
+	// Обновляем параметры комнаты
+	room.Name = name
+	if password == "__KEEP__" {
+		// Не меняем пароль
+	} else {
+		// Устанавливаем новый пароль (может быть пустой строкой для удаления)
+		room.Password = password
+	}
+	room.Rows = rows
+	room.Cols = cols
+	room.Mines = mines
+	
+	// Пересоздаем игровое поле с новыми параметрами
+	room.GameState = NewGameState(rows, cols, mines)
+	room.StartTime = nil // Сбрасываем время начала игры
+	
+	log.Printf("Комната обновлена: %s (ID: %s)", name, roomID)
+	return nil
 }
 
 func (rm *RoomManager) GetRoom(roomID string) *Room {
@@ -258,6 +292,7 @@ func (rm *RoomManager) GetRoomsList() []map[string]interface{} {
 			"mines":       room.Mines,
 			"players":     playerCount,
 			"createdAt":   room.CreatedAt,
+			"creatorId":   room.CreatorID,
 		})
 	}
 	return roomsList
@@ -1237,6 +1272,7 @@ func main() {
 	protected.HandleFunc("/profile", profileHandler.GetProfile).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/profile/activity", profileHandler.UpdateActivity).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/profile/color", profileHandler.UpdateColor).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/rooms/{id}", server.handleUpdateRoom).Methods("PUT", "OPTIONS")
 
 	// Публичный маршрут для просмотра профиля по username
 	r.HandleFunc("/profile", profileHandler.GetProfileByUsername).Methods("GET", "OPTIONS").Queries("username", "{username}")
@@ -1275,7 +1311,15 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	room := s.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines)
+	// Получаем creatorID из контекста (если пользователь авторизован)
+	creatorID := 0
+	if userID := r.Context().Value("userID"); userID != nil {
+		if id, ok := userID.(int); ok {
+			creatorID = id
+		}
+	}
+
+	room := s.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID)
 	utils.JSONResponse(w, http.StatusOK, map[string]interface{}{
 		"id":          room.ID,
 		"name":        room.Name,
@@ -1283,6 +1327,7 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		"rows":        room.Rows,
 		"cols":        room.Cols,
 		"mines":       room.Mines,
+		"creatorId":   room.CreatorID,
 	})
 }
 
@@ -1318,11 +1363,121 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.JSONResponse(w, http.StatusOK, map[string]interface{}{
-		"id":    room.ID,
-		"name":  room.Name,
-		"rows":  room.Rows,
-		"cols":  room.Cols,
-		"mines": room.Mines,
-	})
+	room.mu.RLock()
+	response := map[string]interface{}{
+		"id":        room.ID,
+		"name":      room.Name,
+		"rows":      room.Rows,
+		"cols":      room.Cols,
+		"mines":     room.Mines,
+		"creatorId": room.CreatorID,
+	}
+	room.mu.RUnlock()
+
+	utils.JSONResponse(w, http.StatusOK, response)
+}
+
+func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "PUT" {
+		utils.JSONError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	// Получаем userID из контекста (требуется авторизация)
+	userID, ok := r.Context().Value("userID").(int)
+	if !ok {
+		utils.JSONError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	// Получаем roomID из URL
+	vars := mux.Vars(r)
+	roomID := vars["id"]
+	if roomID == "" {
+		utils.JSONError(w, http.StatusBadRequest, "Room ID required")
+		return
+	}
+
+	var req struct {
+		Name     string `json:"name"`
+		Password string `json:"password"`
+		Rows     int    `json:"rows"`
+		Cols     int    `json:"cols"`
+		Mines    int    `json:"mines"`
+	}
+
+	if err := utils.DecodeJSON(r, &req); err != nil {
+		utils.JSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := utils.ValidateRoomParams(req.Name, req.Rows, req.Cols, req.Mines); err != nil {
+		utils.JSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Проверяем, что комната существует и пользователь является создателем
+	room := s.roomManager.GetRoom(roomID)
+	if room == nil {
+		utils.JSONError(w, http.StatusNotFound, "Room not found")
+		return
+	}
+
+	room.mu.RLock()
+	isCreator := room.CreatorID == userID
+	room.mu.RUnlock()
+
+	if !isCreator {
+		utils.JSONError(w, http.StatusForbidden, "Only room creator can update room settings")
+		return
+	}
+
+	// Обрабатываем пароль: если передан указатель, используем его значение (может быть пустой строкой для удаления)
+	// Если указатель nil, не меняем пароль
+	var password string
+	if req.Password != nil {
+		password = *req.Password
+	} else {
+		// Если пароль не передан, сохраняем текущий пароль
+		room.mu.RLock()
+		password = room.Password
+		room.mu.RUnlock()
+		// Используем специальное значение для "не менять"
+		password = "__KEEP__"
+	}
+
+	// Обновляем комнату
+	if err := s.roomManager.UpdateRoom(roomID, req.Name, password, req.Rows, req.Cols, req.Mines); err != nil {
+		utils.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Получаем обновленную комнату
+	room = s.roomManager.GetRoom(roomID)
+	room.mu.RLock()
+	response := map[string]interface{}{
+		"id":          room.ID,
+		"name":        room.Name,
+		"hasPassword": room.Password != "",
+		"rows":        room.Rows,
+		"cols":        room.Cols,
+		"mines":       room.Mines,
+		"creatorId":   room.CreatorID,
+	}
+	room.mu.RUnlock()
+
+	// Отправляем обновление всем игрокам в комнате через WebSocket
+	room.mu.RLock()
+	updateMsg := Message{
+		Type: "roomUpdated",
+		GameState: &GameState{
+			Rows:  room.Rows,
+			Cols:  room.Cols,
+			Mines: room.Mines,
+		},
+	}
+	room.mu.RUnlock()
+	s.broadcastToAll(room, updateMsg)
+
+	utils.JSONResponse(w, http.StatusOK, response)
 }

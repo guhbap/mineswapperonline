@@ -46,6 +46,7 @@ export interface Room {
   mines: number
   players: number
   createdAt: string
+  creatorId?: number
 }
 
 export interface CreateRoomRequest {
@@ -73,6 +74,19 @@ export async function createRoom(data: CreateRoomRequest): Promise<Room> {
 
 export async function joinRoom(data: JoinRoomRequest): Promise<Room> {
   const response = await axios.post<Room>(`${API_BASE}/rooms/join`, data)
+  return response.data
+}
+
+export interface UpdateRoomRequest {
+  name: string
+  password?: string
+  rows: number
+  cols: number
+  mines: number
+}
+
+export async function updateRoom(roomId: string, data: UpdateRoomRequest): Promise<Room> {
+  const response = await axios.put<Room>(`${API_BASE}/rooms/${roomId}`, data)
   return response.data
 }
 

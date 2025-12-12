@@ -72,6 +72,15 @@
       <MinesweeperGame
         :ws-client="wsClient"
         :nickname="getNickname"
+        :room="selectedRoom"
+        @edit-room="showEditModal = true"
+      />
+      <EditRoomModal
+        v-if="showEditModal && selectedRoom"
+        :show="showEditModal"
+        :room="selectedRoom"
+        @submit="handleUpdateRoom"
+        @cancel="showEditModal = false"
       />
     </section>
   </main>
@@ -86,6 +95,7 @@ import MinesweeperGame from '@/components/MinesweeperGame.vue'
 import RoomsList from '@/components/RoomsList.vue'
 import CreateRoomModal from '@/components/CreateRoomModal.vue'
 import JoinRoomModal from '@/components/JoinRoomModal.vue'
+import EditRoomModal from '@/components/EditRoomModal.vue'
 import { WebSocketClient, type WebSocketMessage, type IWebSocketClient } from '@/api/websocket'
 import { createRoom, getRooms, type Room } from '@/api/rooms'
 
@@ -98,6 +108,7 @@ const wsClient = ref<IWebSocketClient | null>(null)
 const selectedRoom = ref<Room | null>(null)
 const selectedRoomForJoin = ref<Room | null>(null)
 const showCreateModal = ref(false)
+const showEditModal = ref(false)
 
 // Состояние видимости описания игры (загружаем из localStorage)
 const savedDescriptionState = localStorage.getItem('gameDescriptionVisible')
@@ -247,6 +258,24 @@ const handleCreateRoom = async (data: { name: string; password?: string; rows: n
 const handleNicknameSubmit = (submittedNickname: string) => {
   nickname.value = submittedNickname
   connectToRoom(submittedNickname)
+}
+
+const handleUpdateRoom = async (updatedRoom: Room) => {
+  selectedRoom.value = updatedRoom
+  showEditModal.value = false
+
+  // Переподключаемся к WebSocket, чтобы получить обновленное состояние
+  if (wsClient.value) {
+    wsClient.value.disconnect()
+    wsClient.value = null
+  }
+
+  // Если пользователь авторизован, автоматически подключаемся
+  if (authStore.isAuthenticated && authStore.user) {
+    connectToRoom(authStore.user.username)
+  } else if (nickname.value) {
+    connectToRoom(nickname.value)
+  }
 }
 
 const connectToRoom = (playerNickname: string) => {

@@ -23,6 +23,14 @@
         <button @click="handleNewGame" class="new-game-button">
           Новая игра
         </button>
+        <button
+          v-if="isRoomCreator"
+          @click="handleEditRoom"
+          class="edit-room-button"
+          title="Редактировать параметры комнаты"
+        >
+          ⚙️ Настройки
+        </button>
       </div>
     </header>
 
@@ -301,6 +309,11 @@ import Chat from '@/components/Chat.vue'
 const props = defineProps<{
   wsClient: IWebSocketClient | null
   nickname: string
+  room?: { id: string; creatorId?: number } | null
+}>()
+
+const emit = defineEmits<{
+  'edit-room': []
 }>()
 
 const gameState = ref<WebSocketMessage['gameState'] | null>(null)
@@ -311,6 +324,18 @@ const isModalTransparent = ref(false)
 const boardContainer = ref<HTMLElement | null>(null)
 const boardWrapper = ref<HTMLElement | null>(null)
 const authStore = useAuthStore()
+
+// Проверяем, является ли пользователь создателем комнаты
+const isRoomCreator = computed(() => {
+  if (!props.room || !authStore.isAuthenticated || !authStore.user) {
+    return false
+  }
+  return props.room.creatorId === authStore.user.id
+})
+
+const handleEditRoom = () => {
+  emit('edit-room')
+}
 
 // Отслеживание времени игры
 const gameStartTime = ref<number | null>(null)
@@ -899,6 +924,23 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
+.edit-room-button {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.edit-room-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
 .game-board-wrapper {
   position: relative;
   display: inline-block;
@@ -1385,7 +1427,8 @@ onUnmounted(() => {
   }
 
   .hint-button,
-  .new-game-button {
+  .new-game-button,
+  .edit-room-button {
     width: 100%;
     padding: 0.75rem 1rem;
     font-size: 0.9rem;
