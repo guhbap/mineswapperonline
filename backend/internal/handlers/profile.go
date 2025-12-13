@@ -236,6 +236,39 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 	// Вычисляем сложность поля по упрощенной формуле: (M / (W * H)) * sqrt(W^2 + H^2)
 	difficulty := rating.CalculateDifficulty(float64(width), float64(height), float64(mines))
 
+	// Сохраняем игру в историю (для побед и поражений)
+	gameHistory := models.UserGameHistory{
+		UserID:    userID,
+		Width:     width,
+		Height:    height,
+		Mines:     mines,
+		GameTime:  gameTime,
+		CreatedAt: time.Now(),
+	}
+	err = h.db.Create(&gameHistory).Error
+	if err != nil {
+		log.Printf("Error saving game to history: %v", err)
+	} else if len(participants) > 0 {
+		// Сохраняем участников игры
+		for _, participant := range participants {
+			var colorPtr *string
+			if participant.Color != "" {
+				colorPtr = &participant.Color
+			}
+			gameParticipant := models.GameParticipant{
+				GameHistoryID: gameHistory.ID,
+				UserID:        participant.UserID,
+				Nickname:      participant.Nickname,
+				Color:         colorPtr,
+			}
+			err = h.db.Where("game_history_id = ? AND user_id = ?", gameHistory.ID, participant.UserID).
+				FirstOrCreate(&gameParticipant).Error
+			if err != nil {
+				log.Printf("Error saving game participant: %v", err)
+			}
+		}
+	}
+
 	if won {
 		// Упрощенная система рейтинга: просто добавляем сложность к рейтингу
 		ratingGain := difficulty
@@ -256,40 +289,6 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 		if err != nil {
 			log.Printf("Error updating player rating: %v", err)
 		}
-
-		// Сохраняем игру в историю
-		gameHistory := models.UserGameHistory{
-			UserID:    userID,
-			Width:     width,
-			Height:    height,
-			Mines:     mines,
-			GameTime:  gameTime,
-			CreatedAt: time.Now(),
-		}
-		err = h.db.Create(&gameHistory).Error
-		if err != nil {
-			log.Printf("Error saving game to history: %v", err)
-		} else if len(participants) > 0 {
-			// Сохраняем участников игры
-			for _, participant := range participants {
-				var colorPtr *string
-				if participant.Color != "" {
-					colorPtr = &participant.Color
-				}
-				gameParticipant := models.GameParticipant{
-					GameHistoryID: gameHistory.ID,
-					UserID:        participant.UserID,
-					Nickname:      participant.Nickname,
-					Color:         colorPtr,
-				}
-				err = h.db.Where("game_history_id = ? AND user_id = ?", gameHistory.ID, participant.UserID).
-					FirstOrCreate(&gameParticipant).Error
-				if err != nil {
-					log.Printf("Error saving game participant: %v", err)
-				}
-			}
-		}
-
 	} else {
 		// For lost games, don't update rating or best results
 		log.Printf("Game lost - no rating update")
