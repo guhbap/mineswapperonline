@@ -563,8 +563,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		// Обновляем deadline при получении сообщения
 		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 
-		log.Printf("Получено сообщение от игрока %s: тип=%s, полное сообщение: %+v", playerID, msg.Type, msg)
-
+		if msg.Type != "cursor" {
+			log.Printf("Получено сообщение от игрока %s: тип=%s, полное сообщение: %+v", playerID, msg.Type, msg)
+		}
 		switch msg.Type {
 		case "ping":
 			// Отвечаем pong на ping сообщение
