@@ -1100,29 +1100,32 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 			}
 			loserID := room.GameState.LoserPlayerID
 
-			// Собираем список участников игры
-			participants := make([]handlers.GameParticipant, 0)
-			for _, p := range room.Players {
-				if p.UserID > 0 {
-					participants = append(participants, handlers.GameParticipant{
-						UserID:   p.UserID,
-						Nickname: p.Nickname,
-						Color:    p.Color,
-					})
-				}
-			}
-
-			// Записываем победу для всех игроков в комнате, которые не проиграли
-			room.Mu.RLock()
-			for _, p := range room.Players {
-				// Записываем победу только для игроков, которые не проиграли
-				if p.ID != loserID && p.UserID > 0 && s.profileHandler != nil {
-					if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, participants); err != nil {
-						log.Printf("Ошибка записи результата игры: %v", err)
+			// Собираем список участников игры и записываем победу
+			// Делаем это в отдельной горутине, чтобы не блокировать обработку
+			go func() {
+				room.Mu.RLock()
+				participants := make([]handlers.GameParticipant, 0)
+				for _, p := range room.Players {
+					if p.UserID > 0 {
+						participants = append(participants, handlers.GameParticipant{
+							UserID:   p.UserID,
+							Nickname: p.Nickname,
+							Color:    p.Color,
+						})
 					}
 				}
-			}
-			room.Mu.RUnlock()
+
+				// Записываем победу для всех игроков в комнате, которые не проиграли
+				for _, p := range room.Players {
+					// Записываем победу только для игроков, которые не проиграли
+					if p.ID != loserID && p.UserID > 0 && s.profileHandler != nil {
+						if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, participants); err != nil {
+							log.Printf("Ошибка записи результата игры: %v", err)
+						}
+					}
+				}
+				room.Mu.RUnlock()
+			}()
 		}
 	}
 
@@ -1350,28 +1353,31 @@ func (s *Server) handleHint(room *game.Room, playerID string, hint *Hint) {
 			}
 			loserID := room.GameState.LoserPlayerID
 
-			// Собираем список участников игры
-			participants := make([]handlers.GameParticipant, 0)
-			room.Mu.RLock()
-			for _, p := range room.Players {
-				if p.UserID > 0 {
-					participants = append(participants, handlers.GameParticipant{
-						UserID:   p.UserID,
-						Nickname: p.Nickname,
-						Color:    p.Color,
-					})
-				}
-			}
-
-			// Записываем победу для всех игроков в комнате, которые не проиграли
-			for _, p := range room.Players {
-				if p.ID != loserID && p.UserID > 0 && s.profileHandler != nil {
-					if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, participants); err != nil {
-						log.Printf("Ошибка записи результата игры: %v", err)
+			// Собираем список участников игры и записываем победу
+			// Делаем это в отдельной горутине, чтобы не блокировать обработку
+			go func() {
+				room.Mu.RLock()
+				participants := make([]handlers.GameParticipant, 0)
+				for _, p := range room.Players {
+					if p.UserID > 0 {
+						participants = append(participants, handlers.GameParticipant{
+							UserID:   p.UserID,
+							Nickname: p.Nickname,
+							Color:    p.Color,
+						})
 					}
 				}
-			}
-			room.Mu.RUnlock()
+
+				// Записываем победу для всех игроков в комнате, которые не проиграли
+				for _, p := range room.Players {
+					if p.ID != loserID && p.UserID > 0 && s.profileHandler != nil {
+						if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, participants); err != nil {
+							log.Printf("Ошибка записи результата игры: %v", err)
+						}
+					}
+				}
+				room.Mu.RUnlock()
+			}()
 		}
 
 		room.GameState.Mu.Unlock()
