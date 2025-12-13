@@ -736,6 +736,27 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 		cell = &room.GameState.Board[row][col]
 	}
 
+	// Проверка: нельзя открыть ячейку с миной по левому клику
+	if cell.IsMine {
+		log.Printf("Нельзя открыть ячейку с миной по левому клику: row=%d, col=%d", row, col)
+		room.GameState.Mu.Unlock()
+		return
+	}
+
+	// Проверка: нельзя открыть ячейку, помеченную флагом
+	if cell.IsFlagged {
+		log.Printf("Нельзя открыть ячейку с флагом: row=%d, col=%d", row, col)
+		room.GameState.Mu.Unlock()
+		return
+	}
+
+	// Проверка: нельзя открыть уже открытую ячейку
+	if cell.IsRevealed {
+		log.Printf("Ячейка уже открыта: row=%d, col=%d", row, col)
+		room.GameState.Mu.Unlock()
+		return
+	}
+
 	log.Printf("handleCellClick: открываем ячейку row=%d, col=%d", row, col)
 
 	// Собираем измененные клетки
