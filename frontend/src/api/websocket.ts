@@ -45,6 +45,7 @@ export interface WebSocketMessage {
     row?: number
     col?: number
   }
+  error?: string
 }
 
 export interface Cell {
@@ -108,57 +109,67 @@ export class WebSocketClient implements IWebSocketClient {
 
       this.ws.onmessage = async (event) => {
         try {
-          // Проверяем, является ли это бинарным сообщением
+          let buffer: ArrayBuffer
+
+          // Преобразуем данные в ArrayBuffer
           if (event.data instanceof ArrayBuffer) {
-            const buffer = event.data
-            const messageType = new Uint8Array(buffer)[0]
-            
-            // Тип 0 = gameState binary
-            if (messageType === 0) {
-              const { decodeGameStateBinary } = await import('../utils/gamestateBinary')
-              const gameState = decodeGameStateBinary(buffer.slice(1)) // Пропускаем первый байт (тип)
-              this.onMessage({
-                type: 'gameState',
-                gameState
-              } as WebSocketMessage)
+            buffer = event.data
+          } else if (event.data instanceof Blob) {
+            buffer = await event.data.arrayBuffer()
+          } else {
+            // JSON сообщения (входящие от клиента остаются JSON)
+            const msg: WebSocketMessage = JSON.parse(event.data)
+            this.onMessage(msg)
+            return
+          }
+
+          if (buffer.byteLength === 0) {
+            return
+          }
+
+          const messageType = new Uint8Array(buffer)[0]
+
+          // Тип 0 = gameState binary
+          if (messageType === 0) {
+            const { decodeGameStateBinary } = await import('../utils/gamestateBinary')
+            const gameState = decodeGameStateBinary(buffer.slice(1)) // Пропускаем первый байт (тип)
+            this.onMessage({
+              type: 'gameState',
+              gameState
+            } as WebSocketMessage)
+            return
+          }
+
+          // Обрабатываем другие бинарные сообщения
+          const { decodeBinaryMessage } = await import('../utils/messagesBinary')
+          const decodedMsg = decodeBinaryMessage(buffer)
+
+          if (decodedMsg) {
+            // Обрабатываем pong сообщение
+            if (decodedMsg.type === 'pong') {
+              this.lastPongTime = Date.now()
+              if (this.pongTimeout) {
+                clearTimeout(this.pongTimeout)
+                this.pongTimeout = null
+              }
               return
             }
-            // Другие бинарные сообщения (например, pong) игнорируем
-            return
-          }
 
-          // Обрабатываем JSON сообщения
-          if (event.data instanceof Blob) {
-            // Blob может быть бинарным сообщением
-            const arrayBuffer = await event.data.arrayBuffer()
-            const messageType = new Uint8Array(arrayBuffer)[0]
-            
-            if (messageType === 0) {
-              const { decodeGameStateBinary } = await import('../utils/gamestateBinary')
-              const gameState = decodeGameStateBinary(arrayBuffer.slice(1))
-              this.onMessage({
-                type: 'gameState',
-                gameState
-              } as WebSocketMessage)
+            // Преобразуем DecodedMessage в WebSocketMessage
+            const wsMsg: WebSocketMessage = {
+              type: decodedMsg.type,
+              ...(decodedMsg.playerId ? { playerId: decodedMsg.playerId } : {}),
+              ...(decodedMsg.nickname ? { nickname: decodedMsg.nickname } : {}),
+              ...(decodedMsg.color ? { color: decodedMsg.color } : {}),
+              ...(decodedMsg.cursor ? { cursor: decodedMsg.cursor } : {}),
+              ...(decodedMsg.players ? { players: decodedMsg.players } : {}),
+              ...(decodedMsg.chat ? { chat: decodedMsg.chat } : {}),
+              ...(decodedMsg.error ? { error: decodedMsg.error } : {})
             }
-            return
+
+            this.onMessage(wsMsg)
           }
-
-          const msg: WebSocketMessage = JSON.parse(event.data)
-
-          // Обрабатываем pong сообщение
-          if (msg.type === 'pong') {
-            this.lastPongTime = Date.now()
-            if (this.pongTimeout) {
-              clearTimeout(this.pongTimeout)
-              this.pongTimeout = null
-            }
-            return
-          }
-
-          this.onMessage(msg)
         } catch (error) {
-          // Если не JSON, возможно это бинарное сообщение
           // Игнорируем ошибку парсинга для бинарных сообщений
           console.warn('Ошибка обработки сообщения:', error)
         }

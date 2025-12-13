@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	mathrand "math/rand"
@@ -476,7 +477,8 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	room := s.roomManager.GetRoom(roomID)
 	if room == nil {
-		conn.WriteJSON(map[string]string{"error": "Room not found"})
+		errorMsg, _ := encodeErrorBinary("Room not found")
+		conn.WriteMessage(websocket.BinaryMessage, errorMsg)
 		conn.Close()
 		return
 	}
@@ -551,8 +553,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Обработка сообщений
 	for {
-		var msg Message
-		err := conn.ReadJSON(&msg)
+		messageType, data, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("Ошибка чтения сообщения: %v", err)
@@ -563,16 +564,32 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		// Обновляем deadline при получении сообщения
 		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 
+		var msg Message
+		// Обрабатываем бинарные сообщения (входящие от клиента пока остаются JSON для простоты)
+		// Но можем обрабатывать и бинарные, если клиент их отправляет
+		if messageType == websocket.BinaryMessage {
+			// Пока входящие сообщения остаются JSON, но можем добавить поддержку бинарных позже
+			continue
+		} else if messageType == websocket.TextMessage {
+			// Парсим JSON сообщение
+			if err := json.Unmarshal(data, &msg); err != nil {
+				log.Printf("Ошибка парсинга JSON сообщения: %v", err)
+				continue
+			}
+		} else {
+			continue
+		}
+
 		if msg.Type != "cursor" {
 			log.Printf("Получено сообщение от игрока %s: тип=%s, полное сообщение: %+v", playerID, msg.Type, msg)
 		}
 		switch msg.Type {
 		case "ping":
 			// Отвечаем pong на ping сообщение
-			pongMsg := Message{Type: "pong"}
 			player.mu.Lock()
 			if player.Conn != nil {
-				if err := player.Conn.WriteJSON(pongMsg); err != nil {
+				pongMsg, _ := encodePongBinary()
+				if err := player.Conn.WriteMessage(websocket.BinaryMessage, pongMsg); err != nil {
 					log.Printf("Ошибка отправки pong игроку %s: %v", playerID, err)
 				}
 			}
@@ -1411,6 +1428,19 @@ func (s *Server) broadcastToOthers(room *Room, senderID string, msg Message) {
 		return
 	}
 
+	var binaryData []byte
+	var err error
+	if msg.Type == "cursor" && msg.Cursor != nil {
+		binaryData, err = encodeCursorBinary(&msg)
+		if err != nil {
+			log.Printf("Ошибка кодирования курсора: %v", err)
+			return
+		}
+	} else {
+		// Для других типов сообщений используем JSON (если нужно)
+		return
+	}
+
 	room.mu.RLock()
 	defer room.mu.RUnlock()
 	sentCount := 0
@@ -1418,7 +1448,7 @@ func (s *Server) broadcastToOthers(room *Room, senderID string, msg Message) {
 		if id != senderID {
 			player.mu.Lock()
 			if player.Conn != nil {
-				if err := player.Conn.WriteJSON(msg); err != nil {
+				if err := player.Conn.WriteMessage(websocket.BinaryMessage, binaryData); err != nil {
 					log.Printf("Ошибка отправки сообщения игроку %s: %v", id, err)
 				} else {
 					sentCount++
@@ -1431,12 +1461,25 @@ func (s *Server) broadcastToOthers(room *Room, senderID string, msg Message) {
 }
 
 func (s *Server) broadcastToAll(room *Room, msg Message) {
+	var binaryData []byte
+	var err error
+	if msg.Type == "chat" && msg.Chat != nil {
+		binaryData, err = encodeChatBinary(&msg)
+		if err != nil {
+			log.Printf("Ошибка кодирования чата: %v", err)
+			return
+		}
+	} else {
+		// Для других типов сообщений используем JSON (если нужно)
+		return
+	}
+
 	room.mu.RLock()
 	defer room.mu.RUnlock()
 	for id, player := range room.Players {
 		player.mu.Lock()
 		if player.Conn != nil {
-			if err := player.Conn.WriteJSON(msg); err != nil {
+			if err := player.Conn.WriteMessage(websocket.BinaryMessage, binaryData); err != nil {
 				log.Printf("Ошибка отправки сообщения чата игроку %s: %v", id, err)
 			}
 		}
@@ -1458,15 +1501,16 @@ func (s *Server) sendPlayerListToPlayer(room *Room, targetPlayer *Player) {
 	}
 	room.mu.RUnlock()
 
-	msgData := map[string]interface{}{
-		"type":    "players",
-		"players": playersList,
+	binaryData, err := encodePlayersBinary(playersList)
+	if err != nil {
+		log.Printf("Ошибка кодирования списка игроков: %v", err)
+		return
 	}
 
 	targetPlayer.mu.Lock()
 	defer targetPlayer.mu.Unlock()
 	if targetPlayer.Conn != nil {
-		if err := targetPlayer.Conn.WriteJSON(msgData); err != nil {
+		if err := targetPlayer.Conn.WriteMessage(websocket.BinaryMessage, binaryData); err != nil {
 			log.Printf("Ошибка отправки списка игроков: %v", err)
 		}
 	}
@@ -1737,9 +1781,10 @@ func (s *Server) broadcastPlayerList(room *Room) {
 	}
 	room.mu.RUnlock()
 
-	msgData := map[string]interface{}{
-		"type":    "players",
-		"players": playersList,
+	binaryData, err := encodePlayersBinary(playersList)
+	if err != nil {
+		log.Printf("Ошибка кодирования списка игроков: %v", err)
+		return
 	}
 
 	room.mu.RLock()
@@ -1747,7 +1792,7 @@ func (s *Server) broadcastPlayerList(room *Room) {
 	for _, player := range room.Players {
 		player.mu.Lock()
 		if player.Conn != nil {
-			if err := player.Conn.WriteJSON(msgData); err != nil {
+			if err := player.Conn.WriteMessage(websocket.BinaryMessage, binaryData); err != nil {
 				log.Printf("Ошибка отправки списка игроков: %v", err)
 			}
 		}
