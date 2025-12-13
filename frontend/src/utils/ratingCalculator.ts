@@ -19,17 +19,30 @@ export function calculateDifficulty(width: number, height: number, mines: number
 
 // Вычисляет рейтинг за игру по формуле: R = K * d / ln(t + 1)
 // где K = 100, d - сложность поля, t - время в секундах
+// Если chording = true, рейтинг умножается на 0.8
+// Если quickStart = true, рейтинг умножается на 0.9
 export function calculateGameRating(
   width: number,
   height: number,
   mines: number,
-  gameTime: number
+  gameTime: number,
+  chording: boolean = false,
+  quickStart: boolean = false
 ): number {
   const d = calculateDifficulty(width, height, mines)
   if (d <= 0) return 0
   const timeFactor = Math.log(gameTime + 1)
   if (timeFactor <= 0) return 0
-  const rating = K * d / timeFactor
+  let rating = K * d / timeFactor
+  
+  // Применяем множители
+  if (chording) {
+    rating = rating * 0.8
+  }
+  if (quickStart) {
+    rating = rating * 0.9
+  }
+  
   return rating
 }
 
@@ -64,8 +77,10 @@ export function calculateMaxRating(
   width: number,
   height: number,
   mines: number,
+  chording: boolean = false,
+  quickStart: boolean = false
 ): number {
-  return calculateGameRating(width, height, mines, 3.0)
+  return calculateGameRating(width, height, mines, 3.0, chording, quickStart)
 }
 
 // Вычисляет изменение рейтинга на основе игры
@@ -75,9 +90,11 @@ export function calculateRatingChange(
   height: number,
   mines: number,
   gameTime: number,
-  currentRating: number = 0.0
+  currentRating: number = 0.0,
+  chording: boolean = false,
+  quickStart: boolean = false
 ): { gameRating: number; newRating: number } {
-  const gameRating = calculateGameRating(width, height, mines, gameTime)
+  const gameRating = calculateGameRating(width, height, mines, gameTime, chording, quickStart)
   // Рейтинг пользователя - максимальное достигнутое значение
   const newRating = Math.max(currentRating, gameRating)
   return { gameRating, newRating }

@@ -251,7 +251,9 @@ const maxRatingGain = computed(() => {
   return calculateMaxRating(
     form.value.cols,
     form.value.rows,
-    form.value.mines
+    form.value.mines,
+    form.value.chording,
+    form.value.quickStart
   )
 })
 

@@ -787,11 +787,13 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 										}
 									}
 									log.Printf("[MUTEX] handleCellClick (взрыв chording): разблокируем room.Mu.RUnlock() после сбора участников")
+									chording := room.Chording
+									quickStart := room.QuickStart
 									room.Mu.RUnlock()
 									log.Printf("[MUTEX] handleCellClick (взрыв chording): room.Mu.RUnlock() разблокирован после сбора участников")
 
 									go func() {
-										if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, participants); err != nil {
+										if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, chording, quickStart, participants); err != nil {
 											log.Printf("Ошибка записи результата игры: %v", err)
 										}
 									}()
@@ -858,11 +860,13 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 						}
 					}
 					log.Printf("[MUTEX] handleCellClick (chording победа): разблокируем room.Mu.RUnlock() после сбора участников")
+					chording := room.Chording
+					quickStart := room.QuickStart
 					room.Mu.RUnlock()
 					log.Printf("[MUTEX] handleCellClick (chording победа): room.Mu.RUnlock() разблокирован после сбора участников")
 
 					go func() {
-						if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, true, participants); err != nil {
+						if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, participants); err != nil {
 							log.Printf("Ошибка записи результата игры: %v", err)
 						}
 					}()
@@ -1049,10 +1053,12 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 				}
 			}
 			log.Printf("[MUTEX] handleMineExplosion: разблокируем room.Mu.RUnlock() после сбора участников")
+			chording := room.Chording
+			quickStart := room.QuickStart
 			room.Mu.RUnlock()
 			log.Printf("[MUTEX] handleMineExplosion: room.Mu.RUnlock() разблокирован после сбора участников")
 
-			if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, participants); err != nil {
+			if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, chording, quickStart, participants); err != nil {
 				log.Printf("Ошибка записи результата игры: %v", err)
 			}
 		}
@@ -1173,10 +1179,12 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 				}
 
 				// Записываем победу для всех игроков в комнате, которые не проиграли
+				chording := room.Chording
+				quickStart := room.QuickStart
 				for _, p := range room.Players {
 					// Записываем победу только для игроков, которые не проиграли
 					if p.ID != loserID && p.UserID > 0 && s.profileHandler != nil {
-						if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, participants); err != nil {
+						if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, participants); err != nil {
 							log.Printf("Ошибка записи результата игры: %v", err)
 						}
 					}
@@ -1443,9 +1451,11 @@ func (s *Server) handleHint(room *game.Room, playerID string, hint *Hint) {
 				}
 
 				// Записываем победу для всех игроков в комнате, которые не проиграли
+				chording := room.Chording
+				quickStart := room.QuickStart
 				for _, p := range room.Players {
 					if p.ID != loserID && p.UserID > 0 && s.profileHandler != nil {
-						if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, participants); err != nil {
+						if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, participants); err != nil {
 							log.Printf("Ошибка записи результата игры: %v", err)
 						}
 					}

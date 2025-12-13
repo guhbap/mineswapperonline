@@ -311,7 +311,7 @@ import Chat from '@/components/Chat.vue'
 const props = defineProps<{
   wsClient: IWebSocketClient | null
   nickname: string
-  room?: { id: string; creatorId?: number; gameMode?: string } | null
+  room?: { id: string; creatorId?: number; gameMode?: string; chording?: boolean; quickStart?: boolean } | null
 }>()
 
 const emit = defineEmits<{
@@ -585,10 +585,12 @@ const handleMessage = (msg: WebSocketMessage) => {
     // Если игра только что завершилась победой, рассчитываем изменение рейтинга
     if (msg.gameState.gw && !prevGameWon && gameStartTime.value !== null && gameState.value) {
       const gameTime = (Date.now() - gameStartTime.value) / 1000 // время в секундах
+      const chording = props.room?.chording ?? false
+      const quickStart = props.room?.quickStart ?? false
 
       // Проверяем, может ли игра дать рейтинг
       if (isRatingEligible(gameState.value.c, gameState.value.r, gameState.value.m, gameTime)) {
-        ratingChange.value = calculateGameRating(gameState.value.c, gameState.value.r, gameState.value.m, gameTime)
+        ratingChange.value = calculateGameRating(gameState.value.c, gameState.value.r, gameState.value.m, gameTime, chording, quickStart)
       } else {
         ratingChange.value = null // Игра не дает рейтинг (время < 3 сек или плотность < 10%)
       }
@@ -683,9 +685,11 @@ const handleMessage = (msg: WebSocketMessage) => {
     // Если игра только что завершилась победой, рассчитываем изменение рейтинга
     if (msg.gameWon && !prevGameWon && gameStartTime.value !== null && gameState.value) {
       const gameTime = (Date.now() - gameStartTime.value) / 1000
+      const chording = props.room?.chording ?? false
+      const quickStart = props.room?.quickStart ?? false
       // Проверяем, может ли игра дать рейтинг
       if (isRatingEligible(gameState.value.c, gameState.value.r, gameState.value.m, gameTime)) {
-        ratingChange.value = calculateGameRating(gameState.value.c, gameState.value.r, gameState.value.m, gameTime)
+        ratingChange.value = calculateGameRating(gameState.value.c, gameState.value.r, gameState.value.m, gameTime, chording, quickStart)
       } else {
         ratingChange.value = null // Игра не дает рейтинг (время < 3 сек или плотность < 10%)
       }

@@ -215,7 +215,7 @@ type GameParticipant struct {
 	Color    string
 }
 
-func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool, participants []GameParticipant) error {
+func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool, chording bool, quickStart bool, participants []GameParticipant) error {
 	// Если participants не передан, используем пустой слайс
 	if participants == nil {
 		participants = []GameParticipant{}
@@ -274,14 +274,26 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 			// Вычисляем рейтинг за игру по формуле: R = K * d / ln(t + 1)
 			gameRating := rating.CalculateGameRating(float64(width), float64(height), float64(mines), gameTime)
 			
+			// Если используется Chording, рейтинг умножается на 0.8
+			if chording {
+				gameRating = gameRating * 0.8
+				log.Printf("Chording enabled: рейтинг умножен на 0.8")
+			}
+			
+			// Если используется QuickStart, рейтинг умножается на 0.9
+			if quickStart {
+				gameRating = gameRating * 0.9
+				log.Printf("QuickStart enabled: рейтинг умножен на 0.9")
+			}
+			
 			// Рейтинг пользователя - максимальное достигнутое значение за все его игры
 			newRating := currentRating
 			if gameRating > currentRating {
 				newRating = gameRating
 			}
 
-			log.Printf("Field %dx%d with %d mines, time=%.2f: gameRating=%.2f, userRating %.2f -> %.2f",
-				width, height, mines, gameTime, gameRating, currentRating, newRating)
+			log.Printf("Field %dx%d with %d mines, time=%.2f, chording=%v, quickStart=%v: gameRating=%.2f, userRating %.2f -> %.2f",
+				width, height, mines, gameTime, chording, quickStart, gameRating, currentRating, newRating)
 
 			// Update user rating in database
 			err = h.db.Model(&models.User{}).

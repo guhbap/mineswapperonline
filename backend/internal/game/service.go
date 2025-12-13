@@ -225,7 +225,11 @@ func (s *GameService) handleMineExplosion(room *Room, playerID string, userID in
 	// Записываем поражение в БД
 	if userID > 0 && s.resultRecorder != nil {
 		participants := s.collectParticipants(room)
-		if err := s.resultRecorder.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, participants); err != nil {
+		room.Mu.RLock()
+		chording := room.Chording
+		quickStart := room.QuickStart
+		room.Mu.RUnlock()
+		if err := s.resultRecorder.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, chording, quickStart, participants); err != nil {
 			log.Printf("Ошибка записи результата игры: %v", err)
 		}
 	}
@@ -252,9 +256,11 @@ func (s *GameService) handleGameWin(room *Room) {
 
 	// Записываем победу для всех игроков, которые не проиграли
 	room.Mu.RLock()
+	chording := room.Chording
+	quickStart := room.QuickStart
 	for _, p := range room.Players {
 		if p.ID != loserID && p.UserID > 0 && s.resultRecorder != nil {
-			if err := s.resultRecorder.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, participants); err != nil {
+			if err := s.resultRecorder.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, participants); err != nil {
 				log.Printf("Ошибка записи результата игры: %v", err)
 			}
 		}
