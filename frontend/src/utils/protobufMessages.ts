@@ -101,7 +101,7 @@ export async function encodeProtobufMessage(message: any): Promise<ArrayBuffer> 
 
   const messageInstance = WebSocketMessage.create(msgObj)
   const buffer = WebSocketMessage.encode(messageInstance).finish()
-  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer
 }
 
 // Декодирует protobuf сообщение
@@ -187,14 +187,10 @@ export async function decodeProtobufMessage(data: ArrayBuffer): Promise<any> {
       loserNickname: obj.cellUpdate.loserNickname,
       cellUpdates: obj.cellUpdate.updates
     }
-    }
+  }
 
     return null
   } catch (error) {
-    // Если декодирование не удалось, выбрасываем ошибку
-    throw new Error(`Failed to decode protobuf message: ${error}`)
-  }
-} catch (error) {
     // Если декодирование не удалось, выбрасываем ошибку
     throw new Error(`Failed to decode protobuf message: ${error}`)
   }
@@ -311,6 +307,6 @@ export async function encodeClientMessage(message: any): Promise<ArrayBuffer> {
 
   const messageInstance = ClientMessage.create(msgObj)
   const buffer = ClientMessage.encode(messageInstance).finish()
-  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer
 }
 
