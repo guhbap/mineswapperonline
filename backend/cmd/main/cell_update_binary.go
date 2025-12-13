@@ -131,7 +131,7 @@ func getCellType(cell *Cell, row, col int, gameMode string, cellHints []CellHint
 	}
 
 	// Если клетка помечена флагом
-	return CellTypeClosed // Флаг не меняет тип, клетка остается закрытой
+	return CellTypeClosed // Флаг не меняет тип, клетка остается закрытой (255)
 }
 
 // collectCellUpdates собирает измененные клетки из gameState

@@ -18,11 +18,12 @@ const (
 
 // Типы клеток для бинарного формата
 const (
-	CellTypeClosed = byte(0)  // Закрыта
-	CellTypeMine   = byte(9)  // Мина
-	CellTypeSafe   = byte(10) // Зеленая (SAFE) - для режима обучения
-	CellTypeUnknown = byte(11) // Желтая (UNKNOWN) - для режима обучения
-	CellTypeDanger = byte(12)  // Красная (MINE) - для режима обучения
+	CellTypeClosed  = byte(255) // Закрыта (используем 255 вместо 0, чтобы не конфликтовать с количеством мин)
+	CellTypeMine    = byte(9)    // Мина
+	CellTypeSafe    = byte(10)   // Зеленая (SAFE) - для режима обучения
+	CellTypeUnknown = byte(11)   // Желтая (UNKNOWN) - для режима обучения
+	CellTypeDanger  = byte(12)   // Красная (MINE) - для режима обучения
+	// Значения 0-8 используются для открытых клеток с количеством соседних мин (0-8)
 )
 
 // encodeChatBinary кодирует сообщение чата в бинарный формат

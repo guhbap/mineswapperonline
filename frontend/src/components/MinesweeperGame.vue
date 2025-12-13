@@ -610,7 +610,7 @@ const handleMessage = (msg: WebSocketMessage) => {
       updates: msg.cellUpdates.slice(0, 10) // Показываем первые 10 обновлений
     })
     const prevGameWon = gameState.value.gw
-    const CellTypeClosed = 0
+    const CellTypeClosed = 255  // Закрыта (изменено с 0 на 255)
     const CellTypeMine = 9
     const CellTypeSafe = 10
     const CellTypeUnknown = 11
@@ -622,24 +622,39 @@ const handleMessage = (msg: WebSocketMessage) => {
       if (gameState.value.b && gameState.value.b[row] && gameState.value.b[row][col]) {
         const cell = gameState.value.b[row][col]
 
-        if (type === CellTypeClosed) {
+        // Логика определения типа клетки:
+        // - type 0-8: открытая клетка с количеством соседних мин (0-8)
+        // - type 9: мина
+        // - type 10-12: подсказки для режима обучения (закрытая клетка)
+        // - type 255: закрытая клетка
+
+        if (type >= 0 && type <= 8) {
+          // Открытая клетка с количеством соседних мин (0-8)
+          cell.r = true
+          cell.m = false
+          cell.n = type
+        } else if (type === CellTypeMine) {
+          // Мина (9)
+          cell.r = true
+          cell.m = true
+          cell.n = 0
+        } else if (type === CellTypeClosed) {
+          // Закрытая клетка (255)
           cell.r = false
           cell.f = false
           cell.m = false
           cell.n = 0
-        } else if (type === CellTypeMine) {
-          cell.r = true
-          cell.m = true
-          cell.n = 0
-        } else if (type >= 0 && type <= 8) {
-          // Количество соседних мин (0-8)
-          cell.r = true
-          cell.m = false
-          cell.n = type
         } else if (type === CellTypeSafe || type === CellTypeUnknown || type === CellTypeDanger) {
           // Подсказки для режима обучения - клетка остается закрытой
           cell.r = false
           cell.f = false
+        } else {
+          // Fallback: если type не распознан, считаем закрытой
+          console.warn(`[GAME MSG] Неизвестный тип клетки: ${type} для клетки [${row}, ${col}]`)
+          cell.r = false
+          cell.f = false
+          cell.m = false
+          cell.n = 0
         }
       }
     }

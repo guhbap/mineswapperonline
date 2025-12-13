@@ -12,11 +12,12 @@ const MessageTypeError = 5
 const MessageTypeCellUpdate = 6
 
 // Типы клеток
-const CellTypeClosed = 0  // Закрыта
-const CellTypeMine = 9   // Мина
-const CellTypeSafe = 10  // Зеленая (SAFE)
-const CellTypeUnknown = 11 // Желтая (UNKNOWN)
-const CellTypeDanger = 12 // Красная (MINE)
+const CellTypeClosed = 255  // Закрыта (изменено с 0 на 255, чтобы не конфликтовать с количеством мин)
+const CellTypeMine = 9      // Мина
+const CellTypeSafe = 10     // Зеленая (SAFE)
+const CellTypeUnknown = 11  // Желтая (UNKNOWN)
+const CellTypeDanger = 12   // Красная (MINE)
+// Значения 0-8 используются для открытых клеток с количеством соседних мин (0-8)
 
 export interface DecodedMessage {
   type: string
