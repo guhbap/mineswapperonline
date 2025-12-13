@@ -11,6 +11,9 @@ type Room struct {
 	Rows      int        `gorm:"not null" json:"rows"`
 	Cols      int        `gorm:"not null" json:"cols"`
 	Mines     int        `gorm:"not null" json:"mines"`
+	GameMode  string     `gorm:"type:varchar(50);default:'classic'" json:"gameMode"` // "classic", "training", "fair"
+	QuickStart bool      `gorm:"default:false" json:"quickStart"` // Быстрый старт
+	Chording   bool      `gorm:"default:false" json:"chording"`  // Chording
 	CreatorID int        `gorm:"default:0" json:"creatorId"`
 	CreatedAt time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
 	UpdatedAt time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updatedAt"`

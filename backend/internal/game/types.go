@@ -85,5 +85,6 @@ type RoomManager struct {
 	rooms  map[string]*Room
 	mu     sync.RWMutex
 	server interface{} // Ссылка на сервер для доступа к DeleteRoom (используется через интерфейс)
+	db     interface{} // Ссылка на базу данных для персистентности
 }
 

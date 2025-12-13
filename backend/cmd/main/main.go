@@ -2093,6 +2093,13 @@ func main() {
 	}
 
 	roomManager := game.NewRoomManager()
+	roomManager.SetDB(db)
+	
+	// Загружаем комнаты из БД при старте
+	if err := roomManager.LoadRooms(); err != nil {
+		log.Printf("Предупреждение: не удалось загрузить комнаты из БД: %v", err)
+	}
+	
 	server := NewServer(roomManager, db)
 	authHandler := handlers.NewAuthHandler(db)
 	profileHandler := handlers.NewProfileHandler(db)

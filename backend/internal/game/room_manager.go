@@ -50,6 +50,12 @@ func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, co
 	room.StartTime = nil // Сбрасываем время начала игры
 
 	log.Printf("Комната обновлена: %s (ID: %s, GameMode: %s, QuickStart: %v, Chording: %v)", name, roomID, gameMode, quickStart, chording)
+	
+	// Сохраняем обновленную комнату в БД
+	if err := rm.SaveRoom(room); err != nil {
+		log.Printf("Предупреждение: не удалось сохранить обновленную комнату %s в БД: %v", roomID, err)
+	}
+	
 	return nil
 }
 
