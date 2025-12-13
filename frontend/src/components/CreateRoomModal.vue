@@ -125,7 +125,7 @@
                 <div class="game-mode-description">Обычный режим сапера с заранее размещенными минами</div>
               </div>
             </label>
-            <label class="game-mode-option" :class="{ 'game-mode-option--active': form.gameMode === 'training' }">
+            <!-- <label class="game-mode-option" :class="{ 'game-mode-option--active': form.gameMode === 'training' }">
               <input
                 v-model="form.gameMode"
                 type="radio"
@@ -148,7 +148,7 @@
                 <div class="game-mode-title">Справедливый</div>
                 <div class="game-mode-description">Мины размещаются динамически, игра всегда выбирает худший сценарий</div>
               </div>
-            </label>
+            </label> -->
           </div>
         </div>
 
