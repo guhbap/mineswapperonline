@@ -132,10 +132,6 @@ export async function decodeProtobufMessage(data: ArrayBuffer): Promise<any> {
       oneofs: true
     })
 
-    // Логируем объект для отладки
-    console.log('[PROTOBUF DECODE] Decoded object keys:', Object.keys(obj))
-    console.log('[PROTOBUF DECODE] Decoded object:', obj)
-
     // Преобразуем в формат WebSocketMessage
     // Protobufjs конвертирует snake_case в camelCase, но проверяем оба варианта
     if (obj.gameState || obj.game_state) {

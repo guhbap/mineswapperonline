@@ -215,6 +215,7 @@ export class WebSocketClient implements IWebSocketClient {
               ...(decodedMsg.players ? { players: decodedMsg.players } : {}),
               ...(decodedMsg.chat ? { chat: decodedMsg.chat } : {}),
               ...(decodedMsg.error ? { error: decodedMsg.error } : {}),
+              ...(decodedMsg.gameState ? { gameState: decodedMsg.gameState } : {}),
               ...(decodedMsg.cellUpdates ? { cellUpdates: decodedMsg.cellUpdates } : {}),
               ...(decodedMsg.gameOver !== undefined ? { gameOver: decodedMsg.gameOver } : {}),
               ...(decodedMsg.gameWon !== undefined ? { gameWon: decodedMsg.gameWon } : {}),
