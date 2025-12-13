@@ -1,33 +1,15 @@
 package game
 
 import (
-	"math/rand"
-	"sync"
-	"time"
+	mathrand "math/rand"
 )
 
-type Cell struct {
-	IsMine        bool `json:"isMine"`
-	IsRevealed    bool `json:"isRevealed"`
-	IsFlagged     bool `json:"isFlagged"`
-	NeighborMines int  `json:"neighborMines"`
-}
-
-type GameState struct {
-	Board         [][]Cell `json:"board"`
-	Rows          int      `json:"rows"`
-	Cols          int      `json:"cols"`
-	Mines         int      `json:"mines"`
-	GameOver      bool     `json:"gameOver"`
-	GameWon       bool     `json:"gameWon"`
-	Revealed      int      `json:"revealed"`
-	LoserPlayerID string   `json:"loserPlayerId,omitempty"`
-	LoserNickname string   `json:"loserNickname,omitempty"`
-	mu            sync.RWMutex
-}
-
 // NewGameState создает новое состояние игры
-func NewGameState(rows, cols, mines int) *GameState {
+func NewGameState(rows, cols, mines int, gameMode string) *GameState {
+	// По умолчанию classic
+	if gameMode == "" {
+		gameMode = "classic"
+	}
 	gs := &GameState{
 		Rows:          rows,
 		Cols:          cols,
@@ -35,9 +17,11 @@ func NewGameState(rows, cols, mines int) *GameState {
 		GameOver:      false,
 		GameWon:       false,
 		Revealed:      0,
+		HintsUsed:     0,
 		LoserPlayerID: "",
 		LoserNickname: "",
 		Board:         make([][]Cell, rows),
+		flagSetInfo:   make(map[int]FlagInfo),
 	}
 
 	// Инициализация поля
@@ -45,20 +29,40 @@ func NewGameState(rows, cols, mines int) *GameState {
 		gs.Board[i] = make([]Cell, cols)
 	}
 
-	// Размещение мин
-	rand.Seed(time.Now().UnixNano())
-	minesPlaced := 0
-	for minesPlaced < mines {
-		row := rand.Intn(rows)
-		col := rand.Intn(cols)
-		if !gs.Board[row][col].IsMine {
-			gs.Board[row][col].IsMine = true
-			minesPlaced++
+	// В режимах training и fair мины НЕ размещаются заранее - они определяются динамически при клике
+	// В классическом режиме размещаем мины случайно
+	if gameMode == "classic" {
+		minesPlaced := 0
+		for minesPlaced < mines {
+			row := mathrand.Intn(rows)
+			col := mathrand.Intn(cols)
+			if !gs.Board[row][col].IsMine {
+				gs.Board[row][col].IsMine = true
+				minesPlaced++
+			}
+		}
+
+		// Подсчет соседних мин для обычного режима
+		for i := 0; i < rows; i++ {
+			for j := 0; j < cols; j++ {
+				if !gs.Board[i][j].IsMine {
+					count := 0
+					for di := -1; di <= 1; di++ {
+						for dj := -1; dj <= 1; dj++ {
+							ni, nj := i+di, j+dj
+							if ni >= 0 && ni < rows && nj >= 0 && nj < cols {
+								if gs.Board[ni][nj].IsMine {
+									count++
+								}
+							}
+						}
+					}
+					gs.Board[i][j].NeighborMines = count
+				}
+			}
 		}
 	}
-
-	// Подсчет соседних мин
-	gs.calculateNeighborMines()
+	// В режимах training и fair подсчет соседних мин будет происходить динамически при размещении мин
 
 	return gs
 }
@@ -68,26 +72,36 @@ func (gs *GameState) Copy() *GameState {
 	gs.mu.RLock()
 	defer gs.mu.RUnlock()
 
-	copy := &GameState{
+	gsCopy := &GameState{
 		Rows:          gs.Rows,
 		Cols:          gs.Cols,
 		Mines:         gs.Mines,
 		GameOver:      gs.GameOver,
 		GameWon:       gs.GameWon,
 		Revealed:      gs.Revealed,
+		HintsUsed:     gs.HintsUsed,
+		SafeCells:     make([]SafeCell, len(gs.SafeCells)),
+		CellHints:     make([]CellHint, len(gs.CellHints)),
 		LoserPlayerID: gs.LoserPlayerID,
 		LoserNickname: gs.LoserNickname,
 		Board:         make([][]Cell, len(gs.Board)),
+		flagSetInfo:   make(map[int]FlagInfo),
+	}
+
+	copy(gsCopy.SafeCells, gs.SafeCells)
+	copy(gsCopy.CellHints, gs.CellHints)
+	for k, v := range gs.flagSetInfo {
+		gsCopy.flagSetInfo[k] = v
 	}
 
 	for i := range gs.Board {
-		copy.Board[i] = make([]Cell, len(gs.Board[i]))
+		gsCopy.Board[i] = make([]Cell, len(gs.Board[i]))
 		for j := range gs.Board[i] {
-			copy.Board[i][j] = gs.Board[i][j]
+			gsCopy.Board[i][j] = gs.Board[i][j]
 		}
 	}
 
-	return copy
+	return gsCopy
 }
 
 // calculateNeighborMines подсчитывает соседние мины для всех ячеек
@@ -153,12 +167,11 @@ func (gs *GameState) EnsureFirstClickSafe(firstRow, firstCol int) {
 	}
 
 	// Перемещаем мины в случайные свободные места
-	rand.Seed(time.Now().UnixNano())
 	for range minesToMove {
-		attempts := 0
+			attempts := 0
 		for attempts < 100 {
-			newRow := rand.Intn(gs.Rows)
-			newCol := rand.Intn(gs.Cols)
+			newRow := mathrand.Intn(gs.Rows)
+			newCol := mathrand.Intn(gs.Cols)
 
 			if !gs.isInRadius(newRow, newCol, firstRow, firstCol, 1) &&
 				!gs.Board[newRow][newCol].IsMine {
@@ -173,11 +186,8 @@ func (gs *GameState) EnsureFirstClickSafe(firstRow, firstCol int) {
 	gs.calculateNeighborMines()
 }
 
-// RevealNeighbors открывает соседние пустые ячейки
-func (gs *GameState) RevealNeighbors(row, col int) {
-	gs.mu.Lock()
-	defer gs.mu.Unlock()
-
+// RevealNeighbors открывает соседние пустые ячейки и возвращает измененные ячейки
+func (gs *GameState) RevealNeighbors(row, col int, changedCells map[[2]int]bool) {
 	for di := -1; di <= 1; di++ {
 		for dj := -1; dj <= 1; dj++ {
 			if di == 0 && dj == 0 {
@@ -189,10 +199,9 @@ func (gs *GameState) RevealNeighbors(row, col int) {
 				if !cell.IsRevealed && !cell.IsFlagged && !cell.IsMine {
 					cell.IsRevealed = true
 					gs.Revealed++
+					changedCells[[2]int{ni, nj}] = true
 					if cell.NeighborMines == 0 {
-						gs.mu.Unlock()
-						gs.RevealNeighbors(ni, nj)
-						gs.mu.Lock()
+						gs.RevealNeighbors(ni, nj, changedCells)
 					}
 				}
 			}

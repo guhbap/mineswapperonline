@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
+
+	"github.com/gorilla/mux"
 
 	"minesweeperonline/internal/game"
 	"minesweeperonline/internal/utils"
@@ -27,6 +30,7 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		Rows     int    `json:"rows"`
 		Cols     int    `json:"cols"`
 		Mines    int    `json:"mines"`
+		GameMode string `json:"gameMode"`
 	}
 
 	if err := utils.DecodeJSON(r, &req); err != nil {
@@ -39,7 +43,22 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	room := h.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines)
+	// Получаем creatorID из контекста (если пользователь авторизован)
+	creatorID := 0
+	if userID := r.Context().Value("userID"); userID != nil {
+		if id, ok := userID.(int); ok {
+			creatorID = id
+		}
+	}
+
+	// Валидация gameMode
+	gameMode := req.GameMode
+	if gameMode != "classic" && gameMode != "training" && gameMode != "fair" {
+		gameMode = "classic" // По умолчанию
+	}
+
+	room := h.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID, gameMode)
+	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, GameMode: %s)", req.Name, room.ID, creatorID, gameMode)
 	utils.JSONResponse(w, http.StatusOK, room.ToResponse())
 }
 
@@ -75,6 +94,97 @@ func (h *RoomHandler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	utils.JSONResponse(w, http.StatusOK, room.ToResponse())
+}
+
+func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "PUT" {
+		utils.JSONError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	// Получаем userID из контекста (требуется авторизация)
+	userID, ok := r.Context().Value("userID").(int)
+	if !ok {
+		utils.JSONError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	// Получаем roomID из URL
+	vars := mux.Vars(r)
+	roomID := vars["id"]
+	if roomID == "" {
+		utils.JSONError(w, http.StatusBadRequest, "Room ID required")
+		return
+	}
+
+	// Используем map для проверки, было ли поле password передано
+	var reqMap map[string]interface{}
+	if err := utils.DecodeJSON(r, &reqMap); err != nil {
+		utils.JSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Извлекаем значения из map
+	name, _ := reqMap["name"].(string)
+	rowsFloat, _ := reqMap["rows"].(float64)
+	colsFloat, _ := reqMap["cols"].(float64)
+	minesFloat, _ := reqMap["mines"].(float64)
+	rows := int(rowsFloat)
+	cols := int(colsFloat)
+	mines := int(minesFloat)
+	gameMode := "classic"
+	if gameModeVal, exists := reqMap["gameMode"]; exists {
+		if gameModeStr, ok := gameModeVal.(string); ok {
+			if gameModeStr == "classic" || gameModeStr == "training" || gameModeStr == "fair" {
+				gameMode = gameModeStr
+			}
+		}
+	}
+
+	// Проверяем, было ли передано поле password
+	passwordProvided := false
+	password := ""
+	if pwd, exists := reqMap["password"]; exists {
+		passwordProvided = true
+		if pwdStr, ok := pwd.(string); ok {
+			password = pwdStr
+		}
+	}
+
+	if err := utils.ValidateRoomParams(name, rows, cols, mines); err != nil {
+		utils.JSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Проверяем, что комната существует и пользователь является создателем
+	room := h.roomManager.GetRoom(roomID)
+	if room == nil {
+		utils.JSONError(w, http.StatusNotFound, "Room not found")
+		return
+	}
+
+	// Проверяем, является ли пользователь создателем комнаты
+	isCreator := room.IsCreator(userID)
+
+	if !isCreator {
+		utils.JSONError(w, http.StatusForbidden, "Only room creator can update room settings")
+		return
+	}
+
+	// Обрабатываем пароль
+	if !passwordProvided {
+		password = "__KEEP__"
+	}
+
+	// Обновляем комнату
+	if err := h.roomManager.UpdateRoom(roomID, name, password, rows, cols, mines, gameMode); err != nil {
+		utils.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Получаем обновленную комнату
+	room = h.roomManager.GetRoom(roomID)
 	utils.JSONResponse(w, http.StatusOK, room.ToResponse())
 }
 

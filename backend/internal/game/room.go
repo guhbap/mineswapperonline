@@ -1,36 +1,10 @@
 package game
 
 import (
-	"sync"
 	"time"
 
 	"minesweeperonline/internal/utils"
 )
-
-type Player struct {
-	ID       string `json:"id"`
-	Nickname string `json:"nickname"`
-	Color    string `json:"color"`
-	mu       sync.Mutex
-}
-
-type Room struct {
-	ID        string             `json:"id"`
-	Name      string             `json:"name"`
-	Password  string             `json:"-"`
-	Rows      int                `json:"rows"`
-	Cols      int                `json:"cols"`
-	Mines     int                `json:"mines"`
-	Players   map[string]*Player `json:"-"`
-	GameState *GameState         `json:"-"`
-	CreatedAt time.Time          `json:"createdAt"`
-	mu        sync.RWMutex
-}
-
-type RoomManager struct {
-	rooms map[string]*Room
-	mu    sync.RWMutex
-}
 
 func NewRoomManager() *RoomManager {
 	return &RoomManager{
@@ -38,7 +12,11 @@ func NewRoomManager() *RoomManager {
 	}
 }
 
-func NewRoom(id, name, password string, rows, cols, mines int) *Room {
+func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, gameMode string) *Room {
+	// По умолчанию classic, если не указан
+	if gameMode == "" {
+		gameMode = "classic"
+	}
 	return &Room{
 		ID:        id,
 		Name:      name,
@@ -46,15 +24,17 @@ func NewRoom(id, name, password string, rows, cols, mines int) *Room {
 		Rows:      rows,
 		Cols:      cols,
 		Mines:     mines,
+		GameMode:  gameMode,
+		CreatorID: creatorID,
 		Players:   make(map[string]*Player),
-		GameState: NewGameState(rows, cols, mines),
+		GameState: NewGameState(rows, cols, mines, gameMode),
 		CreatedAt: time.Now(),
 	}
 }
 
-func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int) *Room {
+func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int, gameMode string) *Room {
 	roomID := utils.GenerateID()
-	room := NewRoom(roomID, name, password, rows, cols, mines)
+	room := NewRoom(roomID, name, password, rows, cols, mines, creatorID, gameMode)
 	rm.mu.Lock()
 	rm.rooms[roomID] = room
 	rm.mu.Unlock()
@@ -83,8 +63,10 @@ func (rm *RoomManager) GetRoomsList() []map[string]interface{} {
 			"rows":        room.Rows,
 			"cols":        room.Cols,
 			"mines":       room.Mines,
+			"gameMode":    room.GameMode,
 			"players":     playerCount,
 			"createdAt":   room.CreatedAt,
+			"creatorId":   room.CreatorID,
 		})
 	}
 	return roomsList
@@ -102,15 +84,24 @@ func (r *Room) ToResponse() map[string]interface{} {
 	return map[string]interface{}{
 		"id":          r.ID,
 		"name":        r.Name,
-		"hasPassword":  r.Password != "",
+		"hasPassword": r.Password != "",
 		"rows":        r.Rows,
 		"cols":        r.Cols,
 		"mines":       r.Mines,
+		"gameMode":    r.GameMode,
+		"creatorId":   r.CreatorID,
 		"createdAt":   r.CreatedAt,
 	}
 }
 
 func (r *Room) ValidatePassword(password string) bool {
 	return r.Password == "" || r.Password == password
+}
+
+// IsCreator проверяет, является ли пользователь создателем комнаты
+func (r *Room) IsCreator(userID int) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.CreatorID == userID
 }
 
