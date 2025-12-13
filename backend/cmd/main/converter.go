@@ -1,11 +1,20 @@
 package main
 
-import "minesweeperonline/internal/game"
+import (
+	"log"
+
+	"minesweeperonline/internal/game"
+)
 
 // convertGameStateToMain конвертирует game.GameState в GameState для protobuf
 func convertGameStateToMain(gs *game.GameState) *GameState {
+	log.Printf("convertGameStateToMain: пытаемся заблокировать GameState.Mu (RLock)")
 	gs.Mu.RLock()
-	defer gs.Mu.RUnlock()
+	log.Printf("convertGameStateToMain: GameState.Mu заблокирован (RLock), начинаем конвертацию")
+	defer func() {
+		gs.Mu.RUnlock()
+		log.Printf("convertGameStateToMain: GameState.Mu разблокирован")
+	}()
 
 	mainGS := &GameState{
 		Rows:          gs.Rows,

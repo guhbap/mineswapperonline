@@ -1,6 +1,7 @@
 package game
 
 import (
+	"log"
 	"time"
 
 	"minesweeperonline/internal/utils"
@@ -141,9 +142,13 @@ func (r *Room) GetPlayer(playerID string) *Player {
 
 // ResetGame сбрасывает игру
 func (r *Room) ResetGame() {
+	log.Printf("ResetGame: блокируем room.Mu для комнаты %s", r.ID)
 	r.Mu.Lock()
-	defer r.Mu.Unlock()
+	log.Printf("ResetGame: room.Mu заблокирован, создаем новый GameState")
 	r.GameState = NewGameState(r.Rows, r.Cols, r.Mines, r.GameMode)
 	r.StartTime = nil
+	log.Printf("ResetGame: новый GameState создан, разблокируем room.Mu")
+	defer r.Mu.Unlock()
+	log.Printf("ResetGame: завершено для комнаты %s", r.ID)
 }
 
