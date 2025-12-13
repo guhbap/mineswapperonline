@@ -10,7 +10,7 @@
           :error="error"
           :show-advanced-options="true"
           :show-all-game-modes="false"
-          :auto-generate-name="show && !form.name.trim()"
+          :auto-generate-name="false"
         />
 
         <div class="modal__actions">
@@ -25,7 +25,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
+import { generateRandomName } from '@/utils/nameGenerator'
 import RoomForm, { type RoomFormData } from './RoomForm.vue'
 
 const props = defineProps<{
@@ -38,7 +39,7 @@ const emit = defineEmits<{
 }>()
 
 const form = ref<RoomFormData>({
-  name: '',
+  name: generateRandomName(),
   rows: 16,
   cols: 16,
   mines: 40,
@@ -94,7 +95,7 @@ const handleCancel = () => {
   emit('cancel')
   error.value = ''
   form.value = {
-    name: '',
+    name: generateRandomName(),
     rows: 16,
     cols: 16,
     mines: 40,
