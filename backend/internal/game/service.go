@@ -57,6 +57,12 @@ func (s *GameService) HandleCellClick(room *Room, playerID string, row, col int,
 		return
 	}
 
+	// Проверка: нельзя открыть ячейку с флагом
+	if cell.IsFlagged {
+		log.Printf("Нельзя открыть ячейку с флагом: row=%d, col=%d", row, col)
+		return
+	}
+
 	// Обработка открытия ячейки
 	s.handleCellReveal(room, playerID, row, col, cell, userID, nickname, playerColor)
 }

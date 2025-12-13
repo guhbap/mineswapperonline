@@ -477,6 +477,11 @@ const handleCellClick = (row: number, col: number, isRightClick: boolean = false
     return
   }
 
+  // Проверка: нельзя открыть ячейку с флагом по левому клику
+  if (!isRightClick && gameState.value?.b?.[row]?.[col]?.f) {
+    return
+  }
+
   // Блокируем клики на непомеченные ячейки в режиме без угадываний
   if (!isRightClick && isCellBlocked(row, col)) {
     return
