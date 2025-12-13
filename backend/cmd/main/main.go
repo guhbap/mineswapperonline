@@ -677,7 +677,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) {
+	log.Printf("handleCellClick: начало, row=%d, col=%d, flag=%v", click.Row, click.Col, click.Flag)
 	room.GameState.mu.Lock()
+	log.Printf("handleCellClick: мьютекс GameState заблокирован")
 
 	if room.GameState.GameOver || room.GameState.GameWon {
 		log.Printf("Игра уже окончена, клик игнорируется")
@@ -692,7 +694,9 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		return
 	}
 
+	log.Printf("handleCellClick: координаты валидны, получаем ячейку")
 	cell := &room.GameState.Board[row][col]
+	log.Printf("handleCellClick: ячейка получена, isRevealed=%v, isFlagged=%v, isMine=%v", cell.IsRevealed, cell.IsFlagged, cell.IsMine)
 
 	// Получаем информацию об игроке для сервисных сообщений
 	room.mu.RLock()
@@ -814,10 +818,16 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 
 	// В режимах training и fair мины размещаются динамически при клике
 	if gameMode == "training" || gameMode == "fair" {
+		log.Printf("handleCellClick: режим %s, начинаем динамическое размещение мин", gameMode)
 		// Разблокируем для вычисления безопасных ячеек
 		room.GameState.mu.Unlock()
+		log.Printf("handleCellClick: мьютекс GameState разблокирован для determineMinePlacement")
+		startTime := time.Now()
 		mineGrid := s.determineMinePlacement(room, row, col)
+		elapsed := time.Since(startTime)
+		log.Printf("handleCellClick: determineMinePlacement завершен за %v, получена mineGrid размером %dx%d", elapsed, len(mineGrid), len(mineGrid[0]))
 		room.GameState.mu.Lock()
+		log.Printf("handleCellClick: мьютекс GameState заблокирован после determineMinePlacement")
 
 		// Применяем размещение мин и собираем измененные ячейки
 		changedCells := make(map[[2]int]bool)
@@ -872,6 +882,7 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		cell = &room.GameState.Board[row][col]
 	}
 
+	log.Printf("handleCellClick: открываем ячейку row=%d, col=%d", row, col)
 	cell.IsRevealed = true
 	room.GameState.Revealed++
 	log.Printf("Ячейка открыта: row=%d, col=%d, isMine=%v, neighborMines=%d, revealed=%d",
@@ -1550,16 +1561,21 @@ func (s *Server) calculateCellHints(room *Room) {
 
 // determineMinePlacement определяет размещение мин при клике в режимах training и fair
 func (s *Server) determineMinePlacement(room *Room, clickRow, clickCol int) [][]bool {
+	log.Printf("determineMinePlacement: начало, clickRow=%d, clickCol=%d", clickRow, clickCol)
 	// Создаем LabelMap на основе открытых ячеек
 	lm := game.NewLabelMap(room.GameState.Cols, room.GameState.Rows)
+	log.Printf("determineMinePlacement: LabelMap создан")
 
+	revealedCount := 0
 	for i := 0; i < room.GameState.Rows; i++ {
 		for j := 0; j < room.GameState.Cols; j++ {
 			if room.GameState.Board[i][j].IsRevealed {
 				lm.SetLabel(i, j, room.GameState.Board[i][j].NeighborMines)
+				revealedCount++
 			}
 		}
 	}
+	log.Printf("determineMinePlacement: установлено %d меток для открытых ячеек", revealedCount)
 
 	// Создаем решатель
 	// Важно: учитываем уже размещенные мины (только для неоткрытых ячеек)
@@ -1582,14 +1598,19 @@ func (s *Server) determineMinePlacement(room *Room, clickRow, clickCol int) [][]
 	solver := game.MakeSolver(lm, remainingMines)
 
 	// Проверяем, на границе ли клик
+	log.Printf("determineMinePlacement: проверяем, на границе ли клик")
 	boundaryIdx := -1
 	if clickRow >= 0 && clickRow < room.GameState.Rows && clickCol >= 0 && clickCol < room.GameState.Cols {
 		boundaryIdx = lm.GetBoundaryIndex(clickRow, clickCol)
+		log.Printf("determineMinePlacement: boundaryIdx=%d", boundaryIdx)
 	}
 
+	log.Printf("determineMinePlacement: проверяем HasSafeCells")
 	hasSafeCells := solver.HasSafeCells()
+	log.Printf("determineMinePlacement: hasSafeCells=%v", hasSafeCells)
 
 	var shape *game.MineShape
+	log.Printf("determineMinePlacement: определяем форму размещения мин")
 
 	if boundaryIdx == -1 {
 		// Клик вне границы
@@ -1628,14 +1649,19 @@ func (s *Server) determineMinePlacement(room *Room, clickRow, clickCol int) [][]
 	}
 
 	if shape != nil {
-		return shape.MineGrid()
+		log.Printf("determineMinePlacement: получена форма, создаем MineGrid")
+		result := shape.MineGrid()
+		log.Printf("determineMinePlacement: MineGrid создан, размер %dx%d", len(result), len(result[0]))
+		return result
 	}
 
 	// Fallback: создаем пустую сетку (не должно происходить)
+	log.Printf("determineMinePlacement: WARNING - форма не получена, используем fallback")
 	mineGrid := make([][]bool, room.GameState.Rows)
 	for i := 0; i < room.GameState.Rows; i++ {
 		mineGrid[i] = make([]bool, room.GameState.Cols)
 	}
+	log.Printf("determineMinePlacement: fallback mineGrid создан")
 	return mineGrid
 }
 

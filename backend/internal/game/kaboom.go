@@ -575,7 +575,11 @@ func (s *Solver) Run() {
 	}
 	
 	// Проверяем каждую ячейку на границе
+	// log.Printf("Solver.Run: начинаем проверку %d ячеек на границе", s.numMines)
 	for i := 0; i < s.numMines; i++ {
+		if i%10 == 0 && i > 0 {
+			// log.Printf("Solver.Run: обработано %d/%d ячеек", i, s.numMines)
+		}
 		if s.cache[i] != nil {
 			if *s.cache[i] {
 				s.canBeSafe[i] = false
@@ -588,6 +592,7 @@ func (s *Solver) Run() {
 		}
 		
 		// Проверяем, может ли быть безопасной
+		// log.Printf("Solver.Run: проверяем ячейку %d на безопасность", i)
 		solution := s.sat.SolveWith(func() {
 			s.sat.Assert([]int{-(i + 1)})
 		})
@@ -599,6 +604,7 @@ func (s *Solver) Run() {
 		}
 		
 		// Проверяем, может ли быть опасной
+		// log.Printf("Solver.Run: проверяем ячейку %d на опасность", i)
 		solution = s.sat.SolveWith(func() {
 			s.sat.Assert([]int{i + 1})
 		})
@@ -823,14 +829,17 @@ func (ms *MineShape) mineGridWithCell(exceptRow, exceptCol int, exceptIsMine boo
 
 // MakeSolver создает решатель для текущего состояния карты
 func MakeSolver(lm *LabelMap, maxMines int) *Solver {
+	// log.Printf("MakeSolver: начало, maxMines=%d, boundary=%d, numOutside=%d", maxMines, len(lm.boundary), lm.numOutside)
 	minMines := maxMines - lm.numOutside
 	if minMines < 0 {
 		minMines = 0
 	}
 	
 	solver := NewSolver(lm, len(lm.boundary), minMines, maxMines)
+	// log.Printf("MakeSolver: NewSolver создан, numMines=%d, minMines=%d, maxMines=%d", solver.numMines, minMines, maxMines)
 	
 	// Добавляем ограничения из всех открытых ячеек
+	labelCount := 0
 	for i := 0; i < lm.height; i++ {
 		for j := 0; j < lm.width; j++ {
 			label := lm.labels[i][j]
@@ -856,11 +865,14 @@ func MakeSolver(lm *LabelMap, maxMines int) *Solver {
 			
 			if len(mineList) > 0 {
 				solver.AddLabel(label, mineList)
+				labelCount++
 			}
 		}
 	}
+	// log.Printf("MakeSolver: добавлено %d меток, запускаем Run()", labelCount)
 	
 	solver.Run()
+	// log.Printf("MakeSolver: Run() завершен")
 	return solver
 }
 
