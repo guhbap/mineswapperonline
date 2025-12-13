@@ -678,8 +678,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) {
 	log.Printf("handleCellClick: начало, row=%d, col=%d, flag=%v", click.Row, click.Col, click.Flag)
+	log.Printf("handleCellClick: пытаемся заблокировать GameState.mu")
 	room.GameState.mu.Lock()
-	log.Printf("handleCellClick: мьютекс GameState заблокирован")
+	log.Printf("handleCellClick: мьютекс GameState заблокирован успешно")
 
 	if room.GameState.GameOver || room.GameState.GameWon {
 		log.Printf("Игра уже окончена, клик игнорируется")
@@ -764,8 +765,7 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		// Выполняем асинхронно, чтобы не блокировать ответ
 		if gameMode == "training" {
 			go func() {
-				room.GameState.mu.Lock()
-				defer room.GameState.mu.Unlock()
+				// calculateCellHints сама блокирует мьютекс, не нужно блокировать здесь
 				s.calculateCellHints(room)
 				s.broadcastGameState(room)
 			}()
@@ -795,12 +795,8 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		return
 	}
 
-	// Открытие ячейки
-	if cell.IsFlagged || cell.IsRevealed {
-		log.Printf("Ячейка уже открыта или помечена флагом: row=%d, col=%d", row, col)
-		room.GameState.mu.Unlock()
-		return
-	}
+	// Открытие ячейки (проверка уже выполнена выше)
+	log.Printf("handleCellClick: начинаем открытие ячейки")
 
 	// Проверяем режим игры
 	room.mu.RLock()
@@ -975,8 +971,7 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		if gameMode == "training" {
 			// Выполняем асинхронно, чтобы не блокировать ответ
 			go func() {
-				room.GameState.mu.Lock()
-				defer room.GameState.mu.Unlock()
+				// calculateCellHints сама блокирует мьютекс, не нужно блокировать здесь
 				s.calculateCellHints(room)
 				s.broadcastGameState(room)
 			}()
@@ -1412,7 +1407,6 @@ func (s *Server) broadcastToOthers(room *Room, senderID string, msg Message) {
 	room.mu.RUnlock()
 
 	if playersCount <= 1 {
-		log.Printf("Только один игрок, курсор не отправляется другим")
 		return
 	}
 
