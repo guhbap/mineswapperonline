@@ -60,22 +60,23 @@ const hasPassword = ref(false)
 const error = ref('')
 const loading = ref(false)
 
-// Загружаем данные комнаты при открытии модалки
-watch(() => props.show, (isShowing) => {
-  if (isShowing && props.room) {
+// Загружаем данные комнаты при открытии модалки или изменении комнаты
+watch([() => props.show, () => props.room], ([isShowing, room]) => {
+  if (isShowing && room) {
     form.value = {
-      name: props.room.name,
-      rows: props.room.rows,
-      cols: props.room.cols,
-      mines: props.room.mines,
+      name: room.name,
+      rows: room.rows,
+      cols: room.cols,
+      mines: room.mines,
       password: '',
-      gameMode: (props.room.gameMode ?? 'classic') as 'classic' | 'training' | 'fair',
-      quickStart: props.room.quickStart ?? false,
-      chording: props.room.chording ?? false,
+      gameMode: (room.gameMode ?? 'classic') as 'classic' | 'training' | 'fair',
+      quickStart: room.quickStart ?? false,
+      chording: room.chording ?? false,
     }
-    hasPassword.value = props.room.hasPassword
+    hasPassword.value = room.hasPassword
+    error.value = ''
   }
-})
+}, { immediate: true })
 
 const maxMines = computed(() => {
   return form.value.rows * form.value.cols - 15
