@@ -90,6 +90,8 @@ export interface UpdateRoomRequest {
   cols: number
   mines: number
   gameMode?: string
+  quickStart?: boolean
+  chording?: boolean
 }
 
 export async function updateRoom(roomId: string, data: UpdateRoomRequest): Promise<Room> {
