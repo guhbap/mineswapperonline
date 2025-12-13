@@ -12,7 +12,7 @@ func (rm *RoomManager) SetServer(server interface{}) {
 }
 
 // UpdateRoom обновляет параметры комнаты
-func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, cols, mines int, gameMode string, quickStart bool) error {
+func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, cols, mines int, gameMode string, quickStart bool, chording bool) error {
 	rm.mu.RLock()
 	room, exists := rm.rooms[roomID]
 	rm.mu.RUnlock()
@@ -37,12 +37,13 @@ func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, co
 	room.Mines = mines
 	room.GameMode = gameMode
 	room.QuickStart = quickStart
+	room.Chording = chording
 
 	// Пересоздаем игровое поле с новыми параметрами
 	room.GameState = NewGameState(rows, cols, mines, gameMode)
 	room.StartTime = nil // Сбрасываем время начала игры
 
-	log.Printf("Комната обновлена: %s (ID: %s, GameMode: %s, QuickStart: %v)", name, roomID, gameMode, quickStart)
+	log.Printf("Комната обновлена: %s (ID: %s, GameMode: %s, QuickStart: %v, Chording: %v)", name, roomID, gameMode, quickStart, chording)
 	return nil
 }
 

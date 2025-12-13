@@ -46,6 +46,7 @@ export interface Room {
   mines: number
   gameMode?: string
   quickStart?: boolean
+  chording?: boolean
   players: number
   createdAt: string
   creatorId?: number
@@ -59,6 +60,7 @@ export interface CreateRoomRequest {
   mines: number
   gameMode: string
   quickStart: boolean
+  chording: boolean
 }
 
 export interface JoinRoomRequest {

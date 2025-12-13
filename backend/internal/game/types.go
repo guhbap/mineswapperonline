@@ -61,6 +61,7 @@ type Room struct {
 	Mines         int                `json:"mines"`
 	GameMode      string             `json:"gameMode"`  // "classic", "training", "fair"
 	QuickStart    bool               `json:"quickStart"` // Быстрый старт - первая клетка всегда нулевая
+	Chording      bool               `json:"chording"`  // Chording - открытие соседних клеток при клике на открытую клетку с цифрой
 	CreatorID     int                `json:"creatorId"`
 	Players       map[string]*Player `json:"-"`        // Используется только в WebSocket контексте
 	GameState     *GameState         `json:"-"`

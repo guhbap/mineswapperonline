@@ -668,6 +668,176 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 	// Проверяем режим игры
 	gameMode := room.GameMode
 
+	// Chording: если клик на открытую клетку с цифрой и вокруг стоит нужное количество флагов
+	if room.Chording && cell.IsRevealed && cell.NeighborMines > 0 {
+		log.Printf("handleCellClick: проверяем chording для row=%d, col=%d, neighborMines=%d", row, col, cell.NeighborMines)
+		// Подсчитываем количество флагов вокруг
+		flagCount := 0
+		for di := -1; di <= 1; di++ {
+			for dj := -1; dj <= 1; dj++ {
+				if di == 0 && dj == 0 {
+					continue
+				}
+				ni, nj := row+di, col+dj
+				if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
+					if room.GameState.Board[ni][nj].IsFlagged {
+						flagCount++
+					}
+				}
+			}
+		}
+		log.Printf("handleCellClick: chording - флагов вокруг: %d, нужно: %d", flagCount, cell.NeighborMines)
+		
+		// Если количество флагов равно цифре на клетке, открываем соседние закрытые клетки
+		if flagCount == cell.NeighborMines {
+			log.Printf("handleCellClick: chording активирован, открываем соседние клетки")
+			changedCells := make(map[[2]int]bool)
+			for di := -1; di <= 1; di++ {
+				for dj := -1; dj <= 1; dj++ {
+					if di == 0 && dj == 0 {
+						continue
+					}
+					ni, nj := row+di, col+dj
+					if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
+						neighborCell := &room.GameState.Board[ni][nj]
+						// Открываем только закрытые клетки без флагов
+						if !neighborCell.IsRevealed && !neighborCell.IsFlagged {
+							neighborCell.IsRevealed = true
+							room.GameState.Revealed++
+							changedCells[[2]int{ni, nj}] = true
+							log.Printf("handleCellClick: chording - открыта клетка (%d, %d), isMine=%v", ni, nj, neighborCell.IsMine)
+							
+							// Если это мина - игра окончена
+							if neighborCell.IsMine {
+								room.GameState.GameOver = true
+								wsPlayer := s.getWSPlayer(playerID)
+								var userID int
+								var nickname string
+								if wsPlayer != nil {
+									wsPlayer.mu.Lock()
+									userID = wsPlayer.UserID
+									nickname = wsPlayer.Nickname
+									wsPlayer.mu.Unlock()
+								} else {
+									roomPlayer := room.GetPlayer(playerID)
+									if roomPlayer != nil {
+										userID = roomPlayer.UserID
+										nickname = roomPlayer.Nickname
+									}
+								}
+								if nickname != "" {
+									room.GameState.LoserPlayerID = playerID
+									room.GameState.LoserNickname = nickname
+								}
+								
+								room.Mu.RLock()
+								var gameTime float64
+								if room.StartTime != nil {
+									gameTime = time.Since(*room.StartTime).Seconds()
+								}
+								room.Mu.RUnlock()
+								
+								if userID > 0 {
+									// Собираем список участников для записи результата
+									room.Mu.RLock()
+									participants := make([]handlers.GameParticipant, 0)
+									for _, p := range room.Players {
+										if p.UserID > 0 {
+											participants = append(participants, handlers.GameParticipant{
+												UserID:   p.UserID,
+												Nickname: p.Nickname,
+												Color:    p.Color,
+											})
+										}
+									}
+									room.Mu.RUnlock()
+									
+									go func() {
+										if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, participants); err != nil {
+											log.Printf("Ошибка записи результата игры: %v", err)
+										}
+									}()
+								}
+								
+								room.GameState.Mu.Unlock()
+								s.broadcastGameState(room)
+								return
+							}
+							
+							// Автоматическое открытие соседних пустых ячеек
+							if neighborCell.NeighborMines == 0 {
+								room.GameState.RevealNeighbors(ni, nj, changedCells)
+							}
+						}
+					}
+				}
+			}
+			
+			// Проверка победы
+			totalCells := room.GameState.Rows * room.GameState.Cols
+			if room.GameState.Revealed == totalCells-room.GameState.Mines {
+				room.GameState.GameWon = true
+				wsPlayer := s.getWSPlayer(playerID)
+				var userID int
+				if wsPlayer != nil {
+					wsPlayer.mu.Lock()
+					userID = wsPlayer.UserID
+					wsPlayer.mu.Unlock()
+				} else {
+					roomPlayer := room.GetPlayer(playerID)
+					if roomPlayer != nil {
+						userID = roomPlayer.UserID
+					}
+				}
+				
+				room.Mu.RLock()
+				var gameTime float64
+				if room.StartTime != nil {
+					gameTime = time.Since(*room.StartTime).Seconds()
+				}
+				room.Mu.RUnlock()
+				
+				if userID > 0 {
+					// Собираем список участников для записи результата
+					room.Mu.RLock()
+					participants := make([]handlers.GameParticipant, 0)
+					for _, p := range room.Players {
+						if p.UserID > 0 {
+							participants = append(participants, handlers.GameParticipant{
+								UserID:   p.UserID,
+								Nickname: p.Nickname,
+								Color:    p.Color,
+							})
+						}
+					}
+					room.Mu.RUnlock()
+					
+					go func() {
+						if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, true, participants); err != nil {
+							log.Printf("Ошибка записи результата игры: %v", err)
+						}
+					}()
+				}
+			}
+			
+			room.GameState.Mu.Unlock()
+			s.broadcastGameState(room)
+			return
+		} else {
+			// Chording не активирован, игнорируем клик на открытую клетку
+			log.Printf("handleCellClick: chording не активирован (флагов: %d, нужно: %d), игнорируем клик", flagCount, cell.NeighborMines)
+			room.GameState.Mu.Unlock()
+			return
+		}
+	}
+	
+	// Если клик на уже открытую клетку без chording - игнорируем
+	if cell.IsRevealed {
+		log.Printf("handleCellClick: клик на открытую клетку без chording, игнорируем")
+		room.GameState.Mu.Unlock()
+		return
+	}
+
 	// Если это первое открытие, устанавливаем время начала игры
 	// Примечание: StartTime нужно устанавливать через метод или работать напрямую
 	isFirstClick := room.GameState.Revealed == 0

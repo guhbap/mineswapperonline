@@ -123,6 +123,18 @@
         </div>
 
         <div class="form-group">
+          <label class="form-label">
+            <input
+              v-model="form.chording"
+              type="checkbox"
+              class="form-checkbox"
+            />
+            Chording
+          </label>
+          <div class="form-hint">Клик на открытую клетку с цифрой открывает соседние клетки, если вокруг стоит нужное количество флагов</div>
+        </div>
+
+        <div class="form-group">
           <label class="form-label">Режим игры</label>
           <div class="game-mode-selector">
             <label class="game-mode-option" :class="{ 'game-mode-option--active': form.gameMode === 'classic' }">
@@ -188,7 +200,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  submit: [data: { name: string; password?: string; rows: number; cols: number; mines: number; gameMode: string; quickStart: boolean }]
+  submit: [data: { name: string; password?: string; rows: number; cols: number; mines: number; gameMode: string; quickStart: boolean; chording: boolean }]
   cancel: []
 }>()
 
@@ -200,6 +212,7 @@ const form = ref({
   password: '',
   gameMode: 'classic' as 'classic' | 'training' | 'fair',
   quickStart: false,
+  chording: false,
 })
 
 const hasPassword = ref(false)
@@ -272,6 +285,7 @@ const handleSubmit = () => {
     mines: form.value.mines,
     gameMode: form.value.gameMode,
     quickStart: form.value.quickStart,
+    chording: form.value.chording,
     ...(hasPassword.value && form.value.password ? { password: form.value.password } : {}),
   }
 
@@ -294,6 +308,7 @@ const handleCancel = () => {
     password: '',
     gameMode: 'classic' as 'classic' | 'training' | 'fair',
     quickStart: false,
+    chording: false,
   }
   hasPassword.value = false
 }

@@ -32,6 +32,7 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		Mines      int    `json:"mines"`
 		GameMode   string `json:"gameMode"`
 		QuickStart bool   `json:"quickStart"`
+		Chording   bool   `json:"chording"`
 	}
 
 	if err := utils.DecodeJSON(r, &req); err != nil {
@@ -58,8 +59,8 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		gameMode = "classic" // По умолчанию
 	}
 
-	room := h.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID, gameMode, req.QuickStart)
-	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, GameMode: %s, QuickStart: %v)", req.Name, room.ID, creatorID, gameMode, req.QuickStart)
+	room := h.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID, gameMode, req.QuickStart, req.Chording)
+	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, GameMode: %s, QuickStart: %v, Chording: %v)", req.Name, room.ID, creatorID, gameMode, req.QuickStart, req.Chording)
 	utils.JSONResponse(w, http.StatusOK, room.ToResponse())
 }
 
@@ -150,6 +151,14 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 			quickStart = quickStartBool
 		}
 	}
+	
+	// Извлекаем chording (по умолчанию false, если не указан)
+	chording := false
+	if chordingVal, exists := reqMap["chording"]; exists {
+		if chordingBool, ok := chordingVal.(bool); ok {
+			chording = chordingBool
+		}
+	}
 
 	// Проверяем, было ли передано поле password
 	passwordProvided := false
@@ -187,7 +196,7 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Обновляем комнату
-	if err := h.roomManager.UpdateRoom(roomID, name, password, rows, cols, mines, gameMode, quickStart); err != nil {
+	if err := h.roomManager.UpdateRoom(roomID, name, password, rows, cols, mines, gameMode, quickStart, chording); err != nil {
 		utils.JSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

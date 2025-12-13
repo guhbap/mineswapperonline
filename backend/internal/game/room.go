@@ -12,7 +12,7 @@ func NewRoomManager() *RoomManager {
 	}
 }
 
-func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, gameMode string, quickStart bool) *Room {
+func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, gameMode string, quickStart bool, chording bool) *Room {
 	// По умолчанию classic, если не указан
 	if gameMode == "" {
 		gameMode = "classic"
@@ -25,7 +25,8 @@ func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, ga
 		Cols:       cols,
 		Mines:      mines,
 		GameMode:   gameMode,
-		QuickStart:  quickStart,
+		QuickStart: quickStart,
+		Chording:   chording,
 		CreatorID:  creatorID,
 		Players:    make(map[string]*Player),
 		GameState:  NewGameState(rows, cols, mines, gameMode),
@@ -33,9 +34,9 @@ func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, ga
 	}
 }
 
-func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int, gameMode string, quickStart bool) *Room {
+func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int, gameMode string, quickStart bool, chording bool) *Room {
 	roomID := utils.GenerateID()
-	room := NewRoom(roomID, name, password, rows, cols, mines, creatorID, gameMode, quickStart)
+	room := NewRoom(roomID, name, password, rows, cols, mines, creatorID, gameMode, quickStart, chording)
 	rm.mu.Lock()
 	rm.rooms[roomID] = room
 	rm.mu.Unlock()
@@ -66,6 +67,7 @@ func (rm *RoomManager) GetRoomsList() []map[string]interface{} {
 			"mines":       room.Mines,
 			"gameMode":    room.GameMode,
 			"quickStart":  room.QuickStart,
+			"chording":    room.Chording,
 			"players":     playerCount,
 			"createdAt":   room.CreatedAt,
 			"creatorId":   room.CreatorID,
@@ -92,6 +94,7 @@ func (r *Room) ToResponse() map[string]interface{} {
 		"mines":       r.Mines,
 		"gameMode":    r.GameMode,
 		"quickStart":  r.QuickStart,
+		"chording":    r.Chording,
 		"creatorId":   r.CreatorID,
 		"createdAt":   r.CreatedAt,
 	}
