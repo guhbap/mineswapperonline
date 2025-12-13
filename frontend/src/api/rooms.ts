@@ -45,6 +45,7 @@ export interface Room {
   cols: number
   mines: number
   gameMode?: string
+  quickStart?: boolean
   players: number
   createdAt: string
   creatorId?: number
@@ -57,6 +58,7 @@ export interface CreateRoomRequest {
   cols: number
   mines: number
   gameMode: string
+  quickStart: boolean
 }
 
 export interface JoinRoomRequest {

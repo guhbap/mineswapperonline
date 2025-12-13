@@ -111,6 +111,18 @@
         </div>
 
         <div class="form-group">
+          <label class="form-label">
+            <input
+              v-model="form.quickStart"
+              type="checkbox"
+              class="form-checkbox"
+            />
+            Быстрый старт
+          </label>
+          <div class="form-hint">Первая кликнутая клетка всегда будет нулевой (без мин вокруг)</div>
+        </div>
+
+        <div class="form-group">
           <label class="form-label">Режим игры</label>
           <div class="game-mode-selector">
             <label class="game-mode-option" :class="{ 'game-mode-option--active': form.gameMode === 'classic' }">
@@ -176,7 +188,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  submit: [data: { name: string; password?: string; rows: number; cols: number; mines: number; gameMode: string }]
+  submit: [data: { name: string; password?: string; rows: number; cols: number; mines: number; gameMode: string; quickStart: boolean }]
   cancel: []
 }>()
 
@@ -187,6 +199,7 @@ const form = ref({
   mines: 40,
   password: '',
   gameMode: 'classic' as 'classic' | 'training' | 'fair',
+  quickStart: false,
 })
 
 const hasPassword = ref(false)
@@ -258,6 +271,7 @@ const handleSubmit = () => {
     cols: form.value.cols,
     mines: form.value.mines,
     gameMode: form.value.gameMode,
+    quickStart: form.value.quickStart,
     ...(hasPassword.value && form.value.password ? { password: form.value.password } : {}),
   }
 
@@ -279,6 +293,7 @@ const handleCancel = () => {
     mines: 40,
     password: '',
     gameMode: 'classic' as 'classic' | 'training' | 'fair',
+    quickStart: false,
   }
   hasPassword.value = false
 }

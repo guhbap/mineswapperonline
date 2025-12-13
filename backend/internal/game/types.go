@@ -60,6 +60,7 @@ type Room struct {
 	Cols          int                `json:"cols"`
 	Mines         int                `json:"mines"`
 	GameMode      string             `json:"gameMode"`  // "classic", "training", "fair"
+	QuickStart    bool               `json:"quickStart"` // Быстрый старт - первая клетка всегда нулевая
 	CreatorID     int                `json:"creatorId"`
 	Players       map[string]*Player `json:"-"`        // Используется только в WebSocket контексте
 	GameState     *GameState         `json:"-"`

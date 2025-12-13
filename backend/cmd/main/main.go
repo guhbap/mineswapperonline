@@ -677,6 +677,16 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 		log.Printf("StartTime установлен при первом клике: %v, Revealed=%d", now, room.GameState.Revealed)
 	}
 
+	// Для classic режима с QuickStart: делаем первую клетку нулевой
+	if gameMode == "classic" && isFirstClick && room.QuickStart {
+		log.Printf("handleCellClick: QuickStart включен, делаем первую клетку нулевой")
+		room.GameState.Mu.Unlock()
+		room.GameState.EnsureFirstClickSafe(row, col)
+		room.GameState.Mu.Lock()
+		// Обновляем ссылку на ячейку после перемещения мин
+		cell = &room.GameState.Board[row][col]
+	}
+
 	// В режимах training и fair мины размещаются динамически при клике
 	if gameMode == "training" || gameMode == "fair" {
 		log.Printf("handleCellClick: режим %s, начинаем динамическое размещение мин", gameMode)
@@ -1486,6 +1496,52 @@ func (s *Server) calculateCellHints(room *game.Room) {
 // determineMinePlacement определяет размещение мин при клике в режимах training и fair
 func (s *Server) determineMinePlacement(room *game.Room, clickRow, clickCol int) [][]bool {
 	log.Printf("determineMinePlacement: начало, clickRow=%d, clickCol=%d", clickRow, clickCol)
+	
+	// Проверяем QuickStart: если это первый клик и включен QuickStart, делаем клетку нулевой
+	isFirstClick := room.GameState.Revealed == 0
+	if isFirstClick && room.QuickStart {
+		log.Printf("determineMinePlacement: QuickStart включен, делаем первую клетку нулевой")
+		// Создаем сетку без мин вокруг кликнутой клетки
+		mineGrid := make([][]bool, room.GameState.Rows)
+		for i := 0; i < room.GameState.Rows; i++ {
+			mineGrid[i] = make([]bool, room.GameState.Cols)
+		}
+		
+		// Размещаем мины случайно, избегая кликнутой клетки и всех её соседей
+		placed := 0
+		attempts := 0
+		maxAttempts := room.GameState.Rows * room.GameState.Cols * 2
+		for placed < room.GameState.Mines && attempts < maxAttempts {
+			row := mathrand.Intn(room.GameState.Rows)
+			col := mathrand.Intn(room.GameState.Cols)
+			attempts++
+			
+			// Пропускаем кликнутую клетку и все её соседи (радиус 1)
+			isNearClick := false
+			for di := -1; di <= 1; di++ {
+				for dj := -1; dj <= 1; dj++ {
+					if row == clickRow+di && col == clickCol+dj {
+						isNearClick = true
+						break
+					}
+				}
+				if isNearClick {
+					break
+				}
+			}
+			
+			if isNearClick || mineGrid[row][col] {
+				continue
+			}
+			
+			mineGrid[row][col] = true
+			placed++
+		}
+		
+		log.Printf("determineMinePlacement: QuickStart - размещено %d мин (попыток: %d)", placed, attempts)
+		return mineGrid
+	}
+	
 	// Создаем LabelMap на основе открытых ячеек
 	lm := game.NewLabelMap(room.GameState.Cols, room.GameState.Rows)
 	log.Printf("determineMinePlacement: LabelMap создан")

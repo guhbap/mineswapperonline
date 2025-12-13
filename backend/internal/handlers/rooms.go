@@ -25,12 +25,13 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name     string `json:"name"`
-		Password string `json:"password"`
-		Rows     int    `json:"rows"`
-		Cols     int    `json:"cols"`
-		Mines    int    `json:"mines"`
-		GameMode string `json:"gameMode"`
+		Name       string `json:"name"`
+		Password   string `json:"password"`
+		Rows       int    `json:"rows"`
+		Cols       int    `json:"cols"`
+		Mines      int    `json:"mines"`
+		GameMode   string `json:"gameMode"`
+		QuickStart bool   `json:"quickStart"`
 	}
 
 	if err := utils.DecodeJSON(r, &req); err != nil {
@@ -57,8 +58,8 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		gameMode = "classic" // По умолчанию
 	}
 
-	room := h.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID, gameMode)
-	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, GameMode: %s)", req.Name, room.ID, creatorID, gameMode)
+	room := h.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID, gameMode, req.QuickStart)
+	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, GameMode: %s, QuickStart: %v)", req.Name, room.ID, creatorID, gameMode, req.QuickStart)
 	utils.JSONResponse(w, http.StatusOK, room.ToResponse())
 }
 
@@ -141,6 +142,14 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	
+	// Извлекаем quickStart (по умолчанию false, если не указан)
+	quickStart := false
+	if quickStartVal, exists := reqMap["quickStart"]; exists {
+		if quickStartBool, ok := quickStartVal.(bool); ok {
+			quickStart = quickStartBool
+		}
+	}
 
 	// Проверяем, было ли передано поле password
 	passwordProvided := false
@@ -178,7 +187,7 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Обновляем комнату
-	if err := h.roomManager.UpdateRoom(roomID, name, password, rows, cols, mines, gameMode); err != nil {
+	if err := h.roomManager.UpdateRoom(roomID, name, password, rows, cols, mines, gameMode, quickStart); err != nil {
 		utils.JSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

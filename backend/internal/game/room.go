@@ -12,29 +12,30 @@ func NewRoomManager() *RoomManager {
 	}
 }
 
-func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, gameMode string) *Room {
+func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, gameMode string, quickStart bool) *Room {
 	// По умолчанию classic, если не указан
 	if gameMode == "" {
 		gameMode = "classic"
 	}
 	return &Room{
-		ID:        id,
-		Name:      name,
-		Password:  password,
-		Rows:      rows,
-		Cols:      cols,
-		Mines:     mines,
-		GameMode:  gameMode,
-		CreatorID: creatorID,
-		Players:   make(map[string]*Player),
-		GameState: NewGameState(rows, cols, mines, gameMode),
-		CreatedAt: time.Now(),
+		ID:         id,
+		Name:       name,
+		Password:   password,
+		Rows:       rows,
+		Cols:       cols,
+		Mines:      mines,
+		GameMode:   gameMode,
+		QuickStart:  quickStart,
+		CreatorID:  creatorID,
+		Players:    make(map[string]*Player),
+		GameState:  NewGameState(rows, cols, mines, gameMode),
+		CreatedAt:  time.Now(),
 	}
 }
 
-func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int, gameMode string) *Room {
+func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int, gameMode string, quickStart bool) *Room {
 	roomID := utils.GenerateID()
-	room := NewRoom(roomID, name, password, rows, cols, mines, creatorID, gameMode)
+	room := NewRoom(roomID, name, password, rows, cols, mines, creatorID, gameMode, quickStart)
 	rm.mu.Lock()
 	rm.rooms[roomID] = room
 	rm.mu.Unlock()
@@ -64,6 +65,7 @@ func (rm *RoomManager) GetRoomsList() []map[string]interface{} {
 			"cols":        room.Cols,
 			"mines":       room.Mines,
 			"gameMode":    room.GameMode,
+			"quickStart":  room.QuickStart,
 			"players":     playerCount,
 			"createdAt":   room.CreatedAt,
 			"creatorId":   room.CreatorID,
@@ -89,6 +91,7 @@ func (r *Room) ToResponse() map[string]interface{} {
 		"cols":        r.Cols,
 		"mines":       r.Mines,
 		"gameMode":    r.GameMode,
+		"quickStart":  r.QuickStart,
 		"creatorId":   r.CreatorID,
 		"createdAt":   r.CreatedAt,
 	}
