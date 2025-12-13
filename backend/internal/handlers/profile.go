@@ -225,10 +225,6 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 	err := h.db.Select("rating").First(&user, userID).Error
 	currentRating := 0.0
 	if err == nil {
-		currentRating = user.Rating
-		if currentRating < 0 {
-			currentRating = 0.0
-		}
 	} else {
 		log.Printf("Error getting player rating: %v", err)
 	}
@@ -340,9 +336,6 @@ func (h *ProfileHandler) FindUserByID(id int) (models.User, error) {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return models.User{}, err
 	}
-	if user.Rating < 0 {
-		user.Rating = 0.0
-	}
 	return user, err
 }
 
@@ -351,9 +344,6 @@ func (h *ProfileHandler) findUserByUsername(username string) (models.User, error
 	err := h.db.Where("username = ?", username).First(&user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return models.User{}, err
-	}
-	if user.Rating < 0 {
-		user.Rating = 0.0
 	}
 	return user, err
 }
@@ -409,10 +399,6 @@ func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) 
 		entry := LeaderboardEntry{
 			ID:       user.ID,
 			Username: user.Username,
-			Rating:   user.Rating,
-		}
-		if user.Rating < 0 {
-			entry.Rating = 0.0
 		}
 		if user.Color != nil {
 			entry.Color = *user.Color

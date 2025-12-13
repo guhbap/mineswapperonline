@@ -11,6 +11,7 @@ import (
 	"minesweeperonline/internal/database"
 	"minesweeperonline/internal/models"
 	"minesweeperonline/internal/utils"
+
 	"gorm.io/gorm"
 )
 
@@ -155,7 +156,6 @@ func (h *AuthHandler) createUser(username, email, password string) (models.User,
 		Email:        email,
 		PasswordHash: passwordHash,
 		Color:        &defaultColor,
-		Rating:       0.0,
 		CreatedAt:    time.Now(),
 	}
 
@@ -182,9 +182,6 @@ func (h *AuthHandler) findUserByID(id int) (models.User, error) {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return models.User{}, err
 	}
-	// Убеждаемся, что рейтинг не nil
-	if user.Rating < 0 {
-		user.Rating = 0.0
-	}
+
 	return user, err
 }

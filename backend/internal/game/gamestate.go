@@ -104,9 +104,7 @@ func (gs *GameState) Copy() *GameState {
 
 	for i := range gs.Board {
 		gsCopy.Board[i] = make([]Cell, len(gs.Board[i]))
-		for j := range gs.Board[i] {
-			gsCopy.Board[i][j] = gs.Board[i][j]
-		}
+		copy(gsCopy.Board[i], gs.Board[i])
 	}
 
 	return gsCopy
@@ -176,7 +174,7 @@ func (gs *GameState) EnsureFirstClickSafe(firstRow, firstCol int) {
 
 	// Перемещаем мины в случайные свободные места
 	for range minesToMove {
-			attempts := 0
+		attempts := 0
 		for attempts < 100 {
 			newRow := mathrand.Intn(gs.Rows)
 			newCol := mathrand.Intn(gs.Cols)
@@ -224,4 +222,3 @@ func (gs *GameState) CheckWin() bool {
 	totalCells := gs.Rows * gs.Cols
 	return gs.Revealed == totalCells-gs.Mines
 }
-

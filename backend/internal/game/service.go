@@ -21,7 +21,7 @@ func NewGameService(resultRecorder GameResultRecorder) *GameService {
 // HandleCellClick обрабатывает клик по ячейке
 func (s *GameService) HandleCellClick(room *Room, playerID string, row, col int, isFlag bool) {
 	log.Printf("handleCellClick: начало, row=%d, col=%d, flag=%v", row, col, isFlag)
-	
+
 	room.GameState.Mu.Lock()
 	defer room.GameState.Mu.Unlock()
 
@@ -53,7 +53,7 @@ func (s *GameService) HandleCellClick(room *Room, playerID string, row, col int,
 	room.Mu.RUnlock()
 
 	if isFlag {
-		s.handleFlagToggle(room, playerID, row, col, cell, playerColor, nickname)
+		s.handleFlagToggle(room, playerID, row, col, cell, playerColor)
 		return
 	}
 
@@ -64,11 +64,11 @@ func (s *GameService) HandleCellClick(room *Room, playerID string, row, col int,
 	}
 
 	// Обработка открытия ячейки
-	s.handleCellReveal(room, playerID, row, col, cell, userID, nickname, playerColor)
+	s.handleCellReveal(room, playerID, row, col, cell, userID, nickname)
 }
 
 // handleFlagToggle обрабатывает переключение флага
-func (s *GameService) handleFlagToggle(room *Room, playerID string, row, col int, cell *Cell, playerColor, nickname string) {
+func (s *GameService) handleFlagToggle(room *Room, playerID string, row, col int, cell *Cell, playerColor string) {
 	if cell.IsRevealed {
 		log.Printf("Нельзя поставить флаг на открытую ячейку: row=%d, col=%d", row, col)
 		return
@@ -103,7 +103,7 @@ func (s *GameService) handleFlagToggle(room *Room, playerID string, row, col int
 }
 
 // handleCellReveal обрабатывает открытие ячейки
-func (s *GameService) handleCellReveal(room *Room, playerID string, row, col int, cell *Cell, userID int, nickname, playerColor string) {
+func (s *GameService) handleCellReveal(room *Room, playerID string, row, col int, cell *Cell, userID int, nickname string) {
 	// Устанавливаем время начала игры при первом клике
 	isFirstClick := room.GameState.Revealed == 0
 	if isFirstClick && room.StartTime == nil {
@@ -190,7 +190,7 @@ func (s *GameService) handleCellReveal(room *Room, playerID string, row, col int
 	changedCells[[2]int{row, col}] = true
 
 	if cell.IsMine {
-		s.handleMineExplosion(room, playerID, userID, nickname, playerColor, row, col)
+		s.handleMineExplosion(room, playerID, userID, nickname)
 		return
 	}
 
@@ -202,12 +202,12 @@ func (s *GameService) handleCellReveal(room *Room, playerID string, row, col int
 	// Проверка победы
 	totalCells := room.GameState.Rows * room.GameState.Cols
 	if room.GameState.Revealed == totalCells-room.GameState.Mines {
-		s.handleGameWin(room, playerID, userID)
+		s.handleGameWin(room)
 	}
 }
 
 // handleMineExplosion обрабатывает взрыв мины
-func (s *GameService) handleMineExplosion(room *Room, playerID string, userID int, nickname, playerColor string, row, col int) {
+func (s *GameService) handleMineExplosion(room *Room, playerID string, userID int, nickname string) {
 	room.GameState.GameOver = true
 	room.GameState.LoserPlayerID = playerID
 	room.GameState.LoserNickname = nickname
@@ -234,7 +234,7 @@ func (s *GameService) handleMineExplosion(room *Room, playerID string, userID in
 }
 
 // handleGameWin обрабатывает победу
-func (s *GameService) handleGameWin(room *Room, playerID string, userID int) {
+func (s *GameService) handleGameWin(room *Room) {
 	room.GameState.GameWon = true
 	log.Printf("Победа! Все ячейки открыты!")
 
@@ -282,10 +282,10 @@ func (s *GameService) collectParticipants(room *Room) []GameParticipant {
 // determineMinePlacement определяет размещение мин при клике в режимах training и fair
 func (s *GameService) determineMinePlacement(room *Room, clickRow, clickCol int) [][]bool {
 	log.Printf("determineMinePlacement: начало, clickRow=%d, clickCol=%d", clickRow, clickCol)
-	
+
 	// Создаем LabelMap на основе открытых ячеек
 	lm := NewLabelMap(room.GameState.Cols, room.GameState.Rows)
-	
+
 	revealedCount := 0
 	for i := 0; i < room.GameState.Rows; i++ {
 		for j := 0; j < room.GameState.Cols; j++ {
@@ -375,4 +375,3 @@ func (s *GameService) determineMinePlacement(room *Room, clickRow, clickCol int)
 
 	return mineGrid
 }
-

@@ -235,7 +235,7 @@ const handleJoinRoom = (room: Room) => {
   // Если гость - показываем модалку для ввода никнейма
 }
 
-const handleCreateRoom = async (data: { name: string; password?: string; rows: number; cols: number; mines: number }) => {
+const handleCreateRoom = async (data: { name: string; password?: string; rows: number; cols: number; mines: number; gameMode: string; quickStart: boolean; chording: boolean }) => {
   try {
     const room = await createRoom(data)
     selectedRoom.value = room

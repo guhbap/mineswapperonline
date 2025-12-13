@@ -76,6 +76,7 @@ export interface IWebSocketClient {
   sendCellClick(row: number, col: number, flag: boolean): void
   sendHint(row: number, col: number): void
   sendNewGame(): void
+  sendChatMessage(text: string): void
   disconnect(): void
   isConnected(): boolean
 }

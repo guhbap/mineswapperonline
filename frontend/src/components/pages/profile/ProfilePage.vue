@@ -19,10 +19,10 @@
           <div class="user-details">
             <h2 class="username">{{ profile.user.username }}</h2>
             <p v-if="isOwnProfile" class="email">{{ profile.user.email }}</p>
-            <div class="user-rating">
+            <!-- <div class="user-rating">
               <span class="rating-label">Рейтинг:</span>
               <span class="rating-value">{{ Math.round(profile.user.rating) }}</span>
-            </div>
+            </div> -->
             <div class="status-badge" :class="{ 'status-online': profile.stats.isOnline, 'status-offline': !profile.stats.isOnline }">
               <span class="status-dot"></span>
               <span>{{ profile.stats.isOnline ? 'В сети' : 'Не в сети' }}</span>
@@ -62,10 +62,10 @@
       <div class="profile-stats">
         <h3 class="stats-title">Статистика игр</h3>
         <div class="stats-grid">
-          <div class="stat-card stat-card--rating">
+          <!-- <div class="stat-card stat-card--rating">
             <div class="stat-value">{{ Math.round(profile.user.rating) }}</div>
             <div class="stat-label">Рейтинг</div>
-          </div>
+          </div> -->
           <div class="stat-card">
             <div class="stat-value">{{ profile.stats.gamesPlayed }}</div>
             <div class="stat-label">Игр сыграно</div>

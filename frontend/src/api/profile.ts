@@ -17,7 +17,6 @@ export interface UserProfile {
     username: string
     email: string
     color?: string
-    rating: number
     createdAt: string
   }
   stats: UserStats
