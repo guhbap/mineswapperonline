@@ -44,7 +44,8 @@ export async function encodeProtobufMessage(message: any): Promise<ArrayBuffer> 
   const msgObj: any = {}
 
   if (message.type === 'gameState' && message.gameState) {
-    msgObj.gameState = convertGameStateToProtobuf(message.gameState)
+    // В proto файле поле называется game_state (snake_case)
+    msgObj.game_state = convertGameStateToProtobuf(message.gameState)
   } else if (message.type === 'chat' && message.chat) {
     msgObj.chat = {
       playerId: message.playerId || '',
@@ -79,7 +80,8 @@ export async function encodeProtobufMessage(message: any): Promise<ArrayBuffer> 
       error: message.error
     }
   } else if (message.type === 'cellUpdate' && message.cellUpdates) {
-    msgObj.cellUpdate = {
+    // В proto файле поле называется cell_update (snake_case)
+    msgObj.cell_update = {
       gameOver: message.gameOver || false,
       gameWon: message.gameWon || false,
       revealed: message.revealed !== undefined ? message.revealed : -1,
@@ -130,11 +132,16 @@ export async function decodeProtobufMessage(data: ArrayBuffer): Promise<any> {
       oneofs: true
     })
 
+    // Логируем объект для отладки
+    console.log('[PROTOBUF DECODE] Decoded object keys:', Object.keys(obj))
+    console.log('[PROTOBUF DECODE] Decoded object:', obj)
+
     // Преобразуем в формат WebSocketMessage
-    if (obj.gameState) {
+    // Protobufjs конвертирует snake_case в camelCase, но проверяем оба варианта
+    if (obj.gameState || obj.game_state) {
     return {
       type: 'gameState',
-      gameState: convertProtobufToGameState(obj.gameState)
+      gameState: convertProtobufToGameState(obj.gameState || obj.game_state)
     }
   } else if (obj.chat) {
     return {
@@ -176,16 +183,17 @@ export async function decodeProtobufMessage(data: ArrayBuffer): Promise<any> {
       type: 'error',
       error: obj.error.error
     }
-  } else if (obj.cellUpdate) {
+  } else if (obj.cellUpdate || obj.cell_update) {
+    const cellUpdate = obj.cellUpdate || obj.cell_update
     return {
       type: 'cellUpdate',
-      gameOver: obj.cellUpdate.gameOver,
-      gameWon: obj.cellUpdate.gameWon,
-      revealed: obj.cellUpdate.revealed,
-      hintsUsed: obj.cellUpdate.hintsUsed,
-      loserPlayerId: obj.cellUpdate.loserPlayerId,
-      loserNickname: obj.cellUpdate.loserNickname,
-      cellUpdates: obj.cellUpdate.updates
+      gameOver: cellUpdate.gameOver,
+      gameWon: cellUpdate.gameWon,
+      revealed: cellUpdate.revealed,
+      hintsUsed: cellUpdate.hintsUsed,
+      loserPlayerId: cellUpdate.loserPlayerId,
+      loserNickname: cellUpdate.loserNickname,
+      cellUpdates: cellUpdate.updates
     }
   }
 
