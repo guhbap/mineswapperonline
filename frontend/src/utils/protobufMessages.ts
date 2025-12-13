@@ -124,7 +124,7 @@ export async function decodeProtobufMessage(data: ArrayBuffer): Promise<any> {
     const message = WebSocketMessage.decode(buffer)
     const obj = WebSocketMessage.toObject(message, {
       longs: String,
-      enums: String,
+      enums: Number, // Конвертируем enums в числа, а не строки
       bytes: String,
       defaults: true,
       arrays: true,
@@ -312,5 +312,26 @@ export async function encodeClientMessage(message: any): Promise<ArrayBuffer> {
   const messageInstance = ClientMessage.create(msgObj)
   const buffer = ClientMessage.encode(messageInstance).finish()
   return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer
+}
+
+// Преобразует строковое имя типа клетки (enum) в число (fallback)
+function convertCellTypeStringToNumber(typeStr: string): number {
+  const typeMap: Record<string, number> = {
+    'CELL_TYPE_NEIGHBOR_0': 0,
+    'CELL_TYPE_NEIGHBOR_1': 1,
+    'CELL_TYPE_NEIGHBOR_2': 2,
+    'CELL_TYPE_NEIGHBOR_3': 3,
+    'CELL_TYPE_NEIGHBOR_4': 4,
+    'CELL_TYPE_NEIGHBOR_5': 5,
+    'CELL_TYPE_NEIGHBOR_6': 6,
+    'CELL_TYPE_NEIGHBOR_7': 7,
+    'CELL_TYPE_NEIGHBOR_8': 8,
+    'CELL_TYPE_MINE': 9,
+    'CELL_TYPE_SAFE': 10,
+    'CELL_TYPE_UNKNOWN': 11,
+    'CELL_TYPE_DANGER': 12,
+    'CELL_TYPE_CLOSED': 255
+  }
+  return typeMap[typeStr] ?? 255 // По умолчанию закрытая клетка
 }
 
