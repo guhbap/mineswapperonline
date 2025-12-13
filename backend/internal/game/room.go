@@ -53,7 +53,7 @@ func (rm *RoomManager) GetRoom(roomID string) *Room {
 func (rm *RoomManager) GetRoomsList() []map[string]interface{} {
 	rm.mu.RLock()
 	defer rm.mu.RUnlock()
-	
+
 	roomsList := make([]map[string]interface{}, 0, len(rm.rooms))
 	for _, room := range rm.rooms {
 		room.Mu.RLock()
@@ -144,13 +144,31 @@ func (r *Room) GetPlayer(playerID string) *Player {
 func (r *Room) ResetGame() {
 	log.Printf("ResetGame: начало для комнаты %s", r.ID)
 	log.Printf("ResetGame: пытаемся заблокировать room.Mu (Lock)")
-	r.Mu.Lock()
-	log.Printf("ResetGame: room.Mu успешно заблокирован (Lock), создаем новый GameState")
-	r.GameState = NewGameState(r.Rows, r.Cols, r.Mines, r.GameMode)
-	log.Printf("ResetGame: новый GameState создан, сбрасываем StartTime")
-	r.StartTime = nil
-	log.Printf("ResetGame: разблокируем room.Mu")
-	r.Mu.Unlock()
-	log.Printf("ResetGame: room.Mu разблокирован, завершено для комнаты %s", r.ID)
-}
 
+	// Пытаемся заблокировать с таймаутом для диагностики
+	locked := make(chan bool, 1)
+	go func() {
+		r.Mu.Lock()
+		locked <- true
+	}()
+
+	select {
+	case <-locked:
+		log.Printf("ResetGame: room.Mu успешно заблокирован (Lock), создаем новый GameState")
+		r.GameState = NewGameState(r.Rows, r.Cols, r.Mines, r.GameMode)
+		log.Printf("ResetGame: новый GameState создан, сбрасываем StartTime")
+		r.StartTime = nil
+		log.Printf("ResetGame: разблокируем room.Mu")
+		r.Mu.Unlock()
+		log.Printf("ResetGame: room.Mu разблокирован, завершено для комнаты %s", r.ID)
+	case <-time.After(5 * time.Second):
+		log.Printf("ResetGame: ПРЕДУПРЕЖДЕНИЕ - не удалось заблокировать room.Mu за 5 секунд! Возможен deadlock.")
+		// Все равно пытаемся продолжить, но это может быть проблемой
+		r.Mu.Lock()
+		log.Printf("ResetGame: room.Mu наконец заблокирован после ожидания")
+		r.GameState = NewGameState(r.Rows, r.Cols, r.Mines, r.GameMode)
+		r.StartTime = nil
+		r.Mu.Unlock()
+		log.Printf("ResetGame: завершено для комнаты %s (с задержкой)", r.ID)
+	}
+}
