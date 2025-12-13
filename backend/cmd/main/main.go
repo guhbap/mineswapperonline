@@ -1626,37 +1626,89 @@ func (s *Server) determineMinePlacement(room *Room, clickRow, clickCol int) [][]
 		}
 	} else {
 		// Клик на границе
+		log.Printf("determineMinePlacement: клик на границе, boundaryIdx=%d", boundaryIdx)
 		canBeSafe := solver.CanBeSafe(boundaryIdx)
 		canBeDangerous := solver.CanBeDangerous(boundaryIdx)
+		log.Printf("determineMinePlacement: canBeSafe=%v, canBeDangerous=%v, hasSafeCells=%v", canBeSafe, canBeDangerous, hasSafeCells)
 
 		if canBeSafe && (!canBeDangerous || !hasSafeCells) {
 			// Размещаем пустую ячейку
+			log.Printf("determineMinePlacement: пытаемся получить AnySafeShape")
 			shape = solver.AnySafeShape(boundaryIdx)
+			if shape == nil {
+				log.Printf("determineMinePlacement: AnySafeShape вернул nil")
+			} else {
+				log.Printf("determineMinePlacement: AnySafeShape получен")
+			}
 		} else {
 			// Размещаем мину (худший сценарий)
+			log.Printf("determineMinePlacement: пытаемся получить AnyDangerousShape")
 			shape = solver.AnyDangerousShape(boundaryIdx)
+			if shape == nil {
+				log.Printf("determineMinePlacement: AnyDangerousShape вернул nil")
+			} else {
+				log.Printf("determineMinePlacement: AnyDangerousShape получен")
+			}
 		}
 	}
 
 	// Если не удалось получить форму, используем любую форму
 	if shape == nil {
+		log.Printf("determineMinePlacement: форма не получена, пытаемся получить AnyShape")
 		shape = solver.AnyShape()
+		if shape == nil {
+			log.Printf("determineMinePlacement: AnyShape тоже вернул nil!")
+		} else {
+			log.Printf("determineMinePlacement: AnyShape получен")
+		}
 	}
 
 	if shape != nil {
 		log.Printf("determineMinePlacement: получена форма, создаем MineGrid")
 		result := shape.MineGrid()
 		log.Printf("determineMinePlacement: MineGrid создан, размер %dx%d", len(result), len(result[0]))
+
+		// Подсчитываем мины в результате для отладки
+		mineCount := 0
+		for i := 0; i < len(result); i++ {
+			for j := 0; j < len(result[i]); j++ {
+				if result[i][j] {
+					mineCount++
+				}
+			}
+		}
+		log.Printf("determineMinePlacement: в MineGrid размещено %d мин", mineCount)
 		return result
 	}
 
-	// Fallback: создаем пустую сетку (не должно происходить)
-	log.Printf("determineMinePlacement: WARNING - форма не получена, используем fallback")
+	// Fallback: создаем сетку с минами (не должно происходить, но лучше чем пустая)
+	log.Printf("determineMinePlacement: WARNING - форма не получена, используем fallback с минами")
 	mineGrid := make([][]bool, room.GameState.Rows)
 	for i := 0; i < room.GameState.Rows; i++ {
 		mineGrid[i] = make([]bool, room.GameState.Cols)
 	}
-	log.Printf("determineMinePlacement: fallback mineGrid создан")
+
+	// Размещаем мины случайно (fallback), избегая кликнутой ячейки и уже открытых
+	placed := 0
+	mathrand.Seed(time.Now().UnixNano())
+	attempts := 0
+	maxAttempts := room.GameState.Rows * room.GameState.Cols * 2
+	for placed < remainingMines && attempts < maxAttempts {
+		row := mathrand.Intn(room.GameState.Rows)
+		col := mathrand.Intn(room.GameState.Cols)
+		attempts++
+
+		// Пропускаем кликнутую ячейку и уже открытые
+		if (row == clickRow && col == clickCol) || room.GameState.Board[row][col].IsRevealed {
+			continue
+		}
+
+		if !mineGrid[row][col] {
+			mineGrid[row][col] = true
+			placed++
+		}
+	}
+	log.Printf("determineMinePlacement: fallback mineGrid создан с %d минами (попыток: %d)", placed, attempts)
 	return mineGrid
 }
 

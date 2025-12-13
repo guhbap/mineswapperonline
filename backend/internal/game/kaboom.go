@@ -696,17 +696,29 @@ func (s *Solver) OutsideCanBeSafe() bool {
 
 // AnySafeShape возвращает форму с безопасной ячейкой по индексу
 func (s *Solver) AnySafeShape(idx int) *MineShape {
+	if idx < 0 || idx >= s.numMines {
+		return nil
+	}
 	solution := s.sat.SolveWith(func() {
 		s.sat.Assert([]int{-(idx + 1)})
 	})
+	if solution == nil {
+		return nil
+	}
 	return s.shape(solution)
 }
 
 // AnyDangerousShape возвращает форму с опасной ячейкой по индексу
 func (s *Solver) AnyDangerousShape(idx int) *MineShape {
+	if idx < 0 || idx >= s.numMines {
+		return nil
+	}
 	solution := s.sat.SolveWith(func() {
 		s.sat.Assert([]int{idx + 1})
 	})
+	if solution == nil {
+		return nil
+	}
 	return s.shape(solution)
 }
 
