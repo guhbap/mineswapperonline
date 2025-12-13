@@ -6,6 +6,14 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// truncatePlayerID обрезает playerID до 5 символов
+func truncatePlayerID(playerID string) string {
+	if len(playerID) > 5 {
+		return playerID[:5]
+	}
+	return playerID
+}
+
 // encodeGameStateProtobuf кодирует GameState в protobuf формат
 func encodeGameStateProtobuf(gs *GameState) ([]byte, error) {
 	gs.mu.RLock()

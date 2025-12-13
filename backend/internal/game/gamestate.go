@@ -21,7 +21,7 @@ func NewGameState(rows, cols, mines int, gameMode string) *GameState {
 		LoserPlayerID: "",
 		LoserNickname: "",
 		Board:         make([][]Cell, rows),
-		flagSetInfo:   make(map[int]FlagInfo),
+		FlagSetInfo:   make(map[int]FlagInfo),
 	}
 
 	// Инициализация поля
@@ -69,8 +69,8 @@ func NewGameState(rows, cols, mines int, gameMode string) *GameState {
 
 // Copy создает копию состояния игры
 func (gs *GameState) Copy() *GameState {
-	gs.mu.RLock()
-	defer gs.mu.RUnlock()
+	gs.Mu.RLock()
+	defer gs.Mu.RUnlock()
 
 	gsCopy := &GameState{
 		Rows:          gs.Rows,
@@ -85,13 +85,13 @@ func (gs *GameState) Copy() *GameState {
 		LoserPlayerID: gs.LoserPlayerID,
 		LoserNickname: gs.LoserNickname,
 		Board:         make([][]Cell, len(gs.Board)),
-		flagSetInfo:   make(map[int]FlagInfo),
+		FlagSetInfo:   make(map[int]FlagInfo),
 	}
 
 	copy(gsCopy.SafeCells, gs.SafeCells)
 	copy(gsCopy.CellHints, gs.CellHints)
-	for k, v := range gs.flagSetInfo {
-		gsCopy.flagSetInfo[k] = v
+	for k, v := range gs.FlagSetInfo {
+		gsCopy.FlagSetInfo[k] = v
 	}
 
 	for i := range gs.Board {
@@ -151,8 +151,8 @@ func (gs *GameState) isInRadius(row, col, centerRow, centerCol, radius int) bool
 
 // EnsureFirstClickSafe перемещает мины из радиуса первой ячейки
 func (gs *GameState) EnsureFirstClickSafe(firstRow, firstCol int) {
-	gs.mu.Lock()
-	defer gs.mu.Unlock()
+	gs.Mu.Lock()
+	defer gs.Mu.Unlock()
 
 	// Собираем мины в радиусе 1
 	minesToMove := []struct{ row, col int }{}
@@ -211,8 +211,8 @@ func (gs *GameState) RevealNeighbors(row, col int, changedCells map[[2]int]bool)
 
 // CheckWin проверяет условие победы
 func (gs *GameState) CheckWin() bool {
-	gs.mu.RLock()
-	defer gs.mu.RUnlock()
+	gs.Mu.RLock()
+	defer gs.Mu.RUnlock()
 	totalCells := gs.Rows * gs.Cols
 	return gs.Revealed == totalCells-gs.Mines
 }

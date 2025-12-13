@@ -22,8 +22,8 @@ func NewGameService(resultRecorder GameResultRecorder) *GameService {
 func (s *GameService) HandleCellClick(room *Room, playerID string, row, col int, isFlag bool) {
 	log.Printf("handleCellClick: начало, row=%d, col=%d, flag=%v", row, col, isFlag)
 	
-	room.GameState.mu.Lock()
-	defer room.GameState.mu.Unlock()
+	room.GameState.Mu.Lock()
+	defer room.GameState.Mu.Unlock()
 
 	if room.GameState.GameOver || room.GameState.GameWon {
 		log.Printf("Игра уже окончена, клик игнорируется")
@@ -40,7 +40,7 @@ func (s *GameService) HandleCellClick(room *Room, playerID string, row, col int,
 	// Получаем информацию об игроке
 	// Примечание: в реальной реализации Player будет из websocket пакета
 	// Здесь используем упрощенный подход - данные передаются отдельно
-	room.mu.RLock()
+	room.Mu.RLock()
 	player := room.Players[playerID]
 	var nickname string
 	var playerColor string
@@ -50,7 +50,7 @@ func (s *GameService) HandleCellClick(room *Room, playerID string, row, col int,
 		playerColor = player.Color
 		userID = player.UserID
 	}
-	room.mu.RUnlock()
+	room.Mu.RUnlock()
 
 	if isFlag {
 		s.handleFlagToggle(room, playerID, row, col, cell, playerColor, nickname)
@@ -73,7 +73,7 @@ func (s *GameService) handleFlagToggle(room *Room, playerID string, row, col int
 	now := time.Now()
 
 	if wasFlagged {
-		if flagInfo, exists := room.GameState.flagSetInfo[cellKey]; exists {
+		if flagInfo, exists := room.GameState.FlagSetInfo[cellKey]; exists {
 			if flagInfo.PlayerID != playerID {
 				timeSinceFlagSet := now.Sub(flagInfo.SetTime)
 				if timeSinceFlagSet < 1*time.Second {
@@ -82,10 +82,10 @@ func (s *GameService) handleFlagToggle(room *Room, playerID string, row, col int
 				}
 			}
 		}
-		delete(room.GameState.flagSetInfo, cellKey)
+		delete(room.GameState.FlagSetInfo, cellKey)
 		cell.FlagColor = ""
 	} else {
-		room.GameState.flagSetInfo[cellKey] = FlagInfo{
+		room.GameState.FlagSetInfo[cellKey] = FlagInfo{
 			SetTime:  now,
 			PlayerID: playerID,
 		}
@@ -101,22 +101,22 @@ func (s *GameService) handleCellReveal(room *Room, playerID string, row, col int
 	// Устанавливаем время начала игры при первом клике
 	isFirstClick := room.GameState.Revealed == 0
 	if isFirstClick && room.StartTime == nil {
-		room.mu.Lock()
+		room.Mu.Lock()
 		now := time.Now()
 		room.StartTime = &now
-		room.mu.Unlock()
+		room.Mu.Unlock()
 		log.Printf("StartTime установлен при первом клике: %v", now)
 	}
 
 	// В режимах training и fair мины размещаются динамически
-	room.mu.RLock()
+	room.Mu.RLock()
 	gameMode := room.GameMode
-	room.mu.RUnlock()
+	room.Mu.RUnlock()
 
 	if gameMode == "training" || gameMode == "fair" {
-		room.GameState.mu.Unlock()
+		room.GameState.Mu.Unlock()
 		mineGrid := s.determineMinePlacement(room, row, col)
-		room.GameState.mu.Lock()
+		room.GameState.Mu.Lock()
 
 		// Применяем размещение мин
 		changedCells := make(map[[2]int]bool)
@@ -199,14 +199,14 @@ func (s *GameService) handleMineExplosion(room *Room, playerID string, userID in
 	room.GameState.LoserNickname = nickname
 
 	// Вычисляем время игры
-	room.mu.RLock()
+	room.Mu.RLock()
 	var gameTime float64
 	if room.StartTime != nil {
 		gameTime = time.Since(*room.StartTime).Seconds()
 	} else {
 		gameTime = 0.0
 	}
-	room.mu.RUnlock()
+	room.Mu.RUnlock()
 
 	// Записываем поражение в БД
 	if userID > 0 && s.resultRecorder != nil {
@@ -225,7 +225,7 @@ func (s *GameService) handleGameWin(room *Room, playerID string, userID int) {
 	log.Printf("Победа! Все ячейки открыты!")
 
 	// Вычисляем время игры
-	room.mu.RLock()
+	room.Mu.RLock()
 	var gameTime float64
 	if room.StartTime != nil {
 		gameTime = time.Since(*room.StartTime).Seconds()
@@ -234,10 +234,10 @@ func (s *GameService) handleGameWin(room *Room, playerID string, userID int) {
 	}
 	loserID := room.GameState.LoserPlayerID
 	participants := s.collectParticipants(room)
-	room.mu.RUnlock()
+	room.Mu.RUnlock()
 
 	// Записываем победу для всех игроков, которые не проиграли
-	room.mu.RLock()
+	room.Mu.RLock()
 	for _, p := range room.Players {
 		if p.ID != loserID && p.UserID > 0 && s.resultRecorder != nil {
 			if err := s.resultRecorder.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, participants); err != nil {
@@ -245,13 +245,13 @@ func (s *GameService) handleGameWin(room *Room, playerID string, userID int) {
 			}
 		}
 	}
-	room.mu.RUnlock()
+	room.Mu.RUnlock()
 }
 
 // collectParticipants собирает список участников игры
 func (s *GameService) collectParticipants(room *Room) []GameParticipant {
 	participants := make([]GameParticipant, 0)
-	room.mu.RLock()
+	room.Mu.RLock()
 	for _, p := range room.Players {
 		if p.UserID > 0 {
 			participants = append(participants, GameParticipant{
@@ -261,7 +261,7 @@ func (s *GameService) collectParticipants(room *Room) []GameParticipant {
 			})
 		}
 	}
-	room.mu.RUnlock()
+	room.Mu.RUnlock()
 	return participants
 }
 

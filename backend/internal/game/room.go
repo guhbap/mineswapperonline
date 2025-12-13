@@ -53,9 +53,9 @@ func (rm *RoomManager) GetRoomsList() []map[string]interface{} {
 	
 	roomsList := make([]map[string]interface{}, 0, len(rm.rooms))
 	for _, room := range rm.rooms {
-		room.mu.RLock()
+		room.Mu.RLock()
 		playerCount := len(room.Players)
-		room.mu.RUnlock()
+		room.Mu.RUnlock()
 		roomsList = append(roomsList, map[string]interface{}{
 			"id":          room.ID,
 			"name":        room.Name,
@@ -79,8 +79,8 @@ func (rm *RoomManager) DeleteRoom(roomID string) {
 }
 
 func (r *Room) ToResponse() map[string]interface{} {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.Mu.RLock()
+	defer r.Mu.RUnlock()
 	return map[string]interface{}{
 		"id":          r.ID,
 		"name":        r.Name,
@@ -100,8 +100,44 @@ func (r *Room) ValidatePassword(password string) bool {
 
 // IsCreator проверяет, является ли пользователь создателем комнаты
 func (r *Room) IsCreator(userID int) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.Mu.RLock()
+	defer r.Mu.RUnlock()
 	return r.CreatorID == userID
+}
+
+// AddPlayer добавляет игрока в комнату
+func (r *Room) AddPlayer(playerID string, player *Player) {
+	r.Mu.Lock()
+	defer r.Mu.Unlock()
+	r.Players[playerID] = player
+}
+
+// RemovePlayer удаляет игрока из комнаты
+func (r *Room) RemovePlayer(playerID string) {
+	r.Mu.Lock()
+	defer r.Mu.Unlock()
+	delete(r.Players, playerID)
+}
+
+// GetPlayerCount возвращает количество игроков
+func (r *Room) GetPlayerCount() int {
+	r.Mu.RLock()
+	defer r.Mu.RUnlock()
+	return len(r.Players)
+}
+
+// GetPlayer возвращает игрока по ID
+func (r *Room) GetPlayer(playerID string) *Player {
+	r.Mu.RLock()
+	defer r.Mu.RUnlock()
+	return r.Players[playerID]
+}
+
+// ResetGame сбрасывает игру
+func (r *Room) ResetGame() {
+	r.Mu.Lock()
+	defer r.Mu.Unlock()
+	r.GameState = NewGameState(r.Rows, r.Cols, r.Mines, r.GameMode)
+	r.StartTime = nil
 }
 

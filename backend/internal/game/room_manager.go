@@ -21,8 +21,8 @@ func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, co
 		return fmt.Errorf("room not found")
 	}
 
-	room.mu.Lock()
-	defer room.mu.Unlock()
+	room.Mu.Lock()
+	defer room.Mu.Unlock()
 
 	// Обновляем параметры комнаты
 	room.Name = name
@@ -66,9 +66,9 @@ func (rm *RoomManager) ScheduleRoomDeletion(roomID string, delay time.Duration) 
 	// Создаем новый таймер
 	room.deleteTimer = time.AfterFunc(delay, func() {
 		// Проверяем, что комната все еще пустая перед удалением
-		room.mu.RLock()
+		room.Mu.RLock()
 		playersCount := len(room.Players)
-		room.mu.RUnlock()
+		room.Mu.RUnlock()
 
 		if playersCount == 0 {
 			log.Printf("Комната %s пуста более %v, удаляем", roomID, delay)
@@ -92,4 +92,3 @@ func (r *Room) CancelDeletion() {
 		log.Printf("Отмена удаления комнаты %s", r.ID)
 	}
 }
-

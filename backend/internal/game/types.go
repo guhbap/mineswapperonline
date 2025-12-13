@@ -47,8 +47,8 @@ type GameState struct {
 	CellHints     []CellHint  `json:"hints,omitempty"`   // Подсказки для ячеек
 	LoserPlayerID string      `json:"lpid,omitempty"`
 	LoserNickname string      `json:"ln,omitempty"`
-	flagSetInfo   map[int]FlagInfo // Информация об установке флага (ключ: row*cols + col)
-	mu            sync.RWMutex
+	FlagSetInfo   map[int]FlagInfo // Информация об установке флага (ключ: row*cols + col)
+	Mu            sync.RWMutex     // Экспортировано для доступа из main.go
 }
 
 // Room представляет игровую комнату
@@ -67,7 +67,7 @@ type Room struct {
 	StartTime     *time.Time         `json:"-"`        // Время начала игры
 	deleteTimer   *time.Timer        // Таймер для отложенного удаления
 	deleteTimerMu sync.Mutex         // Мьютекс для безопасной работы с таймером
-	mu            sync.RWMutex
+	Mu            sync.RWMutex       // Экспортировано для доступа из main.go
 }
 
 // Player представляет игрока (используется в контексте комнаты)
