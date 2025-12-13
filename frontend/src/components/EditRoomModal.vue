@@ -9,7 +9,7 @@
           v-model:has-password="hasPassword"
           :error="error"
           :show-advanced-options="true"
-          :show-all-game-modes="true"
+          :show-all-game-modes="false"
           :auto-generate-name="false"
         >
           <template #warning>
