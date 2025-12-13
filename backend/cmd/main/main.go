@@ -220,7 +220,6 @@ func NewGameState(rows, cols, mines int, gameMode string) *GameState {
 	// В режимах training и fair мины НЕ размещаются заранее - они определяются динамически при клике
 	// В классическом режиме размещаем мины случайно
 	if gameMode == "classic" {
-		mathrand.Seed(time.Now().UnixNano())
 		minesPlaced := 0
 		for minesPlaced < mines {
 			row := mathrand.Intn(rows)
@@ -257,6 +256,7 @@ func NewGameState(rows, cols, mines int, gameMode string) *GameState {
 }
 
 // generateRandomBoard создает случайное поле (используется как fallback)
+//lint:ignore U1000 Используется для отладки и тестирования
 func generateRandomBoard(rows, cols, mines int) *GameState {
 	gs := &GameState{
 		Rows:          rows,
@@ -276,7 +276,6 @@ func generateRandomBoard(rows, cols, mines int) *GameState {
 		gs.Board[i] = make([]Cell, cols)
 	}
 
-	mathrand.Seed(time.Now().UnixNano())
 	minesPlaced := 0
 	for minesPlaced < mines {
 		row := mathrand.Intn(rows)
@@ -310,6 +309,7 @@ func generateRandomBoard(rows, cols, mines int) *GameState {
 }
 
 // Вспомогательная функция: получить соседей
+//lint:ignore U1000 Используется для отладки и тестирования
 func neighbors(rows, cols, i, j int) [][2]int {
 	out := [][2]int{}
 	for di := -1; di <= 1; di++ {
@@ -1087,6 +1087,8 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 	s.broadcastCellUpdates(room, changedCells, room.GameState.GameOver, room.GameState.GameWon, room.GameState.Revealed, room.GameState.HintsUsed, room.GameState.LoserPlayerID, room.GameState.LoserNickname)
 }
 
+// ensureFirstClickSafe обеспечивает безопасность первого клика
+//lint:ignore U1000 Используется для отладки и тестирования
 func (s *Server) ensureFirstClickSafe(room *Room, firstRow, firstCol int) {
 	// Собираем все мины в радиусе 1 клетки от первой ячейки
 	minesToMove := make([]struct{ row, col int }, 0)
@@ -1104,7 +1106,6 @@ func (s *Server) ensureFirstClickSafe(room *Room, firstRow, firstCol int) {
 	}
 
 	// Перемещаем мины в случайные свободные места
-	mathrand.Seed(time.Now().UnixNano())
 	for range minesToMove {
 		// Ищем свободное место (не в радиусе 1 от первой ячейки и не занятое миной)
 		attempts := 0
@@ -1571,6 +1572,7 @@ func (s *Server) sendPlayerListToPlayer(room *Room, targetPlayer *Player) {
 }
 
 // updateSafeCells обновляет список безопасных ячеек используя алгоритм kaboom
+//lint:ignore U1000 Используется для отладки и тестирования
 func (s *Server) updateSafeCells(room *Room) {
 	room.GameState.mu.Lock()
 	defer room.GameState.mu.Unlock()
@@ -1799,7 +1801,6 @@ func (s *Server) determineMinePlacement(room *Room, clickRow, clickCol int) [][]
 
 	// Размещаем мины случайно (fallback), избегая кликнутой ячейки и уже открытых
 	placed := 0
-	mathrand.Seed(time.Now().UnixNano())
 	attempts := 0
 	maxAttempts := room.GameState.Rows * room.GameState.Cols * 2
 	for placed < minesToPlace && attempts < maxAttempts {
@@ -2066,12 +2067,13 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 
 	// Проверяем, было ли передано поле password
 	passwordProvided := false
-	var password string
+	password := ""
 	if pwd, exists := reqMap["password"]; exists {
 		passwordProvided = true
 		if pwdStr, ok := pwd.(string); ok {
 			password = pwdStr
 		}
+		// Если тип не string, password остается пустой строкой (для удаления пароля)
 	}
 
 	if err := utils.ValidateRoomParams(name, rows, cols, mines); err != nil {
@@ -2098,9 +2100,6 @@ func (s *Server) handleUpdateRoom(w http.ResponseWriter, r *http.Request) {
 	// Обрабатываем пароль
 	if !passwordProvided {
 		// Если пароль не передан, сохраняем текущий пароль (используем специальное значение)
-		room.mu.RLock()
-		password = room.Password
-		room.mu.RUnlock()
 		password = "__KEEP__"
 	}
 	// Если passwordProvided == true, используем переданное значение (может быть пустой строкой для удаления)

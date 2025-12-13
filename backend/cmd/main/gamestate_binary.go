@@ -65,7 +65,7 @@ func encodeGameStateBinary(gs *GameState) ([]byte, error) {
 	// LoserNickname
 	loserNicknameBytes := []byte(gs.LoserNickname)
 	nicknameLen := byte(len(loserNicknameBytes))
-	if nicknameLen > 255 {
+	if len(loserNicknameBytes) > 255 {
 		nicknameLen = 255
 		loserNicknameBytes = loserNicknameBytes[:255]
 	}
@@ -118,7 +118,7 @@ func encodeGameStateBinary(gs *GameState) ([]byte, error) {
 
 	// Записываем количество флагов с цветами
 	flagCount := byte(len(flagColors))
-	if flagCount > 255 {
+	if len(flagColors) > 255 {
 		flagCount = 255
 	}
 	buf.WriteByte(flagCount)
@@ -148,7 +148,7 @@ func encodeGameStateBinary(gs *GameState) ([]byte, error) {
 
 	// Записываем SafeCells (для режима без угадываний)
 	safeCellsCount := uint16(len(gs.SafeCells))
-	if safeCellsCount > 65535 {
+	if len(gs.SafeCells) > 65535 {
 		safeCellsCount = 65535
 	}
 	binary.Write(buf, binary.LittleEndian, safeCellsCount)
@@ -160,7 +160,7 @@ func encodeGameStateBinary(gs *GameState) ([]byte, error) {
 
 	// Записываем CellHints (подсказки для ячеек, показываются при проигрыше в fairMode)
 	hintsCount := uint16(len(gs.CellHints))
-	if hintsCount > 65535 {
+	if len(gs.CellHints) > 65535 {
 		hintsCount = 65535
 	}
 	binary.Write(buf, binary.LittleEndian, hintsCount)
@@ -187,6 +187,7 @@ func encodeGameStateBinary(gs *GameState) ([]byte, error) {
 }
 
 // decodeGameStateBinary декодирует бинарный формат в GameState
+//lint:ignore U1000 Используется для отладки и тестирования
 func decodeGameStateBinary(data []byte) (*GameState, error) {
 	buf := bytes.NewReader(data)
 

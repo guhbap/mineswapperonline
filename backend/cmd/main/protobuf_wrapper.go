@@ -11,16 +11,22 @@ type ProtobufMessage interface {
 }
 
 // encodeProtobufMessage кодирует protobuf сообщение в бинарный формат
+//
+//lint:ignore U1000 Используется для отладки и тестирования
 func encodeProtobufMessage(msg proto.Message) ([]byte, error) {
 	return proto.Marshal(msg)
 }
 
 // decodeProtobufMessage декодирует бинарные данные в protobuf сообщение
+//
+//lint:ignore U1000 Используется для отладки и тестирования
 func decodeProtobufMessage(data []byte, msg proto.Message) error {
 	return proto.Unmarshal(data, msg)
 }
 
 // encodeProtobufJSON кодирует protobuf сообщение в JSON (для отладки)
+//
+//lint:ignore U1000 Используется для отладки и тестирования
 func encodeProtobufJSON(msg proto.Message) (string, error) {
 	marshaler := protojson.MarshalOptions{
 		Multiline:       true,

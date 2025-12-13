@@ -139,7 +139,6 @@ func collectCellUpdates(room *Room, changedCells map[[2]int]bool) []CellUpdate {
 	updates := make([]CellUpdate, 0)
 	
 	room.GameState.mu.RLock()
-	gameMode := room.GameMode
 	cellHints := room.GameState.CellHints
 	board := room.GameState.Board
 	rows := room.GameState.Rows
@@ -147,7 +146,7 @@ func collectCellUpdates(room *Room, changedCells map[[2]int]bool) []CellUpdate {
 	room.GameState.mu.RUnlock()
 
 	room.mu.RLock()
-	gameMode = room.GameMode
+	gameMode := room.GameMode
 	room.mu.RUnlock()
 
 	for pos := range changedCells {

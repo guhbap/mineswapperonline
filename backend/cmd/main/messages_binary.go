@@ -130,6 +130,7 @@ func encodeChatBinary(msg *Message) ([]byte, error) {
 }
 
 // decodeChatBinary декодирует бинарное сообщение чата
+//lint:ignore U1000 Используется для отладки и тестирования
 func decodeChatBinary(data []byte) (*Message, error) {
 	buf := bytes.NewReader(data)
 	msg := &Message{Type: "chat", Chat: &ChatMessage{}}
@@ -255,6 +256,7 @@ func encodeCursorBinary(msg *Message) ([]byte, error) {
 }
 
 // decodeCursorBinary декодирует бинарное сообщение курсора
+//lint:ignore U1000 Используется для отладки и тестирования
 func decodeCursorBinary(data []byte) (*Message, error) {
 	buf := bytes.NewReader(data)
 	msg := &Message{Type: "cursor", Cursor: &CursorPosition{}}
@@ -360,6 +362,7 @@ func encodePlayersBinary(players []map[string]string) ([]byte, error) {
 }
 
 // decodePlayersBinary декодирует бинарное сообщение списка игроков
+//lint:ignore U1000 Используется для отладки и тестирования
 func decodePlayersBinary(data []byte) ([]map[string]string, error) {
 	buf := bytes.NewReader(data)
 	// Пропускаем тип сообщения
@@ -431,6 +434,7 @@ func encodeErrorBinary(errorMsg string) ([]byte, error) {
 }
 
 // decodeErrorBinary декодирует бинарное сообщение об ошибке
+//lint:ignore U1000 Используется для отладки и тестирования
 func decodeErrorBinary(data []byte) (string, error) {
 	buf := bytes.NewReader(data)
 	// Пропускаем тип сообщения
