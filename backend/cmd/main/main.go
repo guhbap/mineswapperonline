@@ -461,11 +461,15 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			player.Nickname = msg.Nickname
 			player.mu.Unlock()
 			// Обновляем никнейм также в room.Players
+			log.Printf("[MUTEX] nickname: блокируем room.Mu.Lock() для комнаты %s, игрок %s", roomID, playerID)
 			room.Mu.Lock()
+			log.Printf("[MUTEX] nickname: room.Mu.Lock() заблокирован для комнаты %s, игрок %s", roomID, playerID)
 			if roomPlayer := room.Players[playerID]; roomPlayer != nil {
 				roomPlayer.Nickname = msg.Nickname
 			}
+			log.Printf("[MUTEX] nickname: разблокируем room.Mu.Unlock() для комнаты %s, игрок %s", roomID, playerID)
 			room.Mu.Unlock()
+			log.Printf("[MUTEX] nickname: room.Mu.Unlock() разблокирован для комнаты %s, игрок %s", roomID, playerID)
 			log.Printf("Никнейм игрока %s установлен: %s", playerID, msg.Nickname)
 			s.broadcastPlayerList(room)
 
@@ -582,7 +586,9 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 	log.Printf("handleCellClick: ячейка получена, isRevealed=%v, isFlagged=%v, isMine=%v", cell.IsRevealed, cell.IsFlagged, cell.IsMine)
 
 	// Получаем информацию об игроке для сервисных сообщений
+	log.Printf("[MUTEX] handleCellClick: блокируем room.Mu.RLock() для комнаты, игрок %s", playerID)
 	room.Mu.RLock()
+	log.Printf("[MUTEX] handleCellClick: room.Mu.RLock() заблокирован для комнаты, игрок %s", playerID)
 	player := room.Players[playerID]
 	var nickname string
 	var playerColor string
@@ -590,7 +596,9 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 		nickname = player.Nickname
 		playerColor = player.Color
 	}
+	log.Printf("[MUTEX] handleCellClick: разблокируем room.Mu.RUnlock() для комнаты, игрок %s", playerID)
 	room.Mu.RUnlock()
+	log.Printf("[MUTEX] handleCellClick: room.Mu.RUnlock() разблокирован для комнаты, игрок %s", playerID)
 
 	if click.Flag {
 		// Переключение флага - нельзя ставить на открытые ячейки
@@ -752,16 +760,22 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 									room.GameState.LoserNickname = nickname
 								}
 
+								log.Printf("[MUTEX] handleCellClick (взрыв chording): блокируем room.Mu.RLock() для получения gameTime")
 								room.Mu.RLock()
+								log.Printf("[MUTEX] handleCellClick (взрыв chording): room.Mu.RLock() заблокирован для получения gameTime")
 								var gameTime float64
 								if room.StartTime != nil {
 									gameTime = time.Since(*room.StartTime).Seconds()
 								}
+								log.Printf("[MUTEX] handleCellClick (взрыв chording): разблокируем room.Mu.RUnlock() после получения gameTime")
 								room.Mu.RUnlock()
+								log.Printf("[MUTEX] handleCellClick (взрыв chording): room.Mu.RUnlock() разблокирован после получения gameTime")
 
 								if userID > 0 {
 									// Собираем список участников для записи результата
+									log.Printf("[MUTEX] handleCellClick (взрыв chording): блокируем room.Mu.RLock() для сбора участников")
 									room.Mu.RLock()
+									log.Printf("[MUTEX] handleCellClick (взрыв chording): room.Mu.RLock() заблокирован для сбора участников")
 									participants := make([]handlers.GameParticipant, 0)
 									for _, p := range room.Players {
 										if p.UserID > 0 {
@@ -772,7 +786,9 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 											})
 										}
 									}
+									log.Printf("[MUTEX] handleCellClick (взрыв chording): разблокируем room.Mu.RUnlock() после сбора участников")
 									room.Mu.RUnlock()
+									log.Printf("[MUTEX] handleCellClick (взрыв chording): room.Mu.RUnlock() разблокирован после сбора участников")
 
 									go func() {
 										if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, participants); err != nil {
@@ -815,16 +831,22 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 					}
 				}
 
+				log.Printf("[MUTEX] handleCellClick (chording победа): блокируем room.Mu.RLock() для получения gameTime")
 				room.Mu.RLock()
+				log.Printf("[MUTEX] handleCellClick (chording победа): room.Mu.RLock() заблокирован для получения gameTime")
 				var gameTime float64
 				if room.StartTime != nil {
 					gameTime = time.Since(*room.StartTime).Seconds()
 				}
+				log.Printf("[MUTEX] handleCellClick (chording победа): разблокируем room.Mu.RUnlock() после получения gameTime")
 				room.Mu.RUnlock()
+				log.Printf("[MUTEX] handleCellClick (chording победа): room.Mu.RUnlock() разблокирован после получения gameTime")
 
 				if userID > 0 {
 					// Собираем список участников для записи результата
+					log.Printf("[MUTEX] handleCellClick (chording победа): блокируем room.Mu.RLock() для сбора участников")
 					room.Mu.RLock()
+					log.Printf("[MUTEX] handleCellClick (chording победа): room.Mu.RLock() заблокирован для сбора участников")
 					participants := make([]handlers.GameParticipant, 0)
 					for _, p := range room.Players {
 						if p.UserID > 0 {
@@ -835,7 +857,9 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 							})
 						}
 					}
+					log.Printf("[MUTEX] handleCellClick (chording победа): разблокируем room.Mu.RUnlock() после сбора участников")
 					room.Mu.RUnlock()
+					log.Printf("[MUTEX] handleCellClick (chording победа): room.Mu.RUnlock() разблокирован после сбора участников")
 
 					go func() {
 						if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, true, participants); err != nil {
@@ -992,7 +1016,9 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 		}
 
 		// Вычисляем время игры
+		log.Printf("[MUTEX] handleMineExplosion: блокируем room.Mu.RLock() для получения gameTime")
 		room.Mu.RLock()
+		log.Printf("[MUTEX] handleMineExplosion: room.Mu.RLock() заблокирован для получения gameTime")
 		var gameTime float64
 		if room.StartTime != nil {
 			gameTime = time.Since(*room.StartTime).Seconds()
@@ -1002,13 +1028,17 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 			gameTime = 0.0
 			log.Printf("ВНИМАНИЕ: StartTime == nil при вычислении времени игры (поражение)!")
 		}
+		log.Printf("[MUTEX] handleMineExplosion: разблокируем room.Mu.RUnlock() после получения gameTime")
 		room.Mu.RUnlock()
+		log.Printf("[MUTEX] handleMineExplosion: room.Mu.RUnlock() разблокирован после получения gameTime")
 
 		// Записываем поражение в БД (поражения не влияют на рейтинг)
 		if userID > 0 && s.profileHandler != nil {
 			// Собираем список участников игры
 			participants := make([]handlers.GameParticipant, 0)
+			log.Printf("[MUTEX] handleMineExplosion: блокируем room.Mu.RLock() для сбора участников")
 			room.Mu.RLock()
+			log.Printf("[MUTEX] handleMineExplosion: room.Mu.RLock() заблокирован для сбора участников")
 			for _, p := range room.Players {
 				if p.UserID > 0 {
 					participants = append(participants, handlers.GameParticipant{
@@ -1018,7 +1048,9 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 					})
 				}
 			}
+			log.Printf("[MUTEX] handleMineExplosion: разблокируем room.Mu.RUnlock() после сбора участников")
 			room.Mu.RUnlock()
+			log.Printf("[MUTEX] handleMineExplosion: room.Mu.RUnlock() разблокирован после сбора участников")
 
 			if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, participants); err != nil {
 				log.Printf("Ошибка записи результата игры: %v", err)
@@ -1027,9 +1059,13 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 		log.Printf("Игра окончена - подорвалась мина! Игрок: %s (%s)", room.GameState.LoserNickname, playerID)
 
 		// В режиме fair вычисляем подсказки при проигрыше
+		log.Printf("[MUTEX] handleMineExplosion: блокируем room.Mu.RLock() для получения gameMode")
 		room.Mu.RLock()
+		log.Printf("[MUTEX] handleMineExplosion: room.Mu.RLock() заблокирован для получения gameMode")
 		gameMode := room.GameMode
+		log.Printf("[MUTEX] handleMineExplosion: разблокируем room.Mu.RUnlock() после получения gameMode")
 		room.Mu.RUnlock()
+		log.Printf("[MUTEX] handleMineExplosion: room.Mu.RUnlock() разблокирован после получения gameMode")
 		if gameMode == "fair" {
 			room.GameState.Mu.Unlock()
 			s.calculateCellHints(room)
@@ -1061,9 +1097,13 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 		}
 
 		// В режиме training пересчитываем подсказки асинхронно после каждого открытия (в fair подсказки только при проигрыше)
+		log.Printf("[MUTEX] handleCellClick: блокируем room.Mu.RLock() для получения gameMode (training)")
 		room.Mu.RLock()
+		log.Printf("[MUTEX] handleCellClick: room.Mu.RLock() заблокирован для получения gameMode (training)")
 		gameMode := room.GameMode
+		log.Printf("[MUTEX] handleCellClick: разблокируем room.Mu.RUnlock() после получения gameMode (training)")
 		room.Mu.RUnlock()
+		log.Printf("[MUTEX] handleCellClick: room.Mu.RUnlock() разблокирован после получения gameMode (training)")
 		if gameMode == "training" {
 			// Выполняем асинхронно, чтобы не блокировать ответ
 			go func() {
@@ -1098,7 +1138,9 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 			log.Printf("Победа! Все ячейки открыты!")
 
 			// Вычисляем время игры
+			log.Printf("[MUTEX] handleCellClick (победа): блокируем room.Mu.RLock() для получения gameTime")
 			room.Mu.RLock()
+			log.Printf("[MUTEX] handleCellClick (победа): room.Mu.RLock() заблокирован для получения gameTime")
 			var gameTime float64
 			if room.StartTime != nil {
 				gameTime = time.Since(*room.StartTime).Seconds()
@@ -1108,12 +1150,17 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 				gameTime = 0.0
 				log.Printf("ВНИМАНИЕ: StartTime == nil при вычислении времени игры (победа)!")
 			}
+			log.Printf("[MUTEX] handleCellClick (победа): разблокируем room.Mu.RUnlock() после получения gameTime")
+			room.Mu.RUnlock()
+			log.Printf("[MUTEX] handleCellClick (победа): room.Mu.RUnlock() разблокирован после получения gameTime")
 			loserID := room.GameState.LoserPlayerID
 
 			// Собираем список участников игры и записываем победу
 			// Делаем это в отдельной горутине, чтобы не блокировать обработку
 			go func() {
+				log.Printf("[MUTEX] handleCellClick (победа goroutine): блокируем room.Mu.RLock() для сбора участников")
 				room.Mu.RLock()
+				log.Printf("[MUTEX] handleCellClick (победа goroutine): room.Mu.RLock() заблокирован для сбора участников")
 				participants := make([]handlers.GameParticipant, 0)
 				for _, p := range room.Players {
 					if p.UserID > 0 {
@@ -1134,7 +1181,9 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 						}
 					}
 				}
+				log.Printf("[MUTEX] handleCellClick (победа goroutine): разблокируем room.Mu.RUnlock() после записи результатов")
 				room.Mu.RUnlock()
+				log.Printf("[MUTEX] handleCellClick (победа goroutine): room.Mu.RUnlock() разблокирован после записи результатов")
 			}()
 		}
 	}
@@ -1274,7 +1323,9 @@ func (s *Server) handleHint(room *game.Room, playerID string, hint *Hint) {
 	}
 
 	// Получаем информацию об игроке для сервисных сообщений
+	log.Printf("[MUTEX] handleHint: блокируем room.Mu.RLock() для комнаты, игрок %s", playerID)
 	room.Mu.RLock()
+	log.Printf("[MUTEX] handleHint: room.Mu.RLock() заблокирован для комнаты, игрок %s", playerID)
 	player := room.Players[playerID]
 	var nickname string
 	var playerColor string
@@ -1282,7 +1333,9 @@ func (s *Server) handleHint(room *game.Room, playerID string, hint *Hint) {
 		nickname = player.Nickname
 		playerColor = player.Color
 	}
+	log.Printf("[MUTEX] handleHint: разблокируем room.Mu.RUnlock() для комнаты, игрок %s", playerID)
 	room.Mu.RUnlock()
+	log.Printf("[MUTEX] handleHint: room.Mu.RUnlock() разблокирован для комнаты, игрок %s", playerID)
 
 	// Если там мина - ставим флаг, иначе открываем
 	if cell.IsMine {
@@ -1297,9 +1350,13 @@ func (s *Server) handleHint(room *game.Room, playerID string, hint *Hint) {
 		s.broadcastCellUpdates(room, changedCellsHintFlag, room.GameState.GameOver, room.GameState.GameWon, room.GameState.Revealed, room.GameState.HintsUsed, room.GameState.LoserPlayerID, room.GameState.LoserNickname)
 
 		// В режиме training пересчитываем подсказки асинхронно после использования подсказки
+		log.Printf("[MUTEX] handleHint (flag): блокируем room.Mu.RLock() для получения gameMode")
 		room.Mu.RLock()
+		log.Printf("[MUTEX] handleHint (flag): room.Mu.RLock() заблокирован для получения gameMode")
 		gameMode := room.GameMode
+		log.Printf("[MUTEX] handleHint (flag): разблокируем room.Mu.RUnlock() после получения gameMode")
 		room.Mu.RUnlock()
+		log.Printf("[MUTEX] handleHint (flag): room.Mu.RUnlock() разблокирован после получения gameMode")
 		if gameMode == "training" {
 			go func() {
 				// calculateCellHints сама блокирует мьютекс, не нужно блокировать здесь
@@ -1352,7 +1409,9 @@ func (s *Server) handleHint(room *game.Room, playerID string, hint *Hint) {
 			log.Printf("Победа! Все ячейки открыты!")
 
 			// Вычисляем время игры
+			log.Printf("[MUTEX] handleHint (победа): блокируем room.Mu.RLock() для получения gameTime")
 			room.Mu.RLock()
+			log.Printf("[MUTEX] handleHint (победа): room.Mu.RLock() заблокирован для получения gameTime")
 			var gameTime float64
 			if room.StartTime != nil {
 				gameTime = time.Since(*room.StartTime).Seconds()
@@ -1361,12 +1420,17 @@ func (s *Server) handleHint(room *game.Room, playerID string, hint *Hint) {
 				gameTime = 0.0
 				log.Printf("ВНИМАНИЕ: StartTime == nil при вычислении времени игры (победа через hint)!")
 			}
+			log.Printf("[MUTEX] handleHint (победа): разблокируем room.Mu.RUnlock() после получения gameTime")
+			room.Mu.RUnlock()
+			log.Printf("[MUTEX] handleHint (победа): room.Mu.RUnlock() разблокирован после получения gameTime")
 			loserID := room.GameState.LoserPlayerID
 
 			// Собираем список участников игры и записываем победу
 			// Делаем это в отдельной горутине, чтобы не блокировать обработку
 			go func() {
+				log.Printf("[MUTEX] handleHint (победа goroutine): блокируем room.Mu.RLock() для сбора участников")
 				room.Mu.RLock()
+				log.Printf("[MUTEX] handleHint (победа goroutine): room.Mu.RLock() заблокирован для сбора участников")
 				participants := make([]handlers.GameParticipant, 0)
 				for _, p := range room.Players {
 					if p.UserID > 0 {
@@ -1386,7 +1450,9 @@ func (s *Server) handleHint(room *game.Room, playerID string, hint *Hint) {
 						}
 					}
 				}
+				log.Printf("[MUTEX] handleHint (победа goroutine): разблокируем room.Mu.RUnlock() после записи результатов")
 				room.Mu.RUnlock()
+				log.Printf("[MUTEX] handleHint (победа goroutine): room.Mu.RUnlock() разблокирован после записи результатов")
 			}()
 		}
 
@@ -1394,9 +1460,13 @@ func (s *Server) handleHint(room *game.Room, playerID string, hint *Hint) {
 		s.broadcastCellUpdates(room, changedCellsHint, room.GameState.GameOver, room.GameState.GameWon, room.GameState.Revealed, room.GameState.HintsUsed, room.GameState.LoserPlayerID, room.GameState.LoserNickname)
 
 		// В режиме training пересчитываем подсказки асинхронно после использования подсказки
+		log.Printf("[MUTEX] handleHint (reveal): блокируем room.Mu.RLock() для получения gameMode")
 		room.Mu.RLock()
+		log.Printf("[MUTEX] handleHint (reveal): room.Mu.RLock() заблокирован для получения gameMode")
 		gameMode := room.GameMode
+		log.Printf("[MUTEX] handleHint (reveal): разблокируем room.Mu.RUnlock() после получения gameMode")
 		room.Mu.RUnlock()
+		log.Printf("[MUTEX] handleHint (reveal): room.Mu.RUnlock() разблокирован после получения gameMode")
 		if gameMode == "training" {
 			go func() {
 				// calculateCellHints сама блокирует мьютекс, не нужно блокировать здесь
@@ -1516,12 +1586,16 @@ func (s *Server) broadcastGameState(room *game.Room) {
 	log.Printf("Отправка состояния игры %d игрокам", playersCount)
 
 	// Получаем список игроков из комнаты и отправляем через WebSocket соединения
+	log.Printf("[MUTEX] broadcastGameState: блокируем room.Mu.RLock()")
 	room.Mu.RLock()
+	log.Printf("[MUTEX] broadcastGameState: room.Mu.RLock() заблокирован")
 	playerIDs := make([]string, 0, len(room.Players))
 	for id := range room.Players {
 		playerIDs = append(playerIDs, id)
 	}
+	log.Printf("[MUTEX] broadcastGameState: разблокируем room.Mu.RUnlock()")
 	room.Mu.RUnlock()
+	log.Printf("[MUTEX] broadcastGameState: room.Mu.RUnlock() разблокирован")
 
 	for _, id := range playerIDs {
 		wsPlayer := s.getWSPlayer(id)
@@ -1558,14 +1632,18 @@ func (s *Server) broadcastToOthers(room *game.Room, senderID string, msg Message
 	}
 
 	// Получаем список игроков из комнаты
+	log.Printf("[MUTEX] broadcastToOthers: блокируем room.Mu.RLock()")
 	room.Mu.RLock()
+	log.Printf("[MUTEX] broadcastToOthers: room.Mu.RLock() заблокирован")
 	playerIDs := make([]string, 0, len(room.Players))
 	for id := range room.Players {
 		if id != senderID {
 			playerIDs = append(playerIDs, id)
 		}
 	}
+	log.Printf("[MUTEX] broadcastToOthers: разблокируем room.Mu.RUnlock()")
 	room.Mu.RUnlock()
+	log.Printf("[MUTEX] broadcastToOthers: room.Mu.RUnlock() разблокирован")
 
 	sentCount := 0
 	for _, id := range playerIDs {
@@ -1621,7 +1699,9 @@ func (s *Server) broadcastToAll(room *game.Room, msg Message) {
 }
 
 func (s *Server) sendPlayerListToPlayer(room *game.Room, targetPlayer *Player) {
+	log.Printf("[MUTEX] sendPlayerListToPlayer: блокируем room.Mu.RLock()")
 	room.Mu.RLock()
+	log.Printf("[MUTEX] sendPlayerListToPlayer: room.Mu.RLock() заблокирован")
 	playersList := make([]map[string]string, 0, len(room.Players))
 	for _, player := range room.Players {
 		playersList = append(playersList, map[string]string{
@@ -1630,7 +1710,9 @@ func (s *Server) sendPlayerListToPlayer(room *game.Room, targetPlayer *Player) {
 			"color":    player.Color,
 		})
 	}
+	log.Printf("[MUTEX] sendPlayerListToPlayer: разблокируем room.Mu.RUnlock()")
 	room.Mu.RUnlock()
+	log.Printf("[MUTEX] sendPlayerListToPlayer: room.Mu.RUnlock() разблокирован")
 
 	binaryData, err := encodePlayersProtobuf(playersList)
 	if err != nil {
@@ -1946,7 +2028,9 @@ func (s *Server) determineMinePlacement(room *game.Room, clickRow, clickCol int)
 }
 
 func (s *Server) broadcastPlayerList(room *game.Room) {
+	log.Printf("[MUTEX] broadcastPlayerList: блокируем room.Mu.RLock()")
 	room.Mu.RLock()
+	log.Printf("[MUTEX] broadcastPlayerList: room.Mu.RLock() заблокирован")
 	playersList := make([]map[string]string, 0, len(room.Players))
 	for _, player := range room.Players {
 		playersList = append(playersList, map[string]string{
@@ -1955,7 +2039,9 @@ func (s *Server) broadcastPlayerList(room *game.Room) {
 			"color":    player.Color,
 		})
 	}
+	log.Printf("[MUTEX] broadcastPlayerList: разблокируем room.Mu.RUnlock()")
 	room.Mu.RUnlock()
+	log.Printf("[MUTEX] broadcastPlayerList: room.Mu.RUnlock() разблокирован")
 
 	binaryData, err := encodePlayersProtobuf(playersList)
 	if err != nil {

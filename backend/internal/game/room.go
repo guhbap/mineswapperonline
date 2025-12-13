@@ -56,9 +56,13 @@ func (rm *RoomManager) GetRoomsList() []map[string]interface{} {
 
 	roomsList := make([]map[string]interface{}, 0, len(rm.rooms))
 	for _, room := range rm.rooms {
+		log.Printf("[MUTEX] GetRoomsList: блокируем room.Mu.RLock() для комнаты %s", room.ID)
 		room.Mu.RLock()
+		log.Printf("[MUTEX] GetRoomsList: room.Mu.RLock() заблокирован для комнаты %s", room.ID)
 		playerCount := len(room.Players)
+		log.Printf("[MUTEX] GetRoomsList: разблокируем room.Mu.RUnlock() для комнаты %s", room.ID)
 		room.Mu.RUnlock()
+		log.Printf("[MUTEX] GetRoomsList: room.Mu.RUnlock() разблокирован для комнаты %s", room.ID)
 		roomsList = append(roomsList, map[string]interface{}{
 			"id":          room.ID,
 			"name":        room.Name,
@@ -84,8 +88,14 @@ func (rm *RoomManager) DeleteRoom(roomID string) {
 }
 
 func (r *Room) ToResponse() map[string]interface{} {
+	log.Printf("[MUTEX] ToResponse: блокируем room.Mu.RLock() для комнаты %s", r.ID)
 	r.Mu.RLock()
-	defer r.Mu.RUnlock()
+	log.Printf("[MUTEX] ToResponse: room.Mu.RLock() заблокирован для комнаты %s", r.ID)
+	defer func() {
+		log.Printf("[MUTEX] ToResponse: разблокируем room.Mu.RUnlock() для комнаты %s", r.ID)
+		r.Mu.RUnlock()
+		log.Printf("[MUTEX] ToResponse: room.Mu.RUnlock() разблокирован для комнаты %s", r.ID)
+	}()
 	return map[string]interface{}{
 		"id":          r.ID,
 		"name":        r.Name,
@@ -107,36 +117,66 @@ func (r *Room) ValidatePassword(password string) bool {
 
 // IsCreator проверяет, является ли пользователь создателем комнаты
 func (r *Room) IsCreator(userID int) bool {
+	log.Printf("[MUTEX] IsCreator: блокируем room.Mu.RLock() для комнаты %s", r.ID)
 	r.Mu.RLock()
-	defer r.Mu.RUnlock()
+	log.Printf("[MUTEX] IsCreator: room.Mu.RLock() заблокирован для комнаты %s", r.ID)
+	defer func() {
+		log.Printf("[MUTEX] IsCreator: разблокируем room.Mu.RUnlock() для комнаты %s", r.ID)
+		r.Mu.RUnlock()
+		log.Printf("[MUTEX] IsCreator: room.Mu.RUnlock() разблокирован для комнаты %s", r.ID)
+	}()
 	return r.CreatorID == userID
 }
 
 // AddPlayer добавляет игрока в комнату
 func (r *Room) AddPlayer(playerID string, player *Player) {
+	log.Printf("[MUTEX] AddPlayer: блокируем room.Mu.Lock() для комнаты %s, игрок %s", r.ID, playerID)
 	r.Mu.Lock()
-	defer r.Mu.Unlock()
+	log.Printf("[MUTEX] AddPlayer: room.Mu.Lock() заблокирован для комнаты %s, игрок %s", r.ID, playerID)
+	defer func() {
+		log.Printf("[MUTEX] AddPlayer: разблокируем room.Mu.Unlock() для комнаты %s, игрок %s", r.ID, playerID)
+		r.Mu.Unlock()
+		log.Printf("[MUTEX] AddPlayer: room.Mu.Unlock() разблокирован для комнаты %s, игрок %s", r.ID, playerID)
+	}()
 	r.Players[playerID] = player
 }
 
 // RemovePlayer удаляет игрока из комнаты
 func (r *Room) RemovePlayer(playerID string) {
+	log.Printf("[MUTEX] RemovePlayer: блокируем room.Mu.Lock() для комнаты %s, игрок %s", r.ID, playerID)
 	r.Mu.Lock()
-	defer r.Mu.Unlock()
+	log.Printf("[MUTEX] RemovePlayer: room.Mu.Lock() заблокирован для комнаты %s, игрок %s", r.ID, playerID)
+	defer func() {
+		log.Printf("[MUTEX] RemovePlayer: разблокируем room.Mu.Unlock() для комнаты %s, игрок %s", r.ID, playerID)
+		r.Mu.Unlock()
+		log.Printf("[MUTEX] RemovePlayer: room.Mu.Unlock() разблокирован для комнаты %s, игрок %s", r.ID, playerID)
+	}()
 	delete(r.Players, playerID)
 }
 
 // GetPlayerCount возвращает количество игроков
 func (r *Room) GetPlayerCount() int {
+	log.Printf("[MUTEX] GetPlayerCount: блокируем room.Mu.RLock() для комнаты %s", r.ID)
 	r.Mu.RLock()
-	defer r.Mu.RUnlock()
+	log.Printf("[MUTEX] GetPlayerCount: room.Mu.RLock() заблокирован для комнаты %s", r.ID)
+	defer func() {
+		log.Printf("[MUTEX] GetPlayerCount: разблокируем room.Mu.RUnlock() для комнаты %s", r.ID)
+		r.Mu.RUnlock()
+		log.Printf("[MUTEX] GetPlayerCount: room.Mu.RUnlock() разблокирован для комнаты %s", r.ID)
+	}()
 	return len(r.Players)
 }
 
 // GetPlayer возвращает игрока по ID
 func (r *Room) GetPlayer(playerID string) *Player {
+	log.Printf("[MUTEX] GetPlayer: блокируем room.Mu.RLock() для комнаты %s, игрок %s", r.ID, playerID)
 	r.Mu.RLock()
-	defer r.Mu.RUnlock()
+	log.Printf("[MUTEX] GetPlayer: room.Mu.RLock() заблокирован для комнаты %s, игрок %s", r.ID, playerID)
+	defer func() {
+		log.Printf("[MUTEX] GetPlayer: разблокируем room.Mu.RUnlock() для комнаты %s, игрок %s", r.ID, playerID)
+		r.Mu.RUnlock()
+		log.Printf("[MUTEX] GetPlayer: room.Mu.RUnlock() разблокирован для комнаты %s, игрок %s", r.ID, playerID)
+	}()
 	return r.Players[playerID]
 }
 

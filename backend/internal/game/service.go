@@ -107,17 +107,25 @@ func (s *GameService) handleCellReveal(room *Room, playerID string, row, col int
 	// Устанавливаем время начала игры при первом клике
 	isFirstClick := room.GameState.Revealed == 0
 	if isFirstClick && room.StartTime == nil {
+		log.Printf("[MUTEX] handleCellReveal: блокируем room.Mu.Lock() для комнаты %s (установка StartTime)", room.ID)
 		room.Mu.Lock()
+		log.Printf("[MUTEX] handleCellReveal: room.Mu.Lock() заблокирован для комнаты %s (установка StartTime)", room.ID)
 		now := time.Now()
 		room.StartTime = &now
+		log.Printf("[MUTEX] handleCellReveal: разблокируем room.Mu.Unlock() для комнаты %s (установка StartTime)", room.ID)
 		room.Mu.Unlock()
+		log.Printf("[MUTEX] handleCellReveal: room.Mu.Unlock() разблокирован для комнаты %s (установка StartTime)", room.ID)
 		log.Printf("StartTime установлен при первом клике: %v", now)
 	}
 
 	// В режимах training и fair мины размещаются динамически
+	log.Printf("[MUTEX] handleCellReveal: блокируем room.Mu.RLock() для комнаты %s (получение gameMode)", room.ID)
 	room.Mu.RLock()
+	log.Printf("[MUTEX] handleCellReveal: room.Mu.RLock() заблокирован для комнаты %s (получение gameMode)", room.ID)
 	gameMode := room.GameMode
+	log.Printf("[MUTEX] handleCellReveal: разблокируем room.Mu.RUnlock() для комнаты %s (получение gameMode)", room.ID)
 	room.Mu.RUnlock()
+	log.Printf("[MUTEX] handleCellReveal: room.Mu.RUnlock() разблокирован для комнаты %s (получение gameMode)", room.ID)
 
 	if gameMode == "training" || gameMode == "fair" {
 		room.GameState.Mu.Unlock()

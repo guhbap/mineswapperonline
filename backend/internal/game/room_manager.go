@@ -21,8 +21,14 @@ func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, co
 		return fmt.Errorf("room not found")
 	}
 
+	log.Printf("[MUTEX] UpdateRoom: блокируем room.Mu.Lock() для комнаты %s", roomID)
 	room.Mu.Lock()
-	defer room.Mu.Unlock()
+	log.Printf("[MUTEX] UpdateRoom: room.Mu.Lock() заблокирован для комнаты %s", roomID)
+	defer func() {
+		log.Printf("[MUTEX] UpdateRoom: разблокируем room.Mu.Unlock() для комнаты %s", roomID)
+		room.Mu.Unlock()
+		log.Printf("[MUTEX] UpdateRoom: room.Mu.Unlock() разблокирован для комнаты %s", roomID)
+	}()
 
 	// Обновляем параметры комнаты
 	room.Name = name
@@ -68,9 +74,13 @@ func (rm *RoomManager) ScheduleRoomDeletion(roomID string, delay time.Duration) 
 	// Создаем новый таймер
 	room.deleteTimer = time.AfterFunc(delay, func() {
 		// Проверяем, что комната все еще пустая перед удалением
+		log.Printf("[MUTEX] ScheduleRoomDeletion timer: блокируем room.Mu.RLock() для комнаты %s", roomID)
 		room.Mu.RLock()
+		log.Printf("[MUTEX] ScheduleRoomDeletion timer: room.Mu.RLock() заблокирован для комнаты %s", roomID)
 		playersCount := len(room.Players)
+		log.Printf("[MUTEX] ScheduleRoomDeletion timer: разблокируем room.Mu.RUnlock() для комнаты %s", roomID)
 		room.Mu.RUnlock()
+		log.Printf("[MUTEX] ScheduleRoomDeletion timer: room.Mu.RUnlock() разблокирован для комнаты %s", roomID)
 
 		if playersCount == 0 {
 			log.Printf("Комната %s пуста более %v, удаляем", roomID, delay)
