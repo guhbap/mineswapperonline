@@ -564,24 +564,34 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		// Обновляем deadline при получении сообщения
 		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 
-		var msg Message
-		// Обрабатываем бинарные сообщения (входящие от клиента пока остаются JSON для простоты)
-		// Но можем обрабатывать и бинарные, если клиент их отправляет
+		var msg *Message
+		var parseErr error
+
+		// Обрабатываем бинарные сообщения (protobuf)
 		if messageType == websocket.BinaryMessage {
-			// Пока входящие сообщения остаются JSON, но можем добавить поддержку бинарных позже
-			continue
-		} else if messageType == websocket.TextMessage {
-			// Парсим JSON сообщение
-			if err := json.Unmarshal(data, &msg); err != nil {
-				log.Printf("Ошибка парсинга JSON сообщения: %v", err)
+			msg, parseErr = decodeClientMessageProtobuf(data)
+			if parseErr != nil {
+				log.Printf("Ошибка декодирования protobuf сообщения: %v", parseErr)
 				continue
 			}
+		} else if messageType == websocket.TextMessage {
+			// Fallback: парсим JSON сообщение (для обратной совместимости)
+			var jsonMsg Message
+			if parseErr := json.Unmarshal(data, &jsonMsg); parseErr != nil {
+				log.Printf("Ошибка парсинга JSON сообщения: %v", parseErr)
+				continue
+			}
+			msg = &jsonMsg
 		} else {
 			continue
 		}
 
+		if msg == nil {
+			continue
+		}
+
 		if msg.Type != "cursor" {
-			log.Printf("Получено сообщение от игрока %s: тип=%s, полное сообщение: %+v", playerID, msg.Type, msg)
+			log.Printf("Получено сообщение от игрока %s: тип=%s, полное сообщение: %+v", playerID, msg.Type, *msg)
 		}
 		switch msg.Type {
 		case "ping":
@@ -604,7 +614,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				msg.Color = player.Color
 				player.mu.Unlock()
 				// Отправляем сообщение всем игрокам в комнате
-				s.broadcastToAll(room, msg)
+				s.broadcastToAll(room, *msg)
 			}
 			continue
 
@@ -644,7 +654,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				player.LastCursorSendTime = now
 				player.mu.Unlock()
 
-				s.broadcastToOthers(room, playerID, msg)
+				s.broadcastToOthers(room, playerID, *msg)
 			}
 
 		case "cellClick":

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	pb "minesweeperonline/proto"
 	"google.golang.org/protobuf/proto"
 )
@@ -221,4 +222,69 @@ func encodeCellUpdateProtobuf(updates []CellUpdate, gameOver bool, gameWon bool,
 	}
 
 	return proto.Marshal(wsMsg)
+}
+
+// decodeClientMessageProtobuf декодирует ClientMessage из protobuf формата
+func decodeClientMessageProtobuf(data []byte) (*Message, error) {
+	var clientMsg pb.ClientMessage
+	if err := proto.Unmarshal(data, &clientMsg); err != nil {
+		return nil, err
+	}
+
+	msg := &Message{}
+
+	// Обрабатываем различные типы сообщений
+	switch {
+	case clientMsg.GetNickname() != "":
+		msg.Type = "nickname"
+		msg.Nickname = clientMsg.GetNickname()
+
+	case clientMsg.GetCursor() != nil:
+		cursorProto := clientMsg.GetCursor()
+		msg.Type = "cursor"
+		msg.Cursor = &CursorPosition{
+			PlayerID: cursorProto.PlayerId,
+			X:        cursorProto.X,
+			Y:        cursorProto.Y,
+		}
+
+	case clientMsg.GetCellClick() != nil:
+		clickProto := clientMsg.GetCellClick()
+		msg.Type = "cellClick"
+		msg.CellClick = &CellClick{
+			Row:  int(clickProto.Row),
+			Col:  int(clickProto.Col),
+			Flag: clickProto.Flag,
+		}
+
+	case clientMsg.GetHint() != nil:
+		hintProto := clientMsg.GetHint()
+		msg.Type = "hint"
+		msg.Hint = &Hint{
+			Row: int(hintProto.Row),
+			Col: int(hintProto.Col),
+		}
+
+	case clientMsg.GetNewGame() != nil:
+		msg.Type = "newGame"
+
+	case clientMsg.GetChat() != nil:
+		chatProto := clientMsg.GetChat()
+		msg.Type = "chat"
+		msg.Chat = &ChatMessage{
+			Text:     chatProto.Text,
+			IsSystem: chatProto.IsSystem,
+			Action:   chatProto.Action,
+			Row:      int(chatProto.Row),
+			Col:      int(chatProto.Col),
+		}
+
+	case clientMsg.GetPing() != nil:
+		msg.Type = "ping"
+
+	default:
+		return nil, fmt.Errorf("unknown message type in ClientMessage")
+	}
+
+	return msg, nil
 }

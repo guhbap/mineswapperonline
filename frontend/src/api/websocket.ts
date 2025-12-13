@@ -140,13 +140,25 @@ export class WebSocketClient implements IWebSocketClient {
               bytes: Array.from(new Uint8Array(buffer.slice(0, Math.min(20, buffer.byteLength))))
             })
           } else {
-            // JSON сообщения (входящие от клиента остаются JSON)
-            const msg: WebSocketMessage = JSON.parse(event.data)
-            console.log(`[WS RECV ${timestamp}] JSON сообщение:`, {
-              type: msg.type,
-              data: msg
-            })
-            this.onMessage(msg)
+            // Все сообщения теперь должны быть в protobuf формате
+            // Если пришло текстовое сообщение, пытаемся декодировать как protobuf
+            console.warn(`[WS RECV ${timestamp}] Получено текстовое сообщение, ожидается бинарный protobuf формат`)
+            // Пытаемся декодировать как protobuf (на случай если это base64 или другой формат)
+            try {
+              const textData = event.data as string
+              // Если это JSON (для обратной совместимости), парсим его
+              if (textData.startsWith('{')) {
+                const msg: WebSocketMessage = JSON.parse(textData)
+                console.log(`[WS RECV ${timestamp}] JSON сообщение (fallback):`, {
+                  type: msg.type,
+                  data: msg
+                })
+                this.onMessage(msg)
+                return
+              }
+            } catch (error) {
+              console.error(`[WS RECV ${timestamp}] Ошибка обработки текстового сообщения:`, error)
+            }
             return
           }
 
@@ -338,9 +350,9 @@ export class WebSocketClient implements IWebSocketClient {
         this.ws.send(binaryData)
       } catch (error) {
         console.error(`[WS SEND ${timestamp}] Ошибка кодирования protobuf сообщения:`, error)
-        // Fallback: отправляем JSON (для совместимости)
-        const jsonData = JSON.stringify(optimizedMessage)
-        this.ws.send(jsonData)
+        // Все сообщения должны отправляться в protobuf формате
+        // Если кодирование не удалось, не отправляем сообщение
+        throw error
       }
     } else {
       console.warn(`[WS SEND] Попытка отправить сообщение при закрытом соединении. Тип: ${message.type}`)
