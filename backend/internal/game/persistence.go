@@ -12,15 +12,15 @@ func (rm *RoomManager) SetDB(db *database.DB) {
 	rm.db = db
 }
 
-// SaveRoom сохраняет комнату в базу данных
-func (rm *RoomManager) SaveRoom(room *Room) error {
+// saveRoomUnsafe сохраняет комнату в базу данных без блокировки мьютекса
+// Предполагается, что вызывающий код уже удерживает блокировку room.Mu
+func (rm *RoomManager) saveRoomUnsafe(room *Room) error {
 	if rm.db == nil {
 		return nil // БД не установлена, пропускаем сохранение
 	}
 
 	db := rm.db.(*database.DB)
 
-	room.Mu.RLock()
 	dbRoom := &models.Room{
 		ID:         room.ID,
 		Name:       room.Name,
@@ -34,7 +34,6 @@ func (rm *RoomManager) SaveRoom(room *Room) error {
 		CreatorID:  room.CreatorID,
 		CreatedAt:  room.CreatedAt,
 	}
-	room.Mu.RUnlock()
 
 	// Используем Save для создания или обновления
 	if err := db.Save(dbRoom).Error; err != nil {
@@ -44,6 +43,14 @@ func (rm *RoomManager) SaveRoom(room *Room) error {
 
 	log.Printf("Комната %s сохранена в БД", room.ID)
 	return nil
+}
+
+// SaveRoom сохраняет комнату в базу данных
+// Блокирует room.Mu для чтения перед сохранением
+func (rm *RoomManager) SaveRoom(room *Room) error {
+	room.Mu.RLock()
+	defer room.Mu.RUnlock()
+	return rm.saveRoomUnsafe(room)
 }
 
 // DeleteRoomFromDB удаляет комнату из базы данных
