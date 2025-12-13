@@ -155,12 +155,30 @@ export class WebSocketClient implements IWebSocketClient {
             return
           }
 
-          console.log(`[WS RECV ${timestamp}] Protobuf сообщение (размер: ${buffer.byteLength} байт)`)
+          console.log(`[WS RECV ${timestamp}] Бинарное сообщение (размер: ${buffer.byteLength} байт)`)
 
-          // Все сообщения теперь в protobuf формате
+          // Пытаемся декодировать как protobuf, если не получается - используем старый бинарный формат
+          let decodedMsg: any = null
+          try {
+            decodedMsg = await decodeProtobufMessage(buffer)
+          } catch (error) {
+            console.warn(`[WS RECV ${timestamp}] Ошибка декодирования protobuf, пробуем бинарный формат:`, error)
+            // Fallback на старый бинарный формат
+            const { decodeBinaryMessage } = await import('../utils/messagesBinary')
+            const messageType = new Uint8Array(buffer)[0]
 
-          // Обрабатываем protobuf сообщения
-          const decodedMsg = await decodeProtobufMessage(buffer)
+            // Тип 0 = gameState binary
+            if (messageType === 0) {
+              const { decodeGameStateBinary } = await import('../utils/gamestateBinary')
+              const gameState = decodeGameStateBinary(buffer.slice(1)) // Пропускаем первый байт (тип)
+              decodedMsg = {
+                type: 'gameState',
+                gameState
+              } as WebSocketMessage
+            } else {
+              decodedMsg = decodeBinaryMessage(buffer)
+            }
+          }
 
           if (decodedMsg) {
             // Дополнительное логирование для chat сообщений

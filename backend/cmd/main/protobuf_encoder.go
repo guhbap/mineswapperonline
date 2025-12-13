@@ -1,98 +1,224 @@
 package main
 
-// Этот файл будет содержать функции для кодирования в protobuf
-// после генерации кода из .proto файла командой:
-// protoc --go_out=backend/proto --go_opt=paths=source_relative proto/messages.proto
-//
-// Временная заглушка - после генерации кода эти функции будут использовать
-// сгенерированные структуры из backend/proto/messages.pb.go
-
-// После генерации кода из .proto, раскомментируйте и обновите эти функции:
-
-/*
 import (
-	"minesweeperonline/proto"
+	pb "minesweeperonline/proto"
 	"google.golang.org/protobuf/proto"
 )
 
 // encodeGameStateProtobuf кодирует GameState в protobuf формат
 func encodeGameStateProtobuf(gs *GameState) ([]byte, error) {
-	// Реализация будет после генерации кода
-	return nil, nil
+	gs.mu.RLock()
+	defer gs.mu.RUnlock()
+
+	// Создаем Board
+	rows := make([]*pb.Row, gs.Rows)
+	for i := 0; i < gs.Rows; i++ {
+		cells := make([]*pb.Cell, gs.Cols)
+		for j := 0; j < gs.Cols; j++ {
+			cell := gs.Board[i][j]
+			cells[j] = &pb.Cell{
+				IsMine:        cell.IsMine,
+				IsRevealed:    cell.IsRevealed,
+				IsFlagged:     cell.IsFlagged,
+				NeighborMines: int32(cell.NeighborMines),
+				FlagColor:     cell.FlagColor,
+			}
+		}
+		rows[i] = &pb.Row{Cells: cells}
+	}
+
+	// Создаем SafeCells
+	safeCells := make([]*pb.SafeCell, len(gs.SafeCells))
+	for i, sc := range gs.SafeCells {
+		safeCells[i] = &pb.SafeCell{
+			Row: int32(sc.Row),
+			Col: int32(sc.Col),
+		}
+	}
+
+	// Создаем CellHints
+	cellHints := make([]*pb.CellHint, len(gs.CellHints))
+	for i, hint := range gs.CellHints {
+		cellHints[i] = &pb.CellHint{
+			Row:  int32(hint.Row),
+			Col:  int32(hint.Col),
+			Type: hint.Type,
+		}
+	}
+
+	gameStateMsg := &pb.GameStateMessage{
+		Board:          &pb.Board{Rows: rows},
+		Rows:           int32(gs.Rows),
+		Cols:           int32(gs.Cols),
+		Mines:          int32(gs.Mines),
+		GameOver:       gs.GameOver,
+		GameWon:        gs.GameWon,
+		Revealed:       int32(gs.Revealed),
+		HintsUsed:      int32(gs.HintsUsed),
+		SafeCells:      safeCells,
+		CellHints:      cellHints,
+		LoserPlayerId:  truncatePlayerID(gs.LoserPlayerID),
+		LoserNickname:  gs.LoserNickname,
+	}
+
+	wsMsg := &pb.WebSocketMessage{
+		Message: &pb.WebSocketMessage_GameState{
+			GameState: gameStateMsg,
+		},
+	}
+
+	return proto.Marshal(wsMsg)
 }
 
 // encodeChatProtobuf кодирует сообщение чата в protobuf формат
 func encodeChatProtobuf(msg *Message) ([]byte, error) {
-	// Реализация будет после генерации кода
-	return nil, nil
+	chatMsg := &pb.ChatMessage{
+		PlayerId: truncatePlayerID(msg.PlayerID),
+		Nickname: msg.Nickname,
+		Color:    msg.Color,
+		Text:     msg.Chat.Text,
+		IsSystem: msg.Chat.IsSystem,
+		Action:   msg.Chat.Action,
+		Row:      int32(msg.Chat.Row),
+		Col:      int32(msg.Chat.Col),
+	}
+
+	wsMsg := &pb.WebSocketMessage{
+		Message: &pb.WebSocketMessage_Chat{
+			Chat: chatMsg,
+		},
+	}
+
+	return proto.Marshal(wsMsg)
 }
 
 // encodeCursorProtobuf кодирует позицию курсора в protobuf формат
 func encodeCursorProtobuf(msg *Message) ([]byte, error) {
-	// Реализация будет после генерации кода
-	return nil, nil
+	cursorMsg := &pb.CursorMessage{
+		PlayerId: truncatePlayerID(msg.Cursor.PlayerID),
+		Nickname: msg.Nickname,
+		Color:    msg.Color,
+		X:        msg.Cursor.X,
+		Y:        msg.Cursor.Y,
+	}
+
+	wsMsg := &pb.WebSocketMessage{
+		Message: &pb.WebSocketMessage_Cursor{
+			Cursor: cursorMsg,
+		},
+	}
+
+	return proto.Marshal(wsMsg)
 }
 
 // encodePlayersProtobuf кодирует список игроков в protobuf формат
 func encodePlayersProtobuf(players []map[string]string) ([]byte, error) {
-	// Реализация будет после генерации кода
-	return nil, nil
+	playerList := make([]*pb.Player, len(players))
+	for i, p := range players {
+		playerList[i] = &pb.Player{
+			Id:       truncatePlayerID(p["id"]),
+			Nickname: p["nickname"],
+			Color:    p["color"],
+		}
+	}
+
+	playersMsg := &pb.PlayersMessage{
+		Players: playerList,
+	}
+
+	wsMsg := &pb.WebSocketMessage{
+		Message: &pb.WebSocketMessage_Players{
+			Players: playersMsg,
+		},
+	}
+
+	return proto.Marshal(wsMsg)
 }
 
 // encodePongProtobuf кодирует pong сообщение в protobuf формат
 func encodePongProtobuf() ([]byte, error) {
-	// Реализация будет после генерации кода
-	return nil, nil
+	pongMsg := &pb.PongMessage{}
+
+	wsMsg := &pb.WebSocketMessage{
+		Message: &pb.WebSocketMessage_Pong{
+			Pong: pongMsg,
+		},
+	}
+
+	return proto.Marshal(wsMsg)
 }
 
 // encodeErrorProtobuf кодирует сообщение об ошибке в protobuf формат
 func encodeErrorProtobuf(errorMsg string) ([]byte, error) {
-	// Реализация будет после генерации кода
-	return nil, nil
+	errorMsgProto := &pb.ErrorMessage{
+		Error: errorMsg,
+	}
+
+	wsMsg := &pb.WebSocketMessage{
+		Message: &pb.WebSocketMessage_Error{
+			Error: errorMsgProto,
+		},
+	}
+
+	return proto.Marshal(wsMsg)
+}
+
+// byteToCellType преобразует byte в CellType enum
+func byteToCellType(b byte) pb.CellType {
+	// Значения 0-8 используются для открытых клеток с количеством соседних мин
+	if b <= 8 {
+		return pb.CellType(b)
+	}
+	// Значение 9 = мина
+	if b == CellTypeMine {
+		return pb.CellType_CELL_TYPE_MINE
+	}
+	// Значение 10 = зеленая (SAFE)
+	if b == CellTypeSafe {
+		return pb.CellType_CELL_TYPE_SAFE
+	}
+	// Значение 11 = желтая (UNKNOWN)
+	if b == CellTypeUnknown {
+		return pb.CellType_CELL_TYPE_UNKNOWN
+	}
+	// Значение 12 = красная (MINE/DANGER)
+	if b == CellTypeDanger {
+		return pb.CellType_CELL_TYPE_DANGER
+	}
+	// Значение 255 = закрыта
+	if b == CellTypeClosed {
+		return pb.CellType_CELL_TYPE_CLOSED
+	}
+	// По умолчанию возвращаем закрытую
+	return pb.CellType_CELL_TYPE_CLOSED
 }
 
 // encodeCellUpdateProtobuf кодирует обновления клеток в protobuf формат
 func encodeCellUpdateProtobuf(updates []CellUpdate, gameOver bool, gameWon bool, revealed int, hintsUsed int, loserPlayerID string, loserNickname string) ([]byte, error) {
-	// Реализация будет после генерации кода
-	return nil, nil
+	cellUpdates := make([]*pb.CellUpdate, len(updates))
+	for i, update := range updates {
+		cellUpdates[i] = &pb.CellUpdate{
+			Row:  int32(update.Row),
+			Col:  int32(update.Col),
+			Type: byteToCellType(update.Type),
+		}
+	}
+
+	cellUpdateMsg := &pb.CellUpdateMessage{
+		GameOver:        gameOver,
+		GameWon:         gameWon,
+		Revealed:        int32(revealed),
+		HintsUsed:       int32(hintsUsed),
+		LoserPlayerId:   truncatePlayerID(loserPlayerID),
+		LoserNickname:   loserNickname,
+		Updates:         cellUpdates,
+	}
+
+	wsMsg := &pb.WebSocketMessage{
+		Message: &pb.WebSocketMessage_CellUpdate{
+			CellUpdate: cellUpdateMsg,
+		},
+	}
+
+	return proto.Marshal(wsMsg)
 }
-*/
-
-// Временные функции-заглушки, которые используют текущий бинарный формат
-// После генерации protobuf кода эти функции будут заменены
-
-func encodeGameStateProtobuf(gs *GameState) ([]byte, error) {
-	// Пока используем бинарный формат
-	return encodeGameStateBinary(gs)
-}
-
-func encodeChatProtobuf(msg *Message) ([]byte, error) {
-	// Пока используем бинарный формат
-	return encodeChatBinary(msg)
-}
-
-func encodeCursorProtobuf(msg *Message) ([]byte, error) {
-	// Пока используем бинарный формат
-	return encodeCursorBinary(msg)
-}
-
-func encodePlayersProtobuf(players []map[string]string) ([]byte, error) {
-	// Пока используем бинарный формат
-	return encodePlayersBinary(players)
-}
-
-func encodePongProtobuf() ([]byte, error) {
-	// Пока используем бинарный формат
-	return encodePongBinary()
-}
-
-func encodeErrorProtobuf(errorMsg string) ([]byte, error) {
-	// Пока используем бинарный формат
-	return encodeErrorBinary(errorMsg)
-}
-
-func encodeCellUpdateProtobuf(updates []CellUpdate, gameOver bool, gameWon bool, revealed int, hintsUsed int, loserPlayerID string, loserNickname string) ([]byte, error) {
-	// Пока используем бинарный формат
-	return encodeCellUpdateBinary(updates, gameOver, gameWon, revealed, hintsUsed, loserPlayerID, loserNickname)
-}
-
