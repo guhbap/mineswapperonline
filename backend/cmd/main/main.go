@@ -524,11 +524,14 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		case "newGame":
 			// Сбрасываем игру
+			log.Printf("Обработка newGame от игрока %s", playerID)
 			room.ResetGame()
-			log.Printf("Новая игра начата")
+			log.Printf("Новая игра начата для комнаты %s", roomID)
 			// Отправляем состояние игры асинхронно, чтобы не блокировать обработку сообщений
 			go func() {
+				log.Printf("Отправка состояния новой игры для комнаты %s", roomID)
 				s.broadcastGameState(room)
+				log.Printf("Состояние новой игры отправлено для комнаты %s", roomID)
 			}()
 		}
 	}
