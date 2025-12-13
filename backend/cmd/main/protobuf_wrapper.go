@@ -1,8 +1,8 @@
 package main
 
 import (
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 // ProtobufMessage представляет любое protobuf сообщение
@@ -27,6 +27,9 @@ func encodeProtobufJSON(msg proto.Message) (string, error) {
 		Indent:          "  ",
 		EmitUnpopulated: true,
 	}
-	return marshaler.Marshal(msg)
+	data, err := marshaler.Marshal(msg)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
-
