@@ -477,7 +477,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	room := s.roomManager.GetRoom(roomID)
 	if room == nil {
-		errorMsg, _ := encodeErrorBinary("Room not found")
+		errorMsg, _ := encodeErrorProtobuf("Room not found")
 		conn.WriteMessage(websocket.BinaryMessage, errorMsg)
 		conn.Close()
 		return
@@ -588,7 +588,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			// Отвечаем pong на ping сообщение
 			player.mu.Lock()
 			if player.Conn != nil {
-				pongMsg, _ := encodePongBinary()
+				pongMsg, _ := encodePongProtobuf()
 				if err := player.Conn.WriteMessage(websocket.BinaryMessage, pongMsg); err != nil {
 					log.Printf("Ошибка отправки pong игроку %s: %v", playerID, err)
 				}
@@ -1359,7 +1359,7 @@ func (s *Server) sendGameStateToPlayer(room *Room, player *Player) {
 	defer player.mu.Unlock()
 
 	// Кодируем gameState в бинарный формат
-	binaryData, err := encodeGameStateBinary(&gameStateCopy)
+	binaryData, err := encodeGameStateProtobuf(&gameStateCopy)
 	if err != nil {
 		log.Printf("Ошибка кодирования gameState: %v", err)
 		return
@@ -1387,8 +1387,8 @@ func (s *Server) broadcastCellUpdates(room *Room, changedCells map[[2]int]bool, 
 	// Собираем обновления клеток
 	updates := collectCellUpdates(room, changedCells)
 
-	// Кодируем обновления в бинарный формат
-	binaryData, err := encodeCellUpdateBinary(updates, gameOver, gameWon, revealed, hintsUsed, loserPlayerID, loserNickname)
+	// Кодируем обновления в protobuf формат
+	binaryData, err := encodeCellUpdateProtobuf(updates, gameOver, gameWon, revealed, hintsUsed, loserPlayerID, loserNickname)
 	if err != nil {
 		log.Printf("Ошибка кодирования обновлений клеток: %v", err)
 		// Fallback: отправляем полное состояние
@@ -1437,7 +1437,7 @@ func (s *Server) broadcastGameState(room *Room) {
 	room.GameState.mu.RUnlock()
 
 	// Кодируем gameState в бинарный формат
-	binaryData, err := encodeGameStateBinary(&gameStateCopy)
+	binaryData, err := encodeGameStateProtobuf(&gameStateCopy)
 	if err != nil {
 		log.Printf("Ошибка кодирования gameState: %v", err)
 		return
@@ -1482,7 +1482,7 @@ func (s *Server) broadcastToOthers(room *Room, senderID string, msg Message) {
 	var binaryData []byte
 	var err error
 	if msg.Type == "cursor" && msg.Cursor != nil {
-		binaryData, err = encodeCursorBinary(&msg)
+		binaryData, err = encodeCursorProtobuf(&msg)
 		if err != nil {
 			log.Printf("Ошибка кодирования курсора: %v", err)
 			return
@@ -1515,7 +1515,7 @@ func (s *Server) broadcastToAll(room *Room, msg Message) {
 	var binaryData []byte
 	var err error
 	if msg.Type == "chat" && msg.Chat != nil {
-		binaryData, err = encodeChatBinary(&msg)
+		binaryData, err = encodeChatProtobuf(&msg)
 		if err != nil {
 			log.Printf("Ошибка кодирования чата: %v", err)
 			return
@@ -1552,7 +1552,7 @@ func (s *Server) sendPlayerListToPlayer(room *Room, targetPlayer *Player) {
 	}
 	room.mu.RUnlock()
 
-	binaryData, err := encodePlayersBinary(playersList)
+	binaryData, err := encodePlayersProtobuf(playersList)
 	if err != nil {
 		log.Printf("Ошибка кодирования списка игроков: %v", err)
 		return
@@ -1832,7 +1832,7 @@ func (s *Server) broadcastPlayerList(room *Room) {
 	}
 	room.mu.RUnlock()
 
-	binaryData, err := encodePlayersBinary(playersList)
+	binaryData, err := encodePlayersProtobuf(playersList)
 	if err != nil {
 		log.Printf("Ошибка кодирования списка игроков: %v", err)
 		return

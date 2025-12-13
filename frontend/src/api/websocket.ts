@@ -1,4 +1,5 @@
 import type { Ref } from 'vue'
+import { decodeProtobufMessage, encodeClientMessage } from '../utils/protobufMessages'
 
 export interface WebSocketMessage {
   type: string
@@ -154,45 +155,16 @@ export class WebSocketClient implements IWebSocketClient {
             return
           }
 
-          const messageType = new Uint8Array(buffer)[0]
-          console.log(`[WS RECV ${timestamp}] Тип бинарного сообщения:`, messageType, `(размер: ${buffer.byteLength} байт)`)
+          console.log(`[WS RECV ${timestamp}] Protobuf сообщение (размер: ${buffer.byteLength} байт)`)
 
-          // Тип 0 = gameState binary
-          if (messageType === 0) {
-            const { decodeGameStateBinary } = await import('../utils/gamestateBinary')
-            const gameState = decodeGameStateBinary(buffer.slice(1)) // Пропускаем первый байт (тип)
-            const decodedMsg = {
-              type: 'gameState',
-              gameState
-            } as WebSocketMessage
-            console.log(`[WS RECV ${timestamp}] gameState (binary):`, {
-              rows: gameState.r,
-              cols: gameState.c,
-              mines: gameState.m,
-              revealed: gameState.rv,
-              gameOver: gameState.go,
-              gameWon: gameState.gw,
-              hintsUsed: gameState.hu,
-              boardSize: gameState.b?.length || 0
-            })
-            this.onMessage(decodedMsg)
-            return
-          }
+          // Все сообщения теперь в protobuf формате
 
-          // Обрабатываем другие бинарные сообщения
-          const { decodeBinaryMessage } = await import('../utils/messagesBinary')
-
-          // Детальное декодирование для отладки
-          if (messageType === 1) {
-            const { decodeBinaryMessageDebug } = await import('../utils/decodeBinaryDebug')
-            decodeBinaryMessageDebug(buffer)
-          }
-
-          const decodedMsg = decodeBinaryMessage(buffer)
+          // Обрабатываем protobuf сообщения
+          const decodedMsg = await decodeProtobufMessage(buffer)
 
           if (decodedMsg) {
             // Дополнительное логирование для chat сообщений
-            if (messageType === 1 && decodedMsg.type === 'chat') {
+            if (decodedMsg.type === 'chat') {
               console.log(`[WS RECV ${timestamp}] Детали chat сообщения:`, {
                 playerId: decodedMsg.playerId,
                 nickname: decodedMsg.nickname,
@@ -243,7 +215,7 @@ export class WebSocketClient implements IWebSocketClient {
 
             this.onMessage(wsMsg)
           } else {
-            console.warn(`[WS RECV ${timestamp}] Не удалось декодировать бинарное сообщение типа ${messageType}`)
+            console.warn(`[WS RECV ${timestamp}] Не удалось декодировать protobuf сообщение`)
           }
         } catch (error) {
           // Игнорируем ошибку парсинга для бинарных сообщений
@@ -304,7 +276,7 @@ export class WebSocketClient implements IWebSocketClient {
     return playerId.length > 5 ? playerId.substring(0, 5) : playerId
   }
 
-  send(message: WebSocketMessage) {
+  async send(message: WebSocketMessage) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       // Ограничиваем playerId до 5 символов при отправке
       const optimizedMessage: WebSocketMessage = {
@@ -320,13 +292,21 @@ export class WebSocketClient implements IWebSocketClient {
         } : undefined
       }
       const timestamp = new Date().toISOString()
-      const jsonData = JSON.stringify(optimizedMessage)
-      console.log(`[WS SEND ${timestamp}] JSON сообщение:`, {
-        type: optimizedMessage.type,
-        data: optimizedMessage,
-        size: jsonData.length
-      })
-      this.ws.send(jsonData)
+      try {
+        // Кодируем сообщение в protobuf формат
+        const binaryData = await encodeClientMessage(optimizedMessage)
+        console.log(`[WS SEND ${timestamp}] Protobuf сообщение:`, {
+          type: optimizedMessage.type,
+          data: optimizedMessage,
+          size: binaryData.byteLength
+        })
+        this.ws.send(binaryData)
+      } catch (error) {
+        console.error(`[WS SEND ${timestamp}] Ошибка кодирования protobuf сообщения:`, error)
+        // Fallback: отправляем JSON (для совместимости)
+        const jsonData = JSON.stringify(optimizedMessage)
+        this.ws.send(jsonData)
+      }
     } else {
       console.warn(`[WS SEND] Попытка отправить сообщение при закрытом соединении. Тип: ${message.type}`)
     }

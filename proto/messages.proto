@@ -1,0 +1,171 @@
+syntax = "proto3";
+
+package messages;
+
+option go_package = "minesweeperonline/proto";
+
+// Основное сообщение WebSocket
+message WebSocketMessage {
+  oneof message {
+    GameStateMessage game_state = 1;
+    ChatMessage chat = 2;
+    CursorMessage cursor = 3;
+    PlayersMessage players = 4;
+    PongMessage pong = 5;
+    ErrorMessage error = 6;
+    CellUpdateMessage cell_update = 7;
+  }
+}
+
+// Входящее сообщение от клиента
+message ClientMessage {
+  oneof message {
+    string nickname = 1;
+    CursorMessage cursor = 2;
+    CellClickMessage cell_click = 3;
+    HintMessage hint = 4;
+    NewGameMessage new_game = 5;
+    ChatMessage chat = 6;
+    PingMessage ping = 7;
+  }
+}
+
+// Состояние игры
+message GameStateMessage {
+  Board board = 1;
+  int32 rows = 2;
+  int32 cols = 3;
+  int32 mines = 4;
+  bool game_over = 5;
+  bool game_won = 6;
+  int32 revealed = 7;
+  int32 hints_used = 8;
+  repeated SafeCell safe_cells = 9;
+  repeated CellHint cell_hints = 10;
+  string loser_player_id = 11;
+  string loser_nickname = 12;
+}
+
+message Board {
+  repeated Row rows = 1;
+}
+
+message Row {
+  repeated Cell cells = 1;
+}
+
+message Cell {
+  bool is_mine = 1;
+  bool is_revealed = 2;
+  bool is_flagged = 3;
+  int32 neighbor_mines = 4;
+  string flag_color = 5;
+}
+
+message SafeCell {
+  int32 row = 1;
+  int32 col = 2;
+}
+
+message CellHint {
+  int32 row = 1;
+  int32 col = 2;
+  string type = 3; // "MINE", "SAFE", "UNKNOWN"
+}
+
+// Сообщение чата
+message ChatMessage {
+  string player_id = 1;
+  string nickname = 2;
+  string color = 3;
+  string text = 4;
+  bool is_system = 5;
+  string action = 6; // "flag", "reveal", "explode"
+  int32 row = 7;
+  int32 col = 8;
+}
+
+// Позиция курсора
+message CursorMessage {
+  string player_id = 1;
+  string nickname = 2;
+  string color = 3;
+  double x = 4;
+  double y = 5;
+}
+
+// Список игроков
+message PlayersMessage {
+  repeated Player players = 1;
+}
+
+message Player {
+  string id = 1;
+  string nickname = 2;
+  string color = 3;
+}
+
+// Сообщение об ошибке
+message ErrorMessage {
+  string error = 1;
+}
+
+// Pong сообщение
+message PongMessage {
+}
+
+// Ping сообщение
+message PingMessage {
+}
+
+// Клик по клетке
+message CellClickMessage {
+  int32 row = 1;
+  int32 col = 2;
+  bool flag = 3;
+}
+
+// Подсказка
+message HintMessage {
+  int32 row = 1;
+  int32 col = 2;
+}
+
+// Новая игра
+message NewGameMessage {
+}
+
+// Обновление клеток
+message CellUpdateMessage {
+  bool game_over = 1;
+  bool game_won = 2;
+  int32 revealed = 3;
+  int32 hints_used = 4;
+  string loser_player_id = 5;
+  string loser_nickname = 6;
+  repeated CellUpdate updates = 7;
+}
+
+message CellUpdate {
+  int32 row = 1;
+  int32 col = 2;
+  CellType type = 3;
+}
+
+enum CellType {
+  CELL_TYPE_NEIGHBOR_0 = 0;    // Открытая клетка с 0 соседних мин
+  CELL_TYPE_NEIGHBOR_1 = 1;    // Открытая клетка с 1 соседней миной
+  CELL_TYPE_NEIGHBOR_2 = 2;    // Открытая клетка с 2 соседними минами
+  CELL_TYPE_NEIGHBOR_3 = 3;    // Открытая клетка с 3 соседними минами
+  CELL_TYPE_NEIGHBOR_4 = 4;    // Открытая клетка с 4 соседними минами
+  CELL_TYPE_NEIGHBOR_5 = 5;    // Открытая клетка с 5 соседними минами
+  CELL_TYPE_NEIGHBOR_6 = 6;    // Открытая клетка с 6 соседними минами
+  CELL_TYPE_NEIGHBOR_7 = 7;    // Открытая клетка с 7 соседними минами
+  CELL_TYPE_NEIGHBOR_8 = 8;    // Открытая клетка с 8 соседними минами
+  CELL_TYPE_MINE = 9;          // Мина
+  CELL_TYPE_SAFE = 10;          // Зеленая (SAFE) - для режима обучения (закрытая)
+  CELL_TYPE_UNKNOWN = 11;      // Желтая (UNKNOWN) - для режима обучения (закрытая)
+  CELL_TYPE_DANGER = 12;       // Красная (MINE) - для режима обучения (закрытая)
+  CELL_TYPE_CLOSED = 255;      // Закрыта (без подсказок)
+}
+
