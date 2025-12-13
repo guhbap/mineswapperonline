@@ -312,6 +312,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Пытаемся получить userID из query параметра (если пользователь авторизован)
 	userIDStr := r.URL.Query().Get("userId")
 	var userID int
+	var initialNickname string
 	if userIDStr != "" {
 		// Парсим userID, игнорируем ошибку если не число
 		if id, err := strconv.Atoi(userIDStr); err == nil {
@@ -323,15 +324,20 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				if userColor, err := s.profileHandler.FindUserColor(userID); err == nil && userColor != "" {
 					color = userColor
 				}
+				// Получаем username из базы данных для авторизованного пользователя
+				if user, err := s.profileHandler.FindUserByID(userID); err == nil {
+					initialNickname = user.Username
+				}
 			}
 		}
 	}
 
 	player := &Player{
-		ID:     playerID,
-		UserID: userID,
-		Color:  color,
-		Conn:   conn,
+		ID:       playerID,
+		UserID:   userID,
+		Nickname: initialNickname,
+		Color:    color,
+		Conn:     conn,
 	}
 
 	// Сохраняем WebSocket Player в Server
@@ -343,7 +349,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	roomPlayer := &game.Player{
 		ID:       playerID,
 		UserID:   userID,
-		Nickname: "",
+		Nickname: initialNickname,
 		Color:    color,
 	}
 
@@ -454,6 +460,12 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			player.mu.Lock()
 			player.Nickname = msg.Nickname
 			player.mu.Unlock()
+			// Обновляем никнейм также в room.Players
+			room.Mu.Lock()
+			if roomPlayer := room.Players[playerID]; roomPlayer != nil {
+				roomPlayer.Nickname = msg.Nickname
+			}
+			room.Mu.Unlock()
 			log.Printf("Никнейм игрока %s установлен: %s", playerID, msg.Nickname)
 			s.broadcastPlayerList(room)
 

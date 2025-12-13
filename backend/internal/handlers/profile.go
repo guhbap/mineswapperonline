@@ -330,6 +330,11 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 }
 
 func (h *ProfileHandler) findUserByID(id int) (models.User, error) {
+	return h.FindUserByID(id)
+}
+
+// FindUserByID находит пользователя по ID (публичный метод)
+func (h *ProfileHandler) FindUserByID(id int) (models.User, error) {
 	var user models.User
 	err := h.db.First(&user, id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
