@@ -169,44 +169,15 @@ export class WebSocketClient implements IWebSocketClient {
 
           console.log(`[WS RECV ${timestamp}] Бинарное сообщение (размер: ${buffer.byteLength} байт)`)
 
-          // Определяем формат сообщения по первому байту
-          // Бинарный формат: первый байт = тип сообщения (0-6)
-          // Protobuf формат: первый байт = varint (обычно > 6 для наших сообщений)
-          const firstByte = new Uint8Array(buffer)[0]
-          const isBinaryFormat = firstByte <= 6 && buffer.byteLength > 1
-
+          // Все сообщения теперь в protobuf формате
           let decodedMsg: any = null
-
-          if (isBinaryFormat) {
-            // Старый бинарный формат
-            try {
-              const { decodeBinaryMessage } = await import('../utils/messagesBinary')
-
-              // Тип 0 = gameState binary
-              if (firstByte === 0) {
-                const { decodeGameStateBinary } = await import('../utils/gamestateBinary')
-                if (buffer.byteLength > 1) {
-                  const gameState = decodeGameStateBinary(buffer.slice(1)) // Пропускаем первый байт (тип)
-                  decodedMsg = {
-                    type: 'gameState',
-                    gameState
-                  } as WebSocketMessage
-                }
-              } else {
-                decodedMsg = decodeBinaryMessage(buffer)
-              }
-            } catch (error) {
-              console.error(`[WS RECV ${timestamp}] Ошибка декодирования бинарного сообщения:`, error)
-            }
-          } else {
-            // Protobuf формат
-            try {
-              decodedMsg = await decodeProtobufMessage(buffer)
-            } catch (error) {
-              console.error(`[WS RECV ${timestamp}] Ошибка декодирования protobuf сообщения:`, error)
-              // Если protobuf не удалось декодировать, не пробуем бинарный формат
-              // так как это может привести к ошибкам чтения за пределами буфера
-            }
+          try {
+            decodedMsg = await decodeProtobufMessage(buffer)
+          } catch (error) {
+            console.error(`[WS RECV ${timestamp}] Ошибка декодирования protobuf сообщения:`, error)
+            // Логируем первые байты для отладки
+            const firstBytes = Array.from(new Uint8Array(buffer.slice(0, Math.min(10, buffer.byteLength))))
+            console.error(`[WS RECV ${timestamp}] Первые байты сообщения:`, firstBytes)
           }
 
           if (decodedMsg) {
