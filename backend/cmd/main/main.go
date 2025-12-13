@@ -526,7 +526,10 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			// Сбрасываем игру
 			room.ResetGame()
 			log.Printf("Новая игра начата")
-			s.broadcastGameState(room)
+			// Отправляем состояние игры асинхронно, чтобы не блокировать обработку сообщений
+			go func() {
+				s.broadcastGameState(room)
+			}()
 		}
 	}
 
