@@ -41,12 +41,12 @@ func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, 
 	rm.mu.Lock()
 	rm.rooms[roomID] = room
 	rm.mu.Unlock()
-	
+
 	// Сохраняем комнату в БД
 	if err := rm.SaveRoom(room); err != nil {
 		log.Printf("Предупреждение: не удалось сохранить комнату %s в БД: %v", roomID, err)
 	}
-	
+
 	return room
 }
 
@@ -91,7 +91,7 @@ func (rm *RoomManager) DeleteRoom(roomID string) {
 	rm.mu.Lock()
 	delete(rm.rooms, roomID)
 	rm.mu.Unlock()
-	
+
 	// Удаляем комнату из БД
 	if err := rm.DeleteRoomFromDB(roomID); err != nil {
 		log.Printf("Предупреждение: не удалось удалить комнату %s из БД: %v", roomID, err)
