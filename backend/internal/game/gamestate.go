@@ -1,11 +1,13 @@
 package game
 
 import (
+	"log"
 	mathrand "math/rand"
 )
 
 // NewGameState создает новое состояние игры
 func NewGameState(rows, cols, mines int, gameMode string) *GameState {
+	log.Printf("NewGameState: начало создания, rows=%d, cols=%d, mines=%d, gameMode=%s", rows, cols, mines, gameMode)
 	// По умолчанию classic
 	if gameMode == "" {
 		gameMode = "classic"
@@ -23,15 +25,18 @@ func NewGameState(rows, cols, mines int, gameMode string) *GameState {
 		Board:         make([][]Cell, rows),
 		FlagSetInfo:   make(map[int]FlagInfo),
 	}
+	log.Printf("NewGameState: структура создана, инициализируем поле")
 
 	// Инициализация поля
 	for i := range gs.Board {
 		gs.Board[i] = make([]Cell, cols)
 	}
+	log.Printf("NewGameState: поле инициализировано")
 
 	// В режимах training и fair мины НЕ размещаются заранее - они определяются динамически при клике
 	// В классическом режиме размещаем мины случайно
 	if gameMode == "classic" {
+		log.Printf("NewGameState: размещаем мины в классическом режиме")
 		minesPlaced := 0
 		for minesPlaced < mines {
 			row := mathrand.Intn(rows)
@@ -41,6 +46,7 @@ func NewGameState(rows, cols, mines int, gameMode string) *GameState {
 				minesPlaced++
 			}
 		}
+		log.Printf("NewGameState: мины размещены, подсчитываем соседние мины")
 
 		// Подсчет соседних мин для обычного режима
 		for i := 0; i < rows; i++ {
@@ -61,9 +67,11 @@ func NewGameState(rows, cols, mines int, gameMode string) *GameState {
 				}
 			}
 		}
+		log.Printf("NewGameState: подсчет соседних мин завершен")
 	}
 	// В режимах training и fair подсчет соседних мин будет происходить динамически при размещении мин
 
+	log.Printf("NewGameState: завершено создание GameState")
 	return gs
 }
 

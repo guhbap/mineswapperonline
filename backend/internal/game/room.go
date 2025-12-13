@@ -142,13 +142,15 @@ func (r *Room) GetPlayer(playerID string) *Player {
 
 // ResetGame сбрасывает игру
 func (r *Room) ResetGame() {
-	log.Printf("ResetGame: блокируем room.Mu для комнаты %s", r.ID)
+	log.Printf("ResetGame: начало для комнаты %s", r.ID)
+	log.Printf("ResetGame: пытаемся заблокировать room.Mu (Lock)")
 	r.Mu.Lock()
-	log.Printf("ResetGame: room.Mu заблокирован, создаем новый GameState")
+	log.Printf("ResetGame: room.Mu успешно заблокирован (Lock), создаем новый GameState")
 	r.GameState = NewGameState(r.Rows, r.Cols, r.Mines, r.GameMode)
+	log.Printf("ResetGame: новый GameState создан, сбрасываем StartTime")
 	r.StartTime = nil
-	log.Printf("ResetGame: новый GameState создан, разблокируем room.Mu")
-	defer r.Mu.Unlock()
-	log.Printf("ResetGame: завершено для комнаты %s", r.ID)
+	log.Printf("ResetGame: разблокируем room.Mu")
+	r.Mu.Unlock()
+	log.Printf("ResetGame: room.Mu разблокирован, завершено для комнаты %s", r.ID)
 }
 
