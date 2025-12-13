@@ -1,16 +1,24 @@
 // Утилита для расчета рейтинга
 // Упрощенная система: каждая игра добавляет к рейтингу столько очков, сколько сложность у нее
 
+
+const α = 1.5
 // Вычисляет сложность поля по формуле: (M / (W * H)) * sqrt(W^2 + H^2)
 // где M - количество мин, W - ширина (cols), H - высота (rows)
 export function calculateDifficulty(width: number, height: number, mines: number): number {
-  const totalCells = width * height
-  if (totalCells <= 0) return 0
 
-  const density = mines / totalCells
-  const diagonal = Math.sqrt(width * width + height * height)
+  const cells = width * height
+  const density = mines / cells
+  const difficulty = cells * Math.pow(density, α)
 
-  return density * diagonal
+  return difficulty
+  // const totalCells = width * height
+  // if (totalCells <= 0) return 0
+
+  // const density = mines / totalCells
+  // const diagonal = Math.sqrt(width * width + height * height)
+
+  // return density * diagonal
 }
 
 // Вычисляет максимальный прирост рейтинга для данного поля
