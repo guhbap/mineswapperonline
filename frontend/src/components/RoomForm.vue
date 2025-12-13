@@ -79,10 +79,10 @@
           {{ isRatedGame ? 'Рейтинговая игра' : 'Нерейтинговая игра' }}
         </div>
         <div v-if="isRatedGame && maxRatingGain > 0" class="rating-status__gain">
-          До +{{ Math.round(maxRatingGain) }} очков попытки
+          Макс. рейтинг: {{ Math.round(maxRatingGain) }} (при времени ≥ 3 сек)
         </div>
         <div v-else-if="!isRatedGame" class="rating-status__hint">
-          Поле слишком простое для получения рейтинга
+          Плотность мин &lt; 10% (минимальное требование для рейтинга)
         </div>
       </div>
     </div>
@@ -181,7 +181,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { generateRandomName } from '@/utils/nameGenerator'
-import { calculateMaxRatingGain, isComplexitySufficient, calculateDifficulty } from '@/utils/ratingCalculator'
+import { calculateMaxRating, isRatingEligible, calculateDifficulty } from '@/utils/ratingCalculator'
 
 export interface RoomFormData {
   name: string
@@ -236,17 +236,19 @@ const difficulty = computed(() => {
   return calculateDifficulty(form.value.cols, form.value.rows, form.value.mines)
 })
 
+// Проверяем, может ли игра дать рейтинг (проверяем только плотность, время проверится при завершении)
 const isRatedGame = computed(() => {
-  return isComplexitySufficient(
-    form.value.cols,
-    form.value.rows,
-    form.value.mines
-  )
+  // Проверяем минимальную плотность мин (10%)
+  const cells = form.value.cols * form.value.rows
+  if (cells <= 0) return false
+  const density = form.value.mines / cells
+  return density >= 0.1
 })
 
+// Максимальный рейтинг при минимальном времени (3 секунды)
 const maxRatingGain = computed(() => {
   if (!isRatedGame.value) return 0
-  return calculateMaxRatingGain(
+  return calculateMaxRating(
     form.value.cols,
     form.value.rows,
     form.value.mines
