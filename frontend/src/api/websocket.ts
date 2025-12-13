@@ -111,6 +111,8 @@ export class WebSocketClient implements IWebSocketClient {
       this.ws = new WebSocket(this.url)
 
       this.ws.onopen = () => {
+        const timestamp = new Date().toISOString()
+        console.log(`[WS CONN ${timestamp}] WebSocket подключен:`, this.url)
         this.reconnectAttempts = 0
         this.lastPongTime = Date.now()
         this.isIntentionallyDisconnected = false // Сбрасываем флаг при успешном подключении
@@ -121,33 +123,59 @@ export class WebSocketClient implements IWebSocketClient {
       this.ws.onmessage = async (event) => {
         try {
           let buffer: ArrayBuffer
+          const timestamp = new Date().toISOString()
 
           // Преобразуем данные в ArrayBuffer
           if (event.data instanceof ArrayBuffer) {
             buffer = event.data
+            console.log(`[WS RECV ${timestamp}] Бинарное сообщение (ArrayBuffer):`, {
+              size: buffer.byteLength,
+              bytes: Array.from(new Uint8Array(buffer.slice(0, Math.min(20, buffer.byteLength))))
+            })
           } else if (event.data instanceof Blob) {
             buffer = await event.data.arrayBuffer()
+            console.log(`[WS RECV ${timestamp}] Бинарное сообщение (Blob):`, {
+              size: buffer.byteLength,
+              bytes: Array.from(new Uint8Array(buffer.slice(0, Math.min(20, buffer.byteLength))))
+            })
           } else {
             // JSON сообщения (входящие от клиента остаются JSON)
             const msg: WebSocketMessage = JSON.parse(event.data)
+            console.log(`[WS RECV ${timestamp}] JSON сообщение:`, {
+              type: msg.type,
+              data: msg
+            })
             this.onMessage(msg)
             return
           }
 
           if (buffer.byteLength === 0) {
+            console.warn(`[WS RECV ${timestamp}] Пустое бинарное сообщение`)
             return
           }
 
           const messageType = new Uint8Array(buffer)[0]
+          console.log(`[WS RECV ${timestamp}] Тип бинарного сообщения:`, messageType, `(размер: ${buffer.byteLength} байт)`)
 
           // Тип 0 = gameState binary
           if (messageType === 0) {
             const { decodeGameStateBinary } = await import('../utils/gamestateBinary')
             const gameState = decodeGameStateBinary(buffer.slice(1)) // Пропускаем первый байт (тип)
-            this.onMessage({
+            const decodedMsg = {
               type: 'gameState',
               gameState
-            } as WebSocketMessage)
+            } as WebSocketMessage
+            console.log(`[WS RECV ${timestamp}] gameState (binary):`, {
+              rows: gameState.r,
+              cols: gameState.c,
+              mines: gameState.m,
+              revealed: gameState.rv,
+              gameOver: gameState.go,
+              gameWon: gameState.gw,
+              hintsUsed: gameState.hu,
+              boardSize: gameState.b?.length || 0
+            })
+            this.onMessage(decodedMsg)
             return
           }
 
@@ -158,6 +186,7 @@ export class WebSocketClient implements IWebSocketClient {
           if (decodedMsg) {
             // Обрабатываем pong сообщение
             if (decodedMsg.type === 'pong') {
+              console.log(`[WS RECV ${timestamp}] pong`)
               this.lastPongTime = Date.now()
               if (this.pongTimeout) {
                 clearTimeout(this.pongTimeout)
@@ -185,15 +214,31 @@ export class WebSocketClient implements IWebSocketClient {
               ...(decodedMsg.loserNickname ? { loserNickname: decodedMsg.loserNickname } : {})
             }
 
+            console.log(`[WS RECV ${timestamp}] Декодированное бинарное сообщение:`, {
+              type: wsMsg.type,
+              data: wsMsg,
+              cellUpdatesCount: wsMsg.cellUpdates?.length || 0,
+              playersCount: wsMsg.players?.length || 0
+            })
+
             this.onMessage(wsMsg)
+          } else {
+            console.warn(`[WS RECV ${timestamp}] Не удалось декодировать бинарное сообщение типа ${messageType}`)
           }
         } catch (error) {
           // Игнорируем ошибку парсинга для бинарных сообщений
-          console.warn('Ошибка обработки сообщения:', error)
+          console.error(`[WS RECV] Ошибка обработки сообщения:`, error)
         }
       }
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event) => {
+        const timestamp = new Date().toISOString()
+        console.log(`[WS CONN ${timestamp}] WebSocket закрыт:`, {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+          intentionallyDisconnected: this.isIntentionallyDisconnected
+        })
         this.stopPingInterval()
         this.onClose?.()
         // Переподключаемся только если отключение было не намеренным
@@ -203,6 +248,8 @@ export class WebSocketClient implements IWebSocketClient {
       }
 
       this.ws.onerror = (error) => {
+        const timestamp = new Date().toISOString()
+        console.error(`[WS ERROR ${timestamp}] Ошибка WebSocket:`, error)
         this.onError?.(error)
       }
     } catch (error) {
@@ -252,11 +299,21 @@ export class WebSocketClient implements IWebSocketClient {
           lpid: this.truncatePlayerId(message.gameState.lpid)
         } : undefined
       }
-      this.ws.send(JSON.stringify(optimizedMessage))
+      const timestamp = new Date().toISOString()
+      const jsonData = JSON.stringify(optimizedMessage)
+      console.log(`[WS SEND ${timestamp}] JSON сообщение:`, {
+        type: optimizedMessage.type,
+        data: optimizedMessage,
+        size: jsonData.length
+      })
+      this.ws.send(jsonData)
+    } else {
+      console.warn(`[WS SEND] Попытка отправить сообщение при закрытом соединении. Тип: ${message.type}`)
     }
   }
 
   sendNickname(nickname: string) {
+    console.log(`[WS SEND] Отправка nickname:`, nickname)
     this.send({ type: 'nickname', nickname })
   }
 
@@ -311,18 +368,22 @@ export class WebSocketClient implements IWebSocketClient {
   }
 
   sendCellClick(row: number, col: number, flag: boolean) {
+    console.log(`[WS SEND] Отправка cellClick:`, { row, col, flag })
     this.send({ type: 'cellClick', cellClick: { row, col, flag } })
   }
 
   sendHint(row: number, col: number) {
+    console.log(`[WS SEND] Отправка hint:`, { row, col })
     this.send({ type: 'hint', hint: { row, col } })
   }
 
   sendNewGame() {
+    console.log(`[WS SEND] Отправка newGame`)
     this.send({ type: 'newGame' })
   }
 
   sendChatMessage(text: string) {
+    console.log(`[WS SEND] Отправка chat:`, text)
     this.send({
       type: 'chat',
       chat: {
@@ -338,6 +399,7 @@ export class WebSocketClient implements IWebSocketClient {
     this.pingInterval = setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         // Отправляем ping сообщение
+        console.log(`[WS PING] Отправка ping`)
         this.send({ type: 'ping' })
 
         // Устанавливаем таймаут для ожидания pong

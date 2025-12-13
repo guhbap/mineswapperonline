@@ -561,7 +561,22 @@ const handleNewGame = () => {
 }
 
 const handleMessage = (msg: WebSocketMessage) => {
+  const timestamp = new Date().toISOString()
+  console.log(`[GAME MSG ${timestamp}] Получено сообщение:`, {
+    type: msg.type,
+    data: msg
+  })
+
   if (msg.type === 'gameState' && msg.gameState) {
+    console.log(`[GAME MSG ${timestamp}] Обработка gameState:`, {
+      rows: msg.gameState.r,
+      cols: msg.gameState.c,
+      mines: msg.gameState.m,
+      revealed: msg.gameState.rv,
+      gameOver: msg.gameState.go,
+      gameWon: msg.gameState.gw,
+      hintsUsed: msg.gameState.hu
+    })
     const prevGameWon = gameState.value?.gw
     gameState.value = msg.gameState
 
@@ -586,6 +601,14 @@ const handleMessage = (msg: WebSocketMessage) => {
     }
   } else if (msg.type === 'cellUpdate' && msg.cellUpdates && gameState.value) {
     // Обрабатываем обновления клеток
+    console.log(`[GAME MSG ${timestamp}] Обработка cellUpdate:`, {
+      updatesCount: msg.cellUpdates.length,
+      gameOver: msg.gameOver,
+      gameWon: msg.gameWon,
+      revealed: msg.revealed,
+      hintsUsed: msg.hintsUsed,
+      updates: msg.cellUpdates.slice(0, 10) // Показываем первые 10 обновлений
+    })
     const prevGameWon = gameState.value.gw
     const CellTypeClosed = 0
     const CellTypeMine = 9
@@ -651,6 +674,11 @@ const handleMessage = (msg: WebSocketMessage) => {
       }
     }
   } else if (msg.type === 'cursor' && msg.cursor) {
+    console.log(`[GAME MSG ${timestamp}] Обработка cursor:`, {
+      playerId: msg.playerId || msg.cursor.pid,
+      x: msg.cursor.x,
+      y: msg.cursor.y
+    })
     // playerId может быть на верхнем уровне или внутри cursor (pid)
     const playerId = msg.playerId || msg.cursor.pid
     if (!playerId) {
@@ -692,12 +720,26 @@ const handleMessage = (msg: WebSocketMessage) => {
     }
     cursorTimeout.value.set(playerId, timeoutId as unknown as number)
   } else if (msg.type === 'players' && msg.players) {
+    console.log(`[GAME MSG ${timestamp}] Обработка players:`, {
+      count: msg.players.length,
+      players: msg.players
+    })
     // Обновляем список игроков
     playersList.value = msg.players.map((p: any) => ({
       id: p.id || p.playerId || '',
       nickname: p.nickname || 'Игрок',
       color: p.color || '#667eea'
     }))
+  } else if (msg.type === 'chat') {
+    console.log(`[GAME MSG ${timestamp}] Обработка chat:`, {
+      text: msg.chat?.text,
+      isSystem: msg.chat?.isSystem,
+      action: msg.chat?.action,
+      playerId: msg.playerId,
+      nickname: msg.nickname
+    })
+  } else {
+    console.log(`[GAME MSG ${timestamp}] Необработанный тип сообщения:`, msg.type)
   }
 }
 
