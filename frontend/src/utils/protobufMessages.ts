@@ -35,14 +35,14 @@ async function loadProto(): Promise<void> {
 // Кодирует сообщение в protobuf формат
 export async function encodeProtobufMessage(message: any): Promise<ArrayBuffer> {
   await loadProto()
-  
+
   if (!WebSocketMessage) {
     throw new Error('WebSocketMessage type not loaded')
   }
 
   // Создаем объект сообщения
   const msgObj: any = {}
-  
+
   if (message.type === 'gameState' && message.gameState) {
     msgObj.gameState = convertGameStateToProtobuf(message.gameState)
   } else if (message.type === 'chat' && message.chat) {
@@ -107,25 +107,31 @@ export async function encodeProtobufMessage(message: any): Promise<ArrayBuffer> 
 // Декодирует protobuf сообщение
 export async function decodeProtobufMessage(data: ArrayBuffer): Promise<any> {
   await loadProto()
-  
+
   if (!WebSocketMessage) {
     throw new Error('WebSocketMessage type not loaded')
   }
 
-  const buffer = new Uint8Array(data)
-  const message = WebSocketMessage.decode(buffer)
-  const obj = WebSocketMessage.toObject(message, {
-    longs: String,
-    enums: String,
-    bytes: String,
-    defaults: true,
-    arrays: true,
-    objects: true,
-    oneofs: true
-  })
+  if (data.byteLength === 0) {
+    throw new Error('Empty buffer')
+  }
 
-  // Преобразуем в формат WebSocketMessage
-  if (obj.gameState) {
+  const buffer = new Uint8Array(data)
+
+  try {
+    const message = WebSocketMessage.decode(buffer)
+    const obj = WebSocketMessage.toObject(message, {
+      longs: String,
+      enums: String,
+      bytes: String,
+      defaults: true,
+      arrays: true,
+      objects: true,
+      oneofs: true
+    })
+
+    // Преобразуем в формат WebSocketMessage
+    if (obj.gameState) {
     return {
       type: 'gameState',
       gameState: convertProtobufToGameState(obj.gameState)
@@ -181,9 +187,17 @@ export async function decodeProtobufMessage(data: ArrayBuffer): Promise<any> {
       loserNickname: obj.cellUpdate.loserNickname,
       cellUpdates: obj.cellUpdate.updates
     }
-  }
+    }
 
-  return null
+    return null
+  } catch (error) {
+    // Если декодирование не удалось, выбрасываем ошибку
+    throw new Error(`Failed to decode protobuf message: ${error}`)
+  }
+} catch (error) {
+    // Если декодирование не удалось, выбрасываем ошибку
+    throw new Error(`Failed to decode protobuf message: ${error}`)
+  }
 }
 
 // Преобразует GameState в protobuf формат
@@ -245,13 +259,13 @@ function convertProtobufToGameState(gameState: any): any {
 // Кодирует клиентское сообщение в protobuf формат
 export async function encodeClientMessage(message: any): Promise<ArrayBuffer> {
   await loadProto()
-  
+
   if (!ClientMessage) {
     throw new Error('ClientMessage type not loaded')
   }
 
   const msgObj: any = {}
-  
+
   if (message.type === 'nickname') {
     msgObj.nickname = message.nickname
   } else if (message.type === 'cursor' && message.cursor) {

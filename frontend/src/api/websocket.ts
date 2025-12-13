@@ -157,26 +157,43 @@ export class WebSocketClient implements IWebSocketClient {
 
           console.log(`[WS RECV ${timestamp}] Бинарное сообщение (размер: ${buffer.byteLength} байт)`)
 
-          // Пытаемся декодировать как protobuf, если не получается - используем старый бинарный формат
-          let decodedMsg: any = null
-          try {
-            decodedMsg = await decodeProtobufMessage(buffer)
-          } catch (error) {
-            console.warn(`[WS RECV ${timestamp}] Ошибка декодирования protobuf, пробуем бинарный формат:`, error)
-            // Fallback на старый бинарный формат
-            const { decodeBinaryMessage } = await import('../utils/messagesBinary')
-            const messageType = new Uint8Array(buffer)[0]
+          // Определяем формат сообщения по первому байту
+          // Бинарный формат: первый байт = тип сообщения (0-6)
+          // Protobuf формат: первый байт = varint (обычно > 6 для наших сообщений)
+          const firstByte = new Uint8Array(buffer)[0]
+          const isBinaryFormat = firstByte <= 6 && buffer.byteLength > 1
 
-            // Тип 0 = gameState binary
-            if (messageType === 0) {
-              const { decodeGameStateBinary } = await import('../utils/gamestateBinary')
-              const gameState = decodeGameStateBinary(buffer.slice(1)) // Пропускаем первый байт (тип)
-              decodedMsg = {
-                type: 'gameState',
-                gameState
-              } as WebSocketMessage
-            } else {
-              decodedMsg = decodeBinaryMessage(buffer)
+          let decodedMsg: any = null
+
+          if (isBinaryFormat) {
+            // Старый бинарный формат
+            try {
+              const { decodeBinaryMessage } = await import('../utils/messagesBinary')
+
+              // Тип 0 = gameState binary
+              if (firstByte === 0) {
+                const { decodeGameStateBinary } = await import('../utils/gamestateBinary')
+                if (buffer.byteLength > 1) {
+                  const gameState = decodeGameStateBinary(buffer.slice(1)) // Пропускаем первый байт (тип)
+                  decodedMsg = {
+                    type: 'gameState',
+                    gameState
+                  } as WebSocketMessage
+                }
+              } else {
+                decodedMsg = decodeBinaryMessage(buffer)
+              }
+            } catch (error) {
+              console.error(`[WS RECV ${timestamp}] Ошибка декодирования бинарного сообщения:`, error)
+            }
+          } else {
+            // Protobuf формат
+            try {
+              decodedMsg = await decodeProtobufMessage(buffer)
+            } catch (error) {
+              console.error(`[WS RECV ${timestamp}] Ошибка декодирования protobuf сообщения:`, error)
+              // Если protobuf не удалось декодировать, не пробуем бинарный формат
+              // так как это может привести к ошибкам чтения за пределами буфера
             }
           }
 
