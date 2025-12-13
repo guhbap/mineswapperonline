@@ -256,6 +256,7 @@ func NewGameState(rows, cols, mines int, gameMode string) *GameState {
 }
 
 // generateRandomBoard создает случайное поле (используется как fallback)
+//
 //lint:ignore U1000 Используется для отладки и тестирования
 func generateRandomBoard(rows, cols, mines int) *GameState {
 	gs := &GameState{
@@ -309,6 +310,7 @@ func generateRandomBoard(rows, cols, mines int) *GameState {
 }
 
 // Вспомогательная функция: получить соседей
+//
 //lint:ignore U1000 Используется для отладки и тестирования
 func neighbors(rows, cols, i, j int) [][2]int {
 	out := [][2]int{}
@@ -832,11 +834,16 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 	room.mu.RUnlock()
 
 	// Если это первое открытие, устанавливаем время начала игры
+	room.mu.RLock()
+	startTimeSet := room.StartTime != nil
+	room.mu.RUnlock()
+
 	isFirstClick := room.GameState.Revealed == 0
-	if isFirstClick {
+	if isFirstClick && !startTimeSet {
 		room.mu.Lock()
 		now := time.Now()
 		room.StartTime = &now
+		log.Printf("StartTime установлен при первом клике: %v, Revealed=%d", now, room.GameState.Revealed)
 		room.mu.Unlock()
 	}
 
@@ -907,7 +914,7 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 	}
 
 	log.Printf("handleCellClick: открываем ячейку row=%d, col=%d", row, col)
-	
+
 	// Собираем измененные клетки
 	changedCells := make(map[[2]int]bool)
 	if gameMode == "training" || gameMode == "fair" {
@@ -915,7 +922,7 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 	} else {
 		changedCells[[2]int{row, col}] = true
 	}
-	
+
 	cell.IsRevealed = true
 	room.GameState.Revealed++
 	changedCells[[2]int{row, col}] = true
@@ -937,9 +944,11 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			var gameTime float64
 			if room.StartTime != nil {
 				gameTime = time.Since(*room.StartTime).Seconds()
+				log.Printf("Время игры (поражение): %.2f секунд, StartTime был: %v", gameTime, *room.StartTime)
 			} else {
 				// Если StartTime не установлен (не должно происходить), используем 0
 				gameTime = 0.0
+				log.Printf("ВНИМАНИЕ: StartTime == nil при вычислении времени игры (поражение)!")
 			}
 			room.mu.RUnlock()
 
@@ -1044,9 +1053,11 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 			var gameTime float64
 			if room.StartTime != nil {
 				gameTime = time.Since(*room.StartTime).Seconds()
+				log.Printf("Время игры (победа): %.2f секунд, StartTime был: %v", gameTime, *room.StartTime)
 			} else {
 				// Если StartTime не установлен (не должно происходить), используем 0
 				gameTime = 0.0
+				log.Printf("ВНИМАНИЕ: StartTime == nil при вычислении времени игры (победа)!")
 			}
 			loserID := room.GameState.LoserPlayerID
 
@@ -1082,12 +1093,13 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 	log.Printf("Отправка обновленного состояния игры после клика")
 	// Разблокируем мьютекс перед отправкой состояния игры
 	room.GameState.mu.Unlock()
-	
+
 	// Отправляем только измененные клетки
 	s.broadcastCellUpdates(room, changedCells, room.GameState.GameOver, room.GameState.GameWon, room.GameState.Revealed, room.GameState.HintsUsed, room.GameState.LoserPlayerID, room.GameState.LoserNickname)
 }
 
 // ensureFirstClickSafe обеспечивает безопасность первого клика
+//
 //lint:ignore U1000 Используется для отладки и тестирования
 func (s *Server) ensureFirstClickSafe(room *Room, firstRow, firstCol int) {
 	// Собираем все мины в радиусе 1 клетки от первой ячейки
@@ -1280,8 +1292,10 @@ func (s *Server) handleHint(room *Room, playerID string, hint *Hint) {
 			var gameTime float64
 			if room.StartTime != nil {
 				gameTime = time.Since(*room.StartTime).Seconds()
+				log.Printf("Время игры (победа через hint): %.2f секунд, StartTime был: %v", gameTime, *room.StartTime)
 			} else {
 				gameTime = 0.0
+				log.Printf("ВНИМАНИЕ: StartTime == nil при вычислении времени игры (победа через hint)!")
 			}
 			loserID := room.GameState.LoserPlayerID
 
@@ -1572,6 +1586,7 @@ func (s *Server) sendPlayerListToPlayer(room *Room, targetPlayer *Player) {
 }
 
 // updateSafeCells обновляет список безопасных ячеек используя алгоритм kaboom
+//
 //lint:ignore U1000 Используется для отладки и тестирования
 func (s *Server) updateSafeCells(room *Room) {
 	room.GameState.mu.Lock()

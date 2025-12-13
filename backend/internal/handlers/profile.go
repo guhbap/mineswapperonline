@@ -237,6 +237,8 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 	difficulty := rating.CalculateDifficulty(float64(width), float64(height), float64(mines))
 
 	// Сохраняем игру в историю (для побед и поражений)
+	log.Printf("Сохранение игры в историю: userID=%d, размер=%dx%d, мины=%d, время=%.2f сек, won=%v",
+		userID, width, height, mines, gameTime, won)
 	gameHistory := models.UserGameHistory{
 		UserID:    userID,
 		Width:     width,
