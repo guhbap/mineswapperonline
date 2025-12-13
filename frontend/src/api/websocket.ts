@@ -181,9 +181,29 @@ export class WebSocketClient implements IWebSocketClient {
 
           // Обрабатываем другие бинарные сообщения
           const { decodeBinaryMessage } = await import('../utils/messagesBinary')
+
+          // Детальное декодирование для отладки
+          if (messageType === 1) {
+            const { decodeBinaryMessageDebug } = await import('../utils/decodeBinaryDebug')
+            decodeBinaryMessageDebug(buffer)
+          }
+
           const decodedMsg = decodeBinaryMessage(buffer)
 
           if (decodedMsg) {
+            // Дополнительное логирование для chat сообщений
+            if (messageType === 1 && decodedMsg.type === 'chat') {
+              console.log(`[WS RECV ${timestamp}] Детали chat сообщения:`, {
+                playerId: decodedMsg.playerId,
+                nickname: decodedMsg.nickname,
+                color: decodedMsg.color,
+                text: decodedMsg.chat?.text,
+                isSystem: decodedMsg.chat?.isSystem,
+                action: decodedMsg.chat?.action,
+                row: decodedMsg.chat?.row,
+                col: decodedMsg.chat?.col
+              })
+            }
             // Обрабатываем pong сообщение
             if (decodedMsg.type === 'pong') {
               console.log(`[WS RECV ${timestamp}] pong`)
