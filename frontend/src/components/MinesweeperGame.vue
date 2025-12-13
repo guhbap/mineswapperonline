@@ -10,6 +10,10 @@
           <span class="info-label">Открыто:</span>
           <span class="info-value">{{ gameState?.rv || 0 }}</span>
         </div>
+        <div v-if="currentRating !== null && !gameState?.go && !gameState?.gw" class="info-item info-item--rating">
+          <span class="info-label">Рейтинг:</span>
+          <span class="info-value">{{ Math.round(currentRating) }}</span>
+        </div>
       </div>
       <div class="game-actions">
         <button
@@ -299,7 +303,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import type { WebSocketMessage, IWebSocketClient } from '@/api/websocket'
 import { useCursorAnimation } from '@/composables/useCursorAnimation'
 import { useGameBoardZoom } from '@/composables/useGameBoardZoom'
@@ -351,6 +355,52 @@ const handleEditRoom = () => {
 // Отслеживание времени игры
 const gameStartTime = ref<number | null>(null)
 const ratingChange = ref<number | null>(null)
+const currentGameTime = ref<number>(0) // Текущее время игры в секундах
+const ratingUpdateInterval = ref<ReturnType<typeof setInterval> | null>(null) // Интервал для обновления рейтинга
+
+// Вычисляем текущий рейтинг на основе времени игры
+const currentRating = computed(() => {
+  if (!gameState.value || !gameStartTime.value || gameState.value.go || gameState.value.gw) {
+    return null
+  }
+  
+  const gameTime = currentGameTime.value
+  const chording = props.room?.chording ?? false
+  const quickStart = props.room?.quickStart ?? false
+  
+  // Проверяем, может ли игра дать рейтинг
+  if (!isRatingEligible(gameState.value.c, gameState.value.r, gameState.value.m, gameTime)) {
+    return null
+  }
+  
+  return calculateGameRating(gameState.value.c, gameState.value.r, gameState.value.m, gameTime, chording, quickStart)
+})
+
+// Функция для обновления времени игры
+const updateGameTime = () => {
+  if (gameStartTime.value && gameState.value && !gameState.value.go && !gameState.value.gw) {
+    currentGameTime.value = (Date.now() - gameStartTime.value) / 1000
+  }
+}
+
+// Запускаем обновление времени каждую секунду
+const startRatingUpdate = () => {
+  if (ratingUpdateInterval.value) {
+    clearInterval(ratingUpdateInterval.value)
+  }
+  updateGameTime() // Обновляем сразу
+  ratingUpdateInterval.value = setInterval(() => {
+    updateGameTime()
+  }, 1000) // Обновляем каждую секунду
+}
+
+// Останавливаем обновление
+const stopRatingUpdate = () => {
+  if (ratingUpdateInterval.value) {
+    clearInterval(ratingUpdateInterval.value)
+    ratingUpdateInterval.value = null
+  }
+}
 
 // Список игроков в комнате
 const playersList = ref<Array<{ id: string; nickname: string; color: string }>>([])
@@ -487,6 +537,8 @@ const handleCellClick = (row: number, col: number, isRightClick: boolean = false
   // Запоминаем время начала игры при первом клике
   if (gameStartTime.value === null && !isRightClick) {
     gameStartTime.value = Date.now()
+    currentGameTime.value = 0
+    startRatingUpdate()
   }
 
   props.wsClient.sendCellClick(row, col, isRightClick)
@@ -559,6 +611,8 @@ const handleNewGame = () => {
   // Подсказки сбрасываются на сервере при создании новой игры
   gameStartTime.value = null
   ratingChange.value = null
+  currentGameTime.value = 0
+  stopRatingUpdate()
   // Список игроков не сбрасываем, так как они остаются в комнате
 }
 
@@ -580,11 +634,13 @@ const handleMessage = (msg: WebSocketMessage) => {
       hintsUsed: msg.gameState.hu
     })
     const prevGameWon = gameState.value?.gw
+    const prevGameOver = gameState.value?.go
     gameState.value = msg.gameState
 
     // Если игра только что завершилась победой, рассчитываем изменение рейтинга
     if (msg.gameState.gw && !prevGameWon && gameStartTime.value !== null && gameState.value) {
-      const gameTime = (Date.now() - gameStartTime.value) / 1000 // время в секундах
+      stopRatingUpdate() // Останавливаем обновление рейтинга
+      const gameTime = currentGameTime.value // Используем уже вычисленное время
       const chording = props.room?.chording ?? false
       const quickStart = props.room?.quickStart ?? false
 
@@ -594,6 +650,11 @@ const handleMessage = (msg: WebSocketMessage) => {
       } else {
         ratingChange.value = null // Игра не дает рейтинг (время < 3 сек или плотность < 10%)
       }
+    }
+    
+    // Если игра окончена (поражение), останавливаем обновление рейтинга
+    if (msg.gameState.go && !prevGameOver && gameStartTime.value !== null) {
+      stopRatingUpdate()
     }
 
     // Сбрасываем время начала игры при новой игре
@@ -664,7 +725,12 @@ const handleMessage = (msg: WebSocketMessage) => {
 
     // Обновляем метаданные игры
     if (msg.gameOver !== undefined) {
+      const prevGameOver = gameState.value?.go
       gameState.value.go = msg.gameOver
+      // Если игра только что окончена (поражение), останавливаем обновление рейтинга
+      if (msg.gameOver && !prevGameOver && gameStartTime.value !== null) {
+        stopRatingUpdate()
+      }
     }
     if (msg.gameWon !== undefined) {
       gameState.value.gw = msg.gameWon
@@ -797,6 +863,7 @@ onUnmounted(() => {
   window.removeEventListener('ws-message', messageHandler)
   window.removeEventListener('reset-game', handleResetGame)
   clearCursors()
+  stopRatingUpdate() // Очищаем интервал при размонтировании компонента
 })
 </script>
 
@@ -1646,6 +1713,11 @@ onUnmounted(() => {
 
   .info-item {
     flex: 1;
+  }
+  
+  .info-item--rating {
+    color: #667eea;
+    font-weight: 600;
   }
 
   .info-value {
