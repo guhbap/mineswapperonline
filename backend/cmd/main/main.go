@@ -1265,6 +1265,23 @@ func (s *Server) handleHint(room *game.Room, playerID string, hint *Hint) {
 		room.GameState.Mu.Unlock()
 		s.broadcastCellUpdates(room, changedCellsHintFlag, room.GameState.GameOver, room.GameState.GameWon, room.GameState.Revealed, room.GameState.HintsUsed, room.GameState.LoserPlayerID, room.GameState.LoserNickname)
 
+		// В режиме training пересчитываем подсказки асинхронно после использования подсказки
+		room.Mu.RLock()
+		gameMode := room.GameMode
+		room.Mu.RUnlock()
+		if gameMode == "training" {
+			go func() {
+				// calculateCellHints сама блокирует мьютекс, не нужно блокировать здесь
+				s.calculateCellHints(room)
+				s.broadcastGameState(room)
+			}()
+		} else {
+			// В других режимах отправляем полное состояние для обновления
+			go func() {
+				s.broadcastGameState(room)
+			}()
+		}
+
 		// Отправляем сервисное сообщение в чат
 		if nickname != "" {
 			chatMsg := Message{
@@ -1341,6 +1358,23 @@ func (s *Server) handleHint(room *game.Room, playerID string, hint *Hint) {
 
 		room.GameState.Mu.Unlock()
 		s.broadcastCellUpdates(room, changedCellsHint, room.GameState.GameOver, room.GameState.GameWon, room.GameState.Revealed, room.GameState.HintsUsed, room.GameState.LoserPlayerID, room.GameState.LoserNickname)
+
+		// В режиме training пересчитываем подсказки асинхронно после использования подсказки
+		room.Mu.RLock()
+		gameMode := room.GameMode
+		room.Mu.RUnlock()
+		if gameMode == "training" {
+			go func() {
+				// calculateCellHints сама блокирует мьютекс, не нужно блокировать здесь
+				s.calculateCellHints(room)
+				s.broadcastGameState(room)
+			}()
+		} else {
+			// В других режимах отправляем полное состояние для обновления
+			go func() {
+				s.broadcastGameState(room)
+			}()
+		}
 
 		// Отправляем сервисное сообщение в чат
 		if nickname != "" {
