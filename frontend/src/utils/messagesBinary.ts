@@ -9,6 +9,14 @@ const MessageTypeCursor = 2
 const MessageTypePlayers = 3
 const MessageTypePong = 4
 const MessageTypeError = 5
+const MessageTypeCellUpdate = 6
+
+// Типы клеток
+const CellTypeClosed = 0  // Закрыта
+const CellTypeMine = 9   // Мина
+const CellTypeSafe = 10  // Зеленая (SAFE)
+const CellTypeUnknown = 11 // Желтая (UNKNOWN)
+const CellTypeDanger = 12 // Красная (MINE)
 
 export interface DecodedMessage {
   type: string
@@ -33,6 +41,17 @@ export interface DecodedMessage {
     col?: number
   }
   error?: string
+  cellUpdates?: Array<{
+    row: number
+    col: number
+    type: number
+  }>
+  gameOver?: boolean
+  gameWon?: boolean
+  revealed?: number
+  hintsUsed?: number
+  loserPlayerId?: string
+  loserNickname?: string
 }
 
 /**
@@ -244,6 +263,84 @@ function decodeErrorBinary(data: ArrayBuffer): DecodedMessage {
 }
 
 /**
+ * Декодирует бинарное сообщение обновления клеток
+ */
+function decodeCellUpdateBinary(data: ArrayBuffer): DecodedMessage {
+  const view = new DataView(data)
+  let offset = 1 // Пропускаем тип сообщения
+
+  // Читаем флаги
+  const flags = view.getUint8(offset)
+  offset += 1
+  const gameOver = (flags & (1 << 0)) !== 0
+  const gameWon = (flags & (1 << 1)) !== 0
+  const hasRevealed = (flags & (1 << 2)) !== 0
+  const hasHintsUsed = (flags & (1 << 3)) !== 0
+
+  let loserPlayerId = ''
+  let loserNickname = ''
+
+  // Читаем GameOver данные
+  if (gameOver) {
+    const pidLen = view.getUint8(offset)
+    offset += 1
+    const pidBytes = new Uint8Array(data, offset, 5)
+    offset += 5
+    loserPlayerId = pidLen > 0 ? new TextDecoder().decode(pidBytes.slice(0, pidLen)) : ''
+
+    const nicknameLen = view.getUint8(offset)
+    offset += 1
+    if (nicknameLen > 0) {
+      const nicknameBytes = new Uint8Array(data, offset, nicknameLen)
+      offset += nicknameLen
+      loserNickname = new TextDecoder().decode(nicknameBytes)
+    }
+  }
+
+  // Читаем Revealed
+  let revealed = -1
+  if (hasRevealed) {
+    revealed = view.getUint16(offset, true)
+    offset += 2
+  }
+
+  // Читаем HintsUsed
+  let hintsUsed = -1
+  if (hasHintsUsed) {
+    hintsUsed = view.getUint8(offset)
+    offset += 1
+  }
+
+  // Читаем количество обновленных клеток
+  const updateCount = view.getUint16(offset, true)
+  offset += 2
+
+  const cellUpdates: Array<{ row: number; col: number; type: number }> = []
+
+  for (let i = 0; i < updateCount; i++) {
+    const row = view.getUint16(offset, true)
+    offset += 2
+    const col = view.getUint16(offset, true)
+    offset += 2
+    const type = view.getUint8(offset)
+    offset += 1
+
+    cellUpdates.push({ row, col, type })
+  }
+
+  return {
+    type: 'cellUpdate',
+    cellUpdates,
+    gameOver,
+    gameWon,
+    ...(revealed >= 0 ? { revealed } : {}),
+    ...(hintsUsed >= 0 ? { hintsUsed } : {}),
+    ...(loserPlayerId ? { loserPlayerId } : {}),
+    ...(loserNickname ? { loserNickname } : {})
+  }
+}
+
+/**
  * Декодирует бинарное сообщение по типу
  */
 export function decodeBinaryMessage(data: ArrayBuffer): DecodedMessage | null {
@@ -267,6 +364,8 @@ export function decodeBinaryMessage(data: ArrayBuffer): DecodedMessage | null {
       return { type: 'pong' }
     case MessageTypeError:
       return decodeErrorBinary(data)
+    case MessageTypeCellUpdate:
+      return decodeCellUpdateBinary(data)
     default:
       console.warn('Неизвестный тип бинарного сообщения:', messageType)
       return null

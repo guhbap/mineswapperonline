@@ -46,6 +46,17 @@ export interface WebSocketMessage {
     col?: number
   }
   error?: string
+  cellUpdates?: Array<{
+    row: number
+    col: number
+    type: number
+  }>
+  gameOver?: boolean
+  gameWon?: boolean
+  revealed?: number
+  hintsUsed?: number
+  loserPlayerId?: string
+  loserNickname?: string
 }
 
 export interface Cell {
@@ -164,7 +175,14 @@ export class WebSocketClient implements IWebSocketClient {
               ...(decodedMsg.cursor ? { cursor: decodedMsg.cursor } : {}),
               ...(decodedMsg.players ? { players: decodedMsg.players } : {}),
               ...(decodedMsg.chat ? { chat: decodedMsg.chat } : {}),
-              ...(decodedMsg.error ? { error: decodedMsg.error } : {})
+              ...(decodedMsg.error ? { error: decodedMsg.error } : {}),
+              ...(decodedMsg.cellUpdates ? { cellUpdates: decodedMsg.cellUpdates } : {}),
+              ...(decodedMsg.gameOver !== undefined ? { gameOver: decodedMsg.gameOver } : {}),
+              ...(decodedMsg.gameWon !== undefined ? { gameWon: decodedMsg.gameWon } : {}),
+              ...(decodedMsg.revealed !== undefined ? { revealed: decodedMsg.revealed } : {}),
+              ...(decodedMsg.hintsUsed !== undefined ? { hintsUsed: decodedMsg.hintsUsed } : {}),
+              ...(decodedMsg.loserPlayerId ? { loserPlayerId: decodedMsg.loserPlayerId } : {}),
+              ...(decodedMsg.loserNickname ? { loserNickname: decodedMsg.loserNickname } : {})
             }
 
             this.onMessage(wsMsg)

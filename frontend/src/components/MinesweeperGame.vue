@@ -584,6 +584,72 @@ const handleMessage = (msg: WebSocketMessage) => {
       gameStartTime.value = null
       ratingChange.value = null
     }
+  } else if (msg.type === 'cellUpdate' && msg.cellUpdates && gameState.value) {
+    // Обрабатываем обновления клеток
+    const prevGameWon = gameState.value.gw
+    const CellTypeClosed = 0
+    const CellTypeMine = 9
+    const CellTypeSafe = 10
+    const CellTypeUnknown = 11
+    const CellTypeDanger = 12
+
+    // Обновляем клетки
+    for (const update of msg.cellUpdates) {
+      const { row, col, type } = update
+      if (gameState.value.b && gameState.value.b[row] && gameState.value.b[row][col]) {
+        const cell = gameState.value.b[row][col]
+
+        if (type === CellTypeClosed) {
+          cell.r = false
+          cell.f = false
+          cell.m = false
+          cell.n = 0
+        } else if (type === CellTypeMine) {
+          cell.r = true
+          cell.m = true
+          cell.n = 0
+        } else if (type >= 0 && type <= 8) {
+          // Количество соседних мин (0-8)
+          cell.r = true
+          cell.m = false
+          cell.n = type
+        } else if (type === CellTypeSafe || type === CellTypeUnknown || type === CellTypeDanger) {
+          // Подсказки для режима обучения - клетка остается закрытой
+          cell.r = false
+          cell.f = false
+        }
+      }
+    }
+
+    // Обновляем метаданные игры
+    if (msg.gameOver !== undefined) {
+      gameState.value.go = msg.gameOver
+    }
+    if (msg.gameWon !== undefined) {
+      gameState.value.gw = msg.gameWon
+    }
+    if (msg.revealed !== undefined) {
+      gameState.value.rv = msg.revealed
+    }
+    if (msg.hintsUsed !== undefined) {
+      gameState.value.hu = msg.hintsUsed
+    }
+    if (msg.loserPlayerId !== undefined) {
+      gameState.value.lpid = msg.loserPlayerId
+    }
+    if (msg.loserNickname !== undefined) {
+      gameState.value.ln = msg.loserNickname
+    }
+
+    // Если игра только что завершилась победой, рассчитываем изменение рейтинга
+    if (msg.gameWon && !prevGameWon && gameStartTime.value !== null && gameState.value) {
+      const gameTime = (Date.now() - gameStartTime.value) / 1000
+      if (calculateDifficulty(gameState.value.c, gameState.value.r, gameState.value.m) > 0) {
+        ratingChange.value = calculateDifficulty(gameState.value.c, gameState.value.r, gameState.value.m)
+      } else {
+        ratingChange.value = null
+      }
+    }
   } else if (msg.type === 'cursor' && msg.cursor) {
     // playerId может быть на верхнем уровне или внутри cursor (pid)
     const playerId = msg.playerId || msg.cursor.pid

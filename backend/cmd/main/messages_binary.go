@@ -12,7 +12,17 @@ const (
 	MessageTypeCursor    = byte(2)
 	MessageTypePlayers   = byte(3)
 	MessageTypePong      = byte(4)
-	MessageTypeError     = byte(5)
+	MessageTypeError      = byte(5)
+	MessageTypeCellUpdate = byte(6)
+)
+
+// Типы клеток для бинарного формата
+const (
+	CellTypeClosed = byte(0)  // Закрыта
+	CellTypeMine   = byte(9)  // Мина
+	CellTypeSafe   = byte(10) // Зеленая (SAFE) - для режима обучения
+	CellTypeUnknown = byte(11) // Желтая (UNKNOWN) - для режима обучения
+	CellTypeDanger = byte(12)  // Красная (MINE) - для режима обучения
 )
 
 // encodeChatBinary кодирует сообщение чата в бинарный формат

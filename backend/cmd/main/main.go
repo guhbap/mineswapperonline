@@ -897,8 +897,18 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 	}
 
 	log.Printf("handleCellClick: открываем ячейку row=%d, col=%d", row, col)
+	
+	// Собираем измененные клетки
+	changedCells := make(map[[2]int]bool)
+	if gameMode == "training" || gameMode == "fair" {
+		// changedCells уже заполнен при размещении мин
+	} else {
+		changedCells[[2]int{row, col}] = true
+	}
+	
 	cell.IsRevealed = true
 	room.GameState.Revealed++
+	changedCells[[2]int{row, col}] = true
 	log.Printf("Ячейка открыта: row=%d, col=%d, isMine=%v, neighborMines=%d, revealed=%d",
 		row, col, cell.IsMine, cell.NeighborMines, room.GameState.Revealed)
 
@@ -979,7 +989,7 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 		// Автоматическое открытие соседних пустых ячеек
 		if cell.NeighborMines == 0 {
 			log.Printf("Открытие соседних ячеек для row=%d, col=%d", row, col)
-			s.revealNeighbors(room, row, col)
+			s.revealNeighbors(room, row, col, changedCells)
 		}
 
 		// В режиме training пересчитываем подсказки асинхронно после каждого открытия (в fair подсказки только при проигрыше)
@@ -1062,7 +1072,9 @@ func (s *Server) handleCellClick(room *Room, playerID string, click *CellClick) 
 	log.Printf("Отправка обновленного состояния игры после клика")
 	// Разблокируем мьютекс перед отправкой состояния игры
 	room.GameState.mu.Unlock()
-	s.broadcastGameState(room)
+	
+	// Отправляем только измененные клетки
+	s.broadcastCellUpdates(room, changedCells, room.GameState.GameOver, room.GameState.GameWon, room.GameState.Revealed, room.GameState.HintsUsed, room.GameState.LoserPlayerID, room.GameState.LoserNickname)
 }
 
 func (s *Server) ensureFirstClickSafe(room *Room, firstRow, firstCol int) {
@@ -1135,7 +1147,7 @@ func (s *Server) ensureFirstClickSafe(room *Room, firstRow, firstCol int) {
 	log.Printf("Мины перемещены, первая ячейка теперь безопасна")
 }
 
-func (s *Server) revealNeighbors(room *Room, row, col int) {
+func (s *Server) revealNeighbors(room *Room, row, col int, changedCells map[[2]int]bool) {
 	for di := -1; di <= 1; di++ {
 		for dj := -1; dj <= 1; dj++ {
 			if di == 0 && dj == 0 {
@@ -1147,8 +1159,9 @@ func (s *Server) revealNeighbors(room *Room, row, col int) {
 				if !cell.IsRevealed && !cell.IsFlagged && !cell.IsMine {
 					cell.IsRevealed = true
 					room.GameState.Revealed++
+					changedCells[[2]int{ni, nj}] = true
 					if cell.NeighborMines == 0 {
-						s.revealNeighbors(room, ni, nj)
+						s.revealNeighbors(room, ni, nj, changedCells)
 					}
 				}
 			}
@@ -1208,8 +1221,10 @@ func (s *Server) handleHint(room *Room, playerID string, hint *Hint) {
 		cell.FlagColor = playerColor
 		room.GameState.HintsUsed++
 		log.Printf("Подсказка: поставлен флаг на мине row=%d, col=%d (использовано подсказок: %d)", row, col, room.GameState.HintsUsed)
+		changedCellsHintFlag := make(map[[2]int]bool)
+		changedCellsHintFlag[[2]int{row, col}] = true
 		room.GameState.mu.Unlock()
-		s.broadcastGameState(room)
+		s.broadcastCellUpdates(room, changedCellsHintFlag, room.GameState.GameOver, room.GameState.GameWon, room.GameState.Revealed, room.GameState.HintsUsed, room.GameState.LoserPlayerID, room.GameState.LoserNickname)
 
 		// Отправляем сервисное сообщение в чат
 		if nickname != "" {
@@ -1230,6 +1245,8 @@ func (s *Server) handleHint(room *Room, playerID string, hint *Hint) {
 		}
 	} else {
 		// Открываем ячейку
+		changedCellsHint := make(map[[2]int]bool)
+		changedCellsHint[[2]int{row, col}] = true
 		cell.IsRevealed = true
 		room.GameState.Revealed++
 		room.GameState.HintsUsed++
@@ -1238,7 +1255,7 @@ func (s *Server) handleHint(room *Room, playerID string, hint *Hint) {
 		// Автоматическое открытие соседних пустых ячеек
 		if cell.NeighborMines == 0 {
 			log.Printf("Открытие соседних ячеек для row=%d, col=%d", row, col)
-			s.revealNeighbors(room, row, col)
+			s.revealNeighbors(room, row, col, changedCellsHint)
 		}
 
 		// Проверка победы
@@ -1285,7 +1302,7 @@ func (s *Server) handleHint(room *Room, playerID string, hint *Hint) {
 		}
 
 		room.GameState.mu.Unlock()
-		s.broadcastGameState(room)
+		s.broadcastCellUpdates(room, changedCellsHint, room.GameState.GameOver, room.GameState.GameWon, room.GameState.Revealed, room.GameState.HintsUsed, room.GameState.LoserPlayerID, room.GameState.LoserNickname)
 
 		// Отправляем сервисное сообщение в чат
 		if nickname != "" {
@@ -1358,6 +1375,40 @@ func (s *Server) sendGameStateToPlayer(room *Room, player *Player) {
 		log.Printf("Ошибка отправки состояния игры: %v", err)
 	} else {
 		log.Printf("Состояние игры успешно отправлено (binary)")
+	}
+}
+
+func (s *Server) broadcastCellUpdates(room *Room, changedCells map[[2]int]bool, gameOver bool, gameWon bool, revealed int, hintsUsed int, loserPlayerID string, loserNickname string) {
+	if len(changedCells) == 0 && !gameOver && !gameWon {
+		// Нет изменений для отправки
+		return
+	}
+
+	// Собираем обновления клеток
+	updates := collectCellUpdates(room, changedCells)
+
+	// Кодируем обновления в бинарный формат
+	binaryData, err := encodeCellUpdateBinary(updates, gameOver, gameWon, revealed, hintsUsed, loserPlayerID, loserNickname)
+	if err != nil {
+		log.Printf("Ошибка кодирования обновлений клеток: %v", err)
+		// Fallback: отправляем полное состояние
+		s.broadcastGameState(room)
+		return
+	}
+
+	log.Printf("Broadcast cell updates: %d клеток, GameOver=%v, GameWon=%v, Size=%d bytes",
+		len(updates), gameOver, gameWon, len(binaryData))
+
+	room.mu.RLock()
+	defer room.mu.RUnlock()
+	for id, player := range room.Players {
+		player.mu.Lock()
+		if player.Conn != nil {
+			if err := player.Conn.WriteMessage(websocket.BinaryMessage, binaryData); err != nil {
+				log.Printf("Ошибка отправки обновлений клеток игроку %s: %v", id, err)
+			}
+		}
+		player.mu.Unlock()
 	}
 }
 
