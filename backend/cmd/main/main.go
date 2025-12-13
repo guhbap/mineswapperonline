@@ -638,7 +638,10 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 		gameMode := room.GameMode
 
 		room.GameState.Mu.Unlock()
-		s.broadcastGameState(room)
+		// Отправляем состояние игры асинхронно, чтобы не блокировать обработку
+		go func() {
+			s.broadcastGameState(room)
+		}()
 
 		// Выполняем асинхронно, чтобы не блокировать ответ
 		if gameMode == "training" {
@@ -705,7 +708,7 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 			}
 		}
 		log.Printf("handleCellClick: chording - флагов вокруг: %d, нужно: %d", flagCount, cell.NeighborMines)
-		
+
 		// Если количество флагов равно цифре на клетке, открываем соседние закрытые клетки
 		if flagCount == cell.NeighborMines {
 			log.Printf("handleCellClick: chording активирован, открываем соседние клетки")
@@ -724,7 +727,7 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 							room.GameState.Revealed++
 							changedCells[[2]int{ni, nj}] = true
 							log.Printf("handleCellClick: chording - открыта клетка (%d, %d), isMine=%v", ni, nj, neighborCell.IsMine)
-							
+
 							// Если это мина - игра окончена
 							if neighborCell.IsMine {
 								room.GameState.GameOver = true
@@ -747,14 +750,14 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 									room.GameState.LoserPlayerID = playerID
 									room.GameState.LoserNickname = nickname
 								}
-								
+
 								room.Mu.RLock()
 								var gameTime float64
 								if room.StartTime != nil {
 									gameTime = time.Since(*room.StartTime).Seconds()
 								}
 								room.Mu.RUnlock()
-								
+
 								if userID > 0 {
 									// Собираем список участников для записи результата
 									room.Mu.RLock()
@@ -769,19 +772,22 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 										}
 									}
 									room.Mu.RUnlock()
-									
+
 									go func() {
 										if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, participants); err != nil {
 											log.Printf("Ошибка записи результата игры: %v", err)
 										}
 									}()
 								}
-								
+
 								room.GameState.Mu.Unlock()
-								s.broadcastGameState(room)
+								// Отправляем состояние игры асинхронно, чтобы не блокировать обработку
+								go func() {
+									s.broadcastGameState(room)
+								}()
 								return
 							}
-							
+
 							// Автоматическое открытие соседних пустых ячеек
 							if neighborCell.NeighborMines == 0 {
 								room.GameState.RevealNeighbors(ni, nj, changedCells)
@@ -790,7 +796,7 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 					}
 				}
 			}
-			
+
 			// Проверка победы
 			totalCells := room.GameState.Rows * room.GameState.Cols
 			if room.GameState.Revealed == totalCells-room.GameState.Mines {
@@ -807,14 +813,14 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 						userID = roomPlayer.UserID
 					}
 				}
-				
+
 				room.Mu.RLock()
 				var gameTime float64
 				if room.StartTime != nil {
 					gameTime = time.Since(*room.StartTime).Seconds()
 				}
 				room.Mu.RUnlock()
-				
+
 				if userID > 0 {
 					// Собираем список участников для записи результата
 					room.Mu.RLock()
@@ -829,7 +835,7 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 						}
 					}
 					room.Mu.RUnlock()
-					
+
 					go func() {
 						if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, true, participants); err != nil {
 							log.Printf("Ошибка записи результата игры: %v", err)
@@ -837,9 +843,12 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 					}()
 				}
 			}
-			
+
 			room.GameState.Mu.Unlock()
-			s.broadcastGameState(room)
+			// Отправляем состояние игры асинхронно, чтобы не блокировать обработку
+			go func() {
+				s.broadcastGameState(room)
+			}()
 			return
 		} else {
 			// Chording не активирован, игнорируем клик на открытую клетку
@@ -848,7 +857,7 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 			return
 		}
 	}
-	
+
 	// Если клик на уже открытую клетку без chording - игнорируем
 	if cell.IsRevealed {
 		log.Printf("handleCellClick: клик на открытую клетку без chording, игнорируем")
@@ -1724,7 +1733,7 @@ func (s *Server) calculateCellHints(room *game.Room) {
 // determineMinePlacement определяет размещение мин при клике в режимах training и fair
 func (s *Server) determineMinePlacement(room *game.Room, clickRow, clickCol int) [][]bool {
 	log.Printf("determineMinePlacement: начало, clickRow=%d, clickCol=%d", clickRow, clickCol)
-	
+
 	// Проверяем QuickStart: если это первый клик и включен QuickStart, делаем клетку нулевой
 	isFirstClick := room.GameState.Revealed == 0
 	if isFirstClick && room.QuickStart {
@@ -1734,7 +1743,7 @@ func (s *Server) determineMinePlacement(room *game.Room, clickRow, clickCol int)
 		for i := 0; i < room.GameState.Rows; i++ {
 			mineGrid[i] = make([]bool, room.GameState.Cols)
 		}
-		
+
 		// Размещаем мины случайно, избегая кликнутой клетки и всех её соседей
 		placed := 0
 		attempts := 0
@@ -1743,7 +1752,7 @@ func (s *Server) determineMinePlacement(room *game.Room, clickRow, clickCol int)
 			row := mathrand.Intn(room.GameState.Rows)
 			col := mathrand.Intn(room.GameState.Cols)
 			attempts++
-			
+
 			// Пропускаем кликнутую клетку и все её соседи (радиус 1)
 			isNearClick := false
 			for di := -1; di <= 1; di++ {
@@ -1757,19 +1766,19 @@ func (s *Server) determineMinePlacement(room *game.Room, clickRow, clickCol int)
 					break
 				}
 			}
-			
+
 			if isNearClick || mineGrid[row][col] {
 				continue
 			}
-			
+
 			mineGrid[row][col] = true
 			placed++
 		}
-		
+
 		log.Printf("determineMinePlacement: QuickStart - размещено %d мин (попыток: %d)", placed, attempts)
 		return mineGrid
 	}
-	
+
 	// Создаем LabelMap на основе открытых ячеек
 	lm := game.NewLabelMap(room.GameState.Cols, room.GameState.Rows)
 	log.Printf("determineMinePlacement: LabelMap создан")
