@@ -1585,10 +1585,12 @@ func (s *Server) determineMinePlacement(room *Room, clickRow, clickCol int) [][]
 	}
 
 	// Общее количество мин минус уже размещенные = оставшиеся мины для размещения
+	log.Printf("determineMinePlacement: room.GameState.Mines=%d, placedMines=%d", room.GameState.Mines, placedMines)
 	remainingMines := room.GameState.Mines - placedMines
 	if remainingMines < 0 {
 		remainingMines = 0
 	}
+	log.Printf("determineMinePlacement: remainingMines=%d", remainingMines)
 
 	solver := game.MakeSolver(lm, remainingMines)
 
@@ -1683,6 +1685,15 @@ func (s *Server) determineMinePlacement(room *Room, clickRow, clickCol int) [][]
 
 	// Fallback: создаем сетку с минами (не должно происходить, но лучше чем пустая)
 	log.Printf("determineMinePlacement: WARNING - форма не получена, используем fallback с минами")
+	log.Printf("determineMinePlacement: fallback - remainingMines=%d, room.GameState.Mines=%d", remainingMines, room.GameState.Mines)
+
+	// Если remainingMines равен 0, но должны быть мины, используем общее количество мин
+	minesToPlace := remainingMines
+	if minesToPlace == 0 && room.GameState.Mines > 0 {
+		log.Printf("determineMinePlacement: fallback - remainingMines=0, но Mines=%d, используем Mines", room.GameState.Mines)
+		minesToPlace = room.GameState.Mines
+	}
+
 	mineGrid := make([][]bool, room.GameState.Rows)
 	for i := 0; i < room.GameState.Rows; i++ {
 		mineGrid[i] = make([]bool, room.GameState.Cols)
@@ -1693,7 +1704,7 @@ func (s *Server) determineMinePlacement(room *Room, clickRow, clickCol int) [][]
 	mathrand.Seed(time.Now().UnixNano())
 	attempts := 0
 	maxAttempts := room.GameState.Rows * room.GameState.Cols * 2
-	for placed < remainingMines && attempts < maxAttempts {
+	for placed < minesToPlace && attempts < maxAttempts {
 		row := mathrand.Intn(room.GameState.Rows)
 		col := mathrand.Intn(room.GameState.Cols)
 		attempts++
@@ -1708,7 +1719,7 @@ func (s *Server) determineMinePlacement(room *Room, clickRow, clickCol int) [][]
 			placed++
 		}
 	}
-	log.Printf("determineMinePlacement: fallback mineGrid создан с %d минами (попыток: %d)", placed, attempts)
+	log.Printf("determineMinePlacement: fallback mineGrid создан с %d минами (попыток: %d, minesToPlace=%d)", placed, attempts, minesToPlace)
 	return mineGrid
 }
 
