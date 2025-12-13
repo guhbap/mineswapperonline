@@ -279,19 +279,16 @@
       <h2>Победа! 🎉</h2>
       <p>Все мины найдены!</p>
       <div v-if="ratingChange !== null" class="rating-change">
-        <div v-if="ratingChange > 0" class="rating-change__positive">
-          +{{ Math.round(ratingChange) }} очков попытки
-        </div>
-        <div v-else class="rating-change__neutral">
-          Очки попытки: {{ Math.round(ratingChange) }}
+        <div class="rating-change__positive">
+          Рейтинг за игру: {{ Math.round(ratingChange) }}
         </div>
         <div class="rating-change__note">
-          Финальный прирост зависит от вашего лучшего результата на этом поле
+          Ваш рейтинг обновится, если это значение больше текущего
         </div>
       </div>
-      <div v-else-if="gameState && calculateDifficulty(gameState.c, gameState.r, gameState.m) === 0" class="rating-change">
+      <div v-else-if="gameState && gameStartTime" class="rating-change">
         <div class="rating-change__hint">
-          Поле слишком простое для получения рейтинга
+          Игра не дает рейтинг (время &lt; 3 сек или плотность мин &lt; 10%)
         </div>
       </div>
       <button @click="handleNewGame" class="game-message__button">
@@ -308,7 +305,7 @@ import { useCursorAnimation } from '@/composables/useCursorAnimation'
 import { useGameBoardZoom } from '@/composables/useGameBoardZoom'
 import { useCellTouch } from '@/composables/useCellTouch'
 import { useAuthStore } from '@/stores/auth'
-import { calculateDifficulty, calculateRatingChange } from '@/utils/ratingCalculator'
+import { calculateDifficulty, calculateGameRating, isRatingEligible } from '@/utils/ratingCalculator'
 import Chat from '@/components/Chat.vue'
 
 const props = defineProps<{
@@ -588,13 +585,12 @@ const handleMessage = (msg: WebSocketMessage) => {
     // Если игра только что завершилась победой, рассчитываем изменение рейтинга
     if (msg.gameState.gw && !prevGameWon && gameStartTime.value !== null && gameState.value) {
       const gameTime = (Date.now() - gameStartTime.value) / 1000 // время в секундах
-      const currentRating = authStore.user?.rating || 0.0
 
-      // Проверяем, достаточно ли сложности поля для получения рейтинга
-      if (calculateDifficulty(gameState.value.c, gameState.value.r, gameState.value.m) > 0) {
-        ratingChange.value = calculateDifficulty(gameState.value.c, gameState.value.r, gameState.value.m)
+      // Проверяем, может ли игра дать рейтинг
+      if (isRatingEligible(gameState.value.c, gameState.value.r, gameState.value.m, gameTime)) {
+        ratingChange.value = calculateGameRating(gameState.value.c, gameState.value.r, gameState.value.m, gameTime)
       } else {
-        ratingChange.value = null // Поле слишком простое
+        ratingChange.value = null // Игра не дает рейтинг (время < 3 сек или плотность < 10%)
       }
     }
 
@@ -687,10 +683,11 @@ const handleMessage = (msg: WebSocketMessage) => {
     // Если игра только что завершилась победой, рассчитываем изменение рейтинга
     if (msg.gameWon && !prevGameWon && gameStartTime.value !== null && gameState.value) {
       const gameTime = (Date.now() - gameStartTime.value) / 1000
-      if (calculateDifficulty(gameState.value.c, gameState.value.r, gameState.value.m) > 0) {
-        ratingChange.value = calculateDifficulty(gameState.value.c, gameState.value.r, gameState.value.m)
+      // Проверяем, может ли игра дать рейтинг
+      if (isRatingEligible(gameState.value.c, gameState.value.r, gameState.value.m, gameTime)) {
+        ratingChange.value = calculateGameRating(gameState.value.c, gameState.value.r, gameState.value.m, gameTime)
       } else {
-        ratingChange.value = null
+        ratingChange.value = null // Игра не дает рейтинг (время < 3 сек или плотность < 10%)
       }
     }
   } else if (msg.type === 'cursor' && msg.cursor) {

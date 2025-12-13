@@ -57,7 +57,11 @@ func (db *DB) InitSchema() error {
 			return fmt.Errorf("failed to create users table: %w", err)
 		}
 	} else {
-		// Если таблица существует, создаем уникальные ограничения вручную, если их нет
+		// Если таблица существует, обновляем схему через AutoMigrate для добавления новых полей
+		if err := migrator.AutoMigrate(&models.User{}); err != nil {
+			log.Printf("Warning during migration of User: %v", err)
+		}
+		// Создаем уникальные ограничения вручную, если их нет
 		db.Exec(`
 			DO $$ 
 			BEGIN

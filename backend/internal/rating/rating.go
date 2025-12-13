@@ -92,23 +92,53 @@ func ComputeComplexity(w, h, m float64) float64 {
 
 const α = 1.5
 
-// CalculateDifficulty вычисляет сложность поля по формуле: (M / (W * H)) * sqrt(W^2 + H^2)
+// CalculateDifficulty вычисляет сложность поля по формуле: d = W * H * (M / (W * H)) ^ α
 // где M - количество мин, W - ширина (cols), H - высота (rows)
 func CalculateDifficulty(width, height, mines float64) float64 {
 	cells := width * height
+	if cells <= 0 {
+		return 0
+	}
 	density := mines / cells
 	difficulty := cells * math.Pow(density, α)
-
 	return difficulty
-	// totalCells := width * height
-	// if totalCells <= 0 {
-	// 	return 0
-	// }
+}
 
-	// density := mines / totalCells
-	// diagonal := math.Sqrt(width*width + height*height)
+// CalculateGameRating вычисляет рейтинг за игру по формуле: R = K * d / ln(t + 1)
+// где K = 100, d - сложность поля, t - время в секундах
+func CalculateGameRating(width, height, mines, gameTime float64) float64 {
+	d := CalculateDifficulty(width, height, mines)
+	if d <= 0 {
+		return 0
+	}
+	K := 100.0
+	timeFactor := math.Log(gameTime + 1.0)
+	if timeFactor <= 0 {
+		return 0
+	}
+	rating := K * d / timeFactor
+	return rating
+}
 
-	// return density * diagonal
+// IsRatingEligible проверяет, может ли игра дать рейтинг
+// Возвращает true, если:
+// 1. Время игры >= 3 секунд
+// 2. Плотность мин >= 10% (0.1)
+func IsRatingEligible(width, height, mines, gameTime float64) bool {
+	// Минимальное время - 3 секунды
+	if gameTime < 3.0 {
+		return false
+	}
+	// Минимальная плотность мин - 10%
+	cells := width * height
+	if cells <= 0 {
+		return false
+	}
+	density := mines / cells
+	if density < 0.1 {
+		return false
+	}
+	return true
 }
 
 // IsComplexitySufficient проверяет, достаточно ли сложности поля для получения рейтинга

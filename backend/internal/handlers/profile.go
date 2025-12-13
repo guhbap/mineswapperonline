@@ -225,12 +225,10 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 	err := h.db.Select("rating").First(&user, userID).Error
 	currentRating := 0.0
 	if err == nil {
+		currentRating = user.Rating
 	} else {
 		log.Printf("Error getting player rating: %v", err)
 	}
-
-	// Вычисляем сложность поля по упрощенной формуле: (M / (W * H)) * sqrt(W^2 + H^2)
-	difficulty := rating.CalculateDifficulty(float64(width), float64(height), float64(mines))
 
 	// Сохраняем игру в историю (для побед и поражений)
 	log.Printf("Сохранение игры в историю: userID=%d, размер=%dx%d, мины=%d, время=%.2f сек, won=%v",
@@ -268,27 +266,33 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 	}
 
 	if won {
-		// Упрощенная система рейтинга: просто добавляем сложность к рейтингу
-		ratingGain := difficulty
-		newRating := currentRating + ratingGain
+		// Проверяем, может ли игра дать рейтинг
+		if !rating.IsRatingEligible(float64(width), float64(height), float64(mines), gameTime) {
+			log.Printf("Игра не дает рейтинг: время=%.2f сек (мин. 3 сек), плотность=%.2f%% (мин. 10%%)",
+				gameTime, float64(mines)/(float64(width)*float64(height))*100)
+		} else {
+			// Вычисляем рейтинг за игру по формуле: R = K * d / ln(t + 1)
+			gameRating := rating.CalculateGameRating(float64(width), float64(height), float64(mines), gameTime)
+			
+			// Рейтинг пользователя - максимальное достигнутое значение за все его игры
+			newRating := currentRating
+			if gameRating > currentRating {
+				newRating = gameRating
+			}
 
-		// Ensure rating doesn't go below a minimum (e.g., 0)
-		if newRating < 0 {
-			newRating = 0
-		}
+			log.Printf("Field %dx%d with %d mines, time=%.2f: gameRating=%.2f, userRating %.2f -> %.2f",
+				width, height, mines, gameTime, gameRating, currentRating, newRating)
 
-		log.Printf("Field %dx%d with %d mines: difficulty=%.2f, rating %.2f -> %.2f",
-			width, height, mines, difficulty, currentRating, newRating)
-
-		// Update user rating in database
-		err = h.db.Model(&models.User{}).
-			Where("id = ?", userID).
-			Update("rating", newRating).Error
-		if err != nil {
-			log.Printf("Error updating player rating: %v", err)
+			// Update user rating in database
+			err = h.db.Model(&models.User{}).
+				Where("id = ?", userID).
+				Update("rating", newRating).Error
+			if err != nil {
+				log.Printf("Error updating player rating: %v", err)
+			}
 		}
 	} else {
-		// For lost games, don't update rating or best results
+		// For lost games, don't update rating
 		log.Printf("Game lost - no rating update")
 	}
 
@@ -399,6 +403,7 @@ func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) 
 		entry := LeaderboardEntry{
 			ID:       user.ID,
 			Username: user.Username,
+			Rating:   user.Rating,
 		}
 		if user.Color != nil {
 			entry.Color = *user.Color
