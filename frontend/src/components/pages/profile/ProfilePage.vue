@@ -124,6 +124,13 @@
                 <div class="game-date">{{ formatDate(game.createdAt) }}</div>
               </div>
             </div>
+            <div class="game-rating">
+              <div class="rating-gain" v-if="game.rating > 0">
+                +{{ Math.round(game.rating) }}
+              </div>
+              <div class="rating-label" v-if="game.rating > 0">рейтинг</div>
+              <div class="rating-label" v-else style="color: var(--text-secondary);">—</div>
+            </div>
           </div>
         </div>
       </div>
@@ -155,6 +162,15 @@
               <div class="game-time-info">
                 <div class="game-time">⏱️ {{ formatTime(game.gameTime) }}</div>
                 <div class="game-date">{{ formatDate(game.createdAt) }}</div>
+              </div>
+            </div>
+            <div class="game-rating-info">
+              <div class="rating-label">Рейтинг за игру:</div>
+              <div class="rating-value" v-if="game.rating > 0">
+                +{{ Math.round(game.rating) }}
+              </div>
+              <div class="rating-value rating-value--none" v-else>
+                —
               </div>
             </div>
             <div v-if="game.participants && game.participants.length > 0" class="game-participants">
@@ -929,7 +945,26 @@ onMounted(() => {
 .game-rating-info {
   padding-top: 0.75rem;
   border-top: 1px solid var(--border-color);
-  text-align: right;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.game-rating-info .rating-label {
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.game-rating-info .rating-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #22c55e;
+}
+
+.game-rating-info .rating-value--none {
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 @media (max-width: 768px) {

@@ -54,13 +54,15 @@ type UserProfile struct {
 }
 
 type UserGameHistory struct {
-	ID        int       `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID    int       `gorm:"not null;column:user_id" json:"userId"`
-	Width     int       `gorm:"not null" json:"width"`
-	Height    int       `gorm:"not null" json:"height"`
-	Mines     int       `gorm:"not null" json:"mines"`
-	GameTime  float64   `gorm:"type:double precision;not null;column:game_time" json:"gameTime"`
-	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
+	ID         int       `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID     int       `gorm:"not null;column:user_id" json:"userId"`
+	Width      int       `gorm:"not null" json:"width"`
+	Height     int       `gorm:"not null" json:"height"`
+	Mines      int       `gorm:"not null" json:"mines"`
+	GameTime   float64   `gorm:"type:double precision;not null;column:game_time" json:"gameTime"`
+	Chording   bool      `gorm:"default:false" json:"chording"`
+	QuickStart bool      `gorm:"default:false;column:quick_start" json:"quickStart"`
+	CreatedAt  time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
 }
 
 func (UserGameHistory) TableName() string {

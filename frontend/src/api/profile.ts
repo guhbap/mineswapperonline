@@ -62,6 +62,7 @@ export interface TopGame {
   height: number
   mines: number
   gameTime: number
+  rating: number
   createdAt: string
 }
 
@@ -85,6 +86,7 @@ export interface RecentGame {
   height: number
   mines: number
   gameTime: number
+  rating: number
   createdAt: string
   participants: GameParticipant[]
 }

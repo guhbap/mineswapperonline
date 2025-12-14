@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"sort"
 	"time"
 
 	"minesweeperonline/internal/database"
@@ -234,12 +235,14 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 	log.Printf("Сохранение игры в историю: userID=%d, размер=%dx%d, мины=%d, время=%.2f сек, won=%v",
 		userID, width, height, mines, gameTime, won)
 	gameHistory := models.UserGameHistory{
-		UserID:    userID,
-		Width:     width,
-		Height:    height,
-		Mines:     mines,
-		GameTime:  gameTime,
-		CreatedAt: time.Now(),
+		UserID:     userID,
+		Width:      width,
+		Height:     height,
+		Mines:      mines,
+		GameTime:   gameTime,
+		Chording:   chording,
+		QuickStart: quickStart,
+		CreatedAt:  time.Now(),
 	}
 	err = h.db.Create(&gameHistory).Error
 	if err != nil {
@@ -459,24 +462,19 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 		userID = userIDValue.(int)
 	}
 
-	// Получаем топ-10 игр по начисленному рейтингу
+	// Получаем все игры пользователя для расчета рейтинга
 	type GameHistory struct {
-		ID            int     `json:"id"`
-		Width         int     `json:"width"`
-		Height        int     `json:"height"`
-		Mines         int     `json:"mines"`
-		GameTime      float64 `json:"gameTime"`
-		RatingGain    float64 `json:"ratingGain"`
-		RatingBefore  float64 `json:"ratingBefore"`
-		RatingAfter   float64 `json:"ratingAfter"`
-		Complexity    float64 `json:"complexity"`
-		AttemptPoints float64 `json:"attemptPoints"`
-		CreatedAt     string  `json:"createdAt"`
+		ID        int     `json:"id"`
+		Width     int     `json:"width"`
+		Height    int     `json:"height"`
+		Mines     int     `json:"mines"`
+		GameTime  float64 `json:"gameTime"`
+		Rating    float64 `json:"rating"`
+		CreatedAt string  `json:"createdAt"`
 	}
 
 	var historyRecords []models.UserGameHistory
 	err = h.db.Where("user_id = ?", userID).
-		Limit(10).
 		Find(&historyRecords).Error
 
 	if err != nil {
@@ -487,14 +485,37 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 
 	var games []GameHistory
 	for _, record := range historyRecords {
+		// Рассчитываем рейтинг для игры
+		var gameRating float64
+		if rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
+			gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
+			
+			// Применяем модификаторы
+			if record.Chording {
+				gameRating = gameRating * 0.8
+			}
+			if record.QuickStart {
+				gameRating = gameRating * 0.9
+			}
+		}
+
 		games = append(games, GameHistory{
 			ID:        record.ID,
 			Width:     record.Width,
 			Height:    record.Height,
 			Mines:     record.Mines,
 			GameTime:  record.GameTime,
+			Rating:    gameRating,
 			CreatedAt: record.CreatedAt.Format(time.RFC3339),
 		})
+	}
+
+	// Сортируем по рейтингу (по убыванию) и берем топ-10
+	sort.Slice(games, func(i, j int) bool {
+		return games[i].Rating > games[j].Rating
+	})
+	if len(games) > 10 {
+		games = games[:10]
 	}
 
 	utils.JSONResponse(w, http.StatusOK, games)
@@ -538,6 +559,7 @@ func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) 
 		Height       int                   `json:"height"`
 		Mines        int                   `json:"mines"`
 		GameTime     float64               `json:"gameTime"`
+		Rating       float64               `json:"rating"`
 		CreatedAt    string                `json:"createdAt"`
 		Participants []GameParticipantInfo `json:"participants"`
 	}
@@ -556,12 +578,27 @@ func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) 
 
 	var games []RecentGame
 	for _, record := range historyRecords {
+		// Рассчитываем рейтинг для игры
+		var gameRating float64
+		if rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
+			gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
+			
+			// Применяем модификаторы
+			if record.Chording {
+				gameRating = gameRating * 0.8
+			}
+			if record.QuickStart {
+				gameRating = gameRating * 0.9
+			}
+		}
+
 		game := RecentGame{
 			ID:           record.ID,
 			Width:        record.Width,
 			Height:       record.Height,
 			Mines:        record.Mines,
 			GameTime:     record.GameTime,
+			Rating:       gameRating,
 			CreatedAt:    record.CreatedAt.Format(time.RFC3339),
 			Participants: []GameParticipantInfo{},
 		}

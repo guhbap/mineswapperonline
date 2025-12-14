@@ -186,26 +186,3 @@ func ComputeDifficultyFactor(w, h, m, Dref float64) float64 {
 	}
 	return df
 }
-
-// ComputeAttemptPoints вычисляет очки попытки P = K * DF * (S - E)
-// где K - K-factor, DF - коэффициент сложности, S - оценка исполнения, E - ожидаемый результат
-func ComputeAttemptPoints(w, h, m, T, Rpl, Dref float64) float64 {
-	DF := ComputeDifficultyFactor(w, h, m, Dref)
-	Texp := expectedTime(w, h, m)
-	S := performanceScore(T, Texp)
-	Rp := computeRp(w, h, m, Dref)
-	E := expectedResult(Rp, Rpl)
-	return K * DF * (S - E)
-}
-
-// UpdatePlayerRating performs one update, returns new rating and delta
-// DEPRECATED: Используйте ComputeAttemptPoints и логику с BestP
-func UpdatePlayerRating(w, h, m, T, Rpl float64, Dref float64) (newR float64, delta float64) {
-	Rp := computeRp(w, h, m, Dref)
-	Texp := expectedTime(w, h, m)
-	S := performanceScore(T, Texp)
-	E := expectedResult(Rp, Rpl)
-	delta = K * (S - E)
-	newR = Rpl + delta
-	return
-}
