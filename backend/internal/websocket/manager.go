@@ -260,13 +260,21 @@ func (m *Manager) handleMessages(conn *websocket.Conn, room *game.Room, player *
 		log.Printf("[WS IN] Игрок %s: обработка сообщения type=%s в switch", playerID, msg.Type)
 		switch msg.Type {
 		case "ping":
+			log.Printf("[WS IN] Игрок %s: вызов handlePing", playerID)
 			m.handlePing(player, playerID)
+			log.Printf("[WS IN] Игрок %s: handlePing завершен", playerID)
 		case "chat":
+			log.Printf("[WS IN] Игрок %s: вызов handleChat", playerID)
 			m.handleChat(room, player, playerID, msg)
+			log.Printf("[WS IN] Игрок %s: handleChat завершен", playerID)
 		case "nickname":
+			log.Printf("[WS IN] Игрок %s: вызов handleNickname", playerID)
 			m.handleNickname(room, player, playerID, msg, roomID)
+			log.Printf("[WS IN] Игрок %s: handleNickname завершен", playerID)
 		case "cursor":
+			log.Printf("[WS IN] Игрок %s: вызов handleCursor", playerID)
 			m.handleCursor(room, player, playerID, msg)
+			log.Printf("[WS IN] Игрок %s: handleCursor завершен", playerID)
 		case "cellClick":
 			log.Printf("[WS IN] Игрок %s: вызов handleCellClick", playerID)
 			m.handleCellClick(room, playerID, msg)
@@ -331,10 +339,15 @@ func (m *Manager) handleNickname(room *game.Room, player *Player, playerID strin
 
 // handleCursor обрабатывает движение курсора
 func (m *Manager) handleCursor(room *game.Room, player *Player, playerID string, msg *game.Message) {
+	log.Printf("[WS] handleCursor: начало, playerID=%s, cursor=%v", playerID, msg.Cursor != nil)
 	if msg.Cursor != nil {
+		log.Printf("[WS] handleCursor: курсор не nil, x=%.2f, y=%.2f", msg.Cursor.X, msg.Cursor.Y)
 		player.Mu.Lock()
-		if !player.UpdateCursor(msg.Cursor.X, msg.Cursor.Y) {
+		updated := player.UpdateCursor(msg.Cursor.X, msg.Cursor.Y)
+		log.Printf("[WS] handleCursor: UpdateCursor вернул %v", updated)
+		if !updated {
 			player.Mu.Unlock()
+			log.Printf("[WS] handleCursor: курсор не обновлен (throttling), пропускаем сообщение")
 			return // Пропускаем это сообщение
 		}
 
@@ -345,22 +358,32 @@ func (m *Manager) handleCursor(room *game.Room, player *Player, playerID string,
 		msg.Color = player.Color
 		player.Mu.Unlock()
 
+		log.Printf("[WS] handleCursor: отправка BroadcastToOthers")
 		m.gameService.BroadcastToOthers(room, playerID, *msg)
+		log.Printf("[WS] handleCursor: BroadcastToOthers завершен")
+	} else {
+		log.Printf("[WS] handleCursor: курсор nil, пропускаем")
 	}
 }
 
 // handleCellClick обрабатывает клик по ячейке
 func (m *Manager) handleCellClick(room *game.Room, playerID string, msg *game.Message) {
+	log.Printf("[WS] handleCellClick: начало, playerID=%s, cellClick=%v", playerID, msg.CellClick != nil)
 	if msg.CellClick != nil {
-		log.Printf("Обработка cellClick: row=%d, col=%d, flag=%v", msg.CellClick.Row, msg.CellClick.Col, msg.CellClick.Flag)
+		log.Printf("[WS] handleCellClick: обработка cellClick: row=%d, col=%d, flag=%v", msg.CellClick.Row, msg.CellClick.Col, msg.CellClick.Flag)
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("ПАНИКА в handleCellClick: %v", r)
+				log.Printf("[WS] ПАНИКА в handleCellClick: %v", r)
 			}
 		}()
+		log.Printf("[WS] handleCellClick: вызов gameService.HandleCellClick")
 		if err := m.gameService.HandleCellClick(room, playerID, msg.CellClick); err != nil {
-			log.Printf("Ошибка обработки клика: %v", err)
+			log.Printf("[WS] handleCellClick: ошибка обработки клика: %v", err)
+		} else {
+			log.Printf("[WS] handleCellClick: gameService.HandleCellClick завершен успешно")
 		}
+	} else {
+		log.Printf("[WS] handleCellClick: cellClick nil, пропускаем")
 	}
 }
 
