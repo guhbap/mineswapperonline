@@ -1356,6 +1356,7 @@ onUnmounted(() => {
 .game-message__transparency-button svg {
   width: 1.25rem;
   height: 1.25rem;
+  filter: invert(1);
 }
 
 .cell-flag {
