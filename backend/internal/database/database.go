@@ -127,6 +127,14 @@ func (db *DB) InitSchema() error {
 				log.Println("Added creator_id column to user_game_history")
 			}
 		}
+		// Проверяем и добавляем won
+		if !migrator.HasColumn(&models.UserGameHistory{}, "won") {
+			if err := db.Exec(`ALTER TABLE user_game_history ADD COLUMN won BOOLEAN NOT NULL DEFAULT false`).Error; err != nil {
+				log.Printf("Warning: failed to add won column: %v", err)
+			} else {
+				log.Println("Added won column to user_game_history")
+			}
+		}
 	}
 
 	// Создаем уникальные индексы вручную, если их нет

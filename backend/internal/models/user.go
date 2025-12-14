@@ -63,6 +63,7 @@ type UserGameHistory struct {
 	GameTime   float64   `gorm:"type:double precision;not null;column:game_time" json:"gameTime"`
 	Seed       int64     `gorm:"not null" json:"seed"`
 	CreatorID  int       `gorm:"not null;column:creator_id" json:"creatorId"`
+	Won        bool      `gorm:"default:false" json:"won"`
 	Chording   bool      `gorm:"default:false" json:"chording"`
 	QuickStart bool      `gorm:"default:false;column:quick_start" json:"quickStart"`
 	CreatedAt  time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`

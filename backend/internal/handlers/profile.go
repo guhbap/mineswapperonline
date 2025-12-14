@@ -46,6 +46,11 @@ func (h *ProfileHandler) calculateUserRating(userID int, topGamesCount int) floa
 	var gameRatings []GameRating
 
 	for _, record := range historyRecords {
+		// Учитываем только выигранные игры
+		if !record.Won {
+			continue
+		}
+		
 		// Пропускаем игры с seed (нерейтинговые)
 		if record.Seed != 0 {
 			continue
@@ -308,6 +313,7 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 		GameTime:   gameTime,
 		Seed:       seed,
 		CreatorID:  creatorID,
+		Won:        won,
 		Chording:   chording,
 		QuickStart: quickStart,
 		CreatedAt:  time.Now(),
@@ -554,17 +560,20 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 
 	var games []GameHistory
 	for _, record := range historyRecords {
-		// Рассчитываем рейтинг для игры
+		// Рассчитываем рейтинг только для выигранных игр
 		var gameRating float64
-		if rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
-			gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
-			
-			// Применяем модификаторы
-			if record.Chording {
-				gameRating = gameRating * 0.8
-			}
-			if record.QuickStart {
-				gameRating = gameRating * 0.9
+		if record.Won && rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
+			// Пропускаем игры с seed (нерейтинговые)
+			if record.Seed == 0 {
+				gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
+				
+				// Применяем модификаторы
+				if record.Chording {
+					gameRating = gameRating * 0.8
+				}
+				if record.QuickStart {
+					gameRating = gameRating * 0.9
+				}
 			}
 		}
 
