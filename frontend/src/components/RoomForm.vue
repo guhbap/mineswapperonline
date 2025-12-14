@@ -262,8 +262,9 @@ const isRatedGame = computed(() => {
   // Проверяем минимальную плотность мин (10%)
   const cells = form.value.cols * form.value.rows
   if (cells <= 0) return false
-  const density = form.value.mines / cells
-  return density >= 0.1
+  // const density = form.value.mines / cells
+  // return density >= 0.1
+  return true
 })
 
 // Максимальный рейтинг при минимальном времени (0.1 секунды для расчета)
