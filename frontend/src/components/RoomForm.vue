@@ -22,6 +22,48 @@
     </div>
 
     <div class="form-group">
+      <label class="form-label">Сложность</label>
+      <div class="difficulty-templates">
+        <button
+          type="button"
+          @click="applyTemplate('easy')"
+          class="difficulty-template"
+          :class="{ 'difficulty-template--active': currentTemplate === 'easy' }"
+        >
+          <div class="difficulty-template__title">Легкий</div>
+          <div class="difficulty-template__params">9×9, 10 мин</div>
+        </button>
+        <button
+          type="button"
+          @click="applyTemplate('medium')"
+          class="difficulty-template"
+          :class="{ 'difficulty-template--active': currentTemplate === 'medium' }"
+        >
+          <div class="difficulty-template__title">Нормальный</div>
+          <div class="difficulty-template__params">16×16, 40 мин</div>
+        </button>
+        <button
+          type="button"
+          @click="applyTemplate('hard')"
+          class="difficulty-template"
+          :class="{ 'difficulty-template--active': currentTemplate === 'hard' }"
+        >
+          <div class="difficulty-template__title">Сложный</div>
+          <div class="difficulty-template__params">16×30, 99 мин</div>
+        </button>
+        <button
+          type="button"
+          @click="applyTemplate('custom')"
+          class="difficulty-template"
+          :class="{ 'difficulty-template--active': currentTemplate === 'custom' }"
+        >
+          <div class="difficulty-template__title">Свой</div>
+          <div class="difficulty-template__params">Настроить вручную</div>
+        </button>
+      </div>
+    </div>
+
+    <div class="form-group">
       <label class="form-label">Размер поля</label>
       <div class="form-row">
         <div class="form-col">
@@ -35,6 +77,7 @@
             min="5"
             max="50"
             step="1"
+            @input="checkTemplate"
           />
         </div>
         <div class="form-col">
@@ -48,6 +91,7 @@
             min="5"
             max="50"
             step="1"
+            @input="checkTemplate"
           />
         </div>
       </div>
@@ -64,6 +108,7 @@
         :min="1"
         :max="maxMines"
         step="1"
+        @input="checkTemplate"
       />
       <div class="form-hint">Максимум: {{ maxMines }}</div>
       <div class="difficulty-info">
@@ -253,6 +298,11 @@ watch(() => props.autoGenerateName, (shouldGenerate) => {
   }
 }, { immediate: true })
 
+// Проверяем шаблон при инициализации
+watch(() => form.value, () => {
+  checkTemplate()
+}, { immediate: true, deep: true })
+
 const maxMines = computed(() => {
   return form.value.rows * form.value.cols - 15
 })
@@ -285,6 +335,46 @@ const maxRatingGain = computed(() => {
 const generateRoomName = () => {
   form.value = { ...form.value, name: generateRandomName() }
   emit('generate-name')
+}
+
+// Шаблоны сложности
+const templates = {
+  easy: { rows: 9, cols: 9, mines: 10 },
+  medium: { rows: 16, cols: 16, mines: 40 },
+  hard: { rows: 16, cols: 30, mines: 99 },
+}
+
+const currentTemplate = ref<'easy' | 'medium' | 'hard' | 'custom'>('medium')
+
+// Применяем шаблон
+const applyTemplate = (template: 'easy' | 'medium' | 'hard' | 'custom') => {
+  if (template === 'custom') {
+    currentTemplate.value = 'custom'
+    return
+  }
+  
+  const templateData = templates[template]
+  form.value = {
+    ...form.value,
+    rows: templateData.rows,
+    cols: templateData.cols,
+    mines: templateData.mines,
+  }
+  currentTemplate.value = template
+}
+
+// Проверяем, соответствует ли текущая конфигурация какому-либо шаблону
+const checkTemplate = () => {
+  const { rows, cols, mines } = form.value
+  
+  for (const [key, template] of Object.entries(templates)) {
+    if (template.rows === rows && template.cols === cols && template.mines === mines) {
+      currentTemplate.value = key as 'easy' | 'medium' | 'hard'
+      return
+    }
+  }
+  
+  currentTemplate.value = 'custom'
 }
 </script>
 
@@ -588,6 +678,72 @@ const generateRoomName = () => {
 
 .form-range:focus::-moz-range-thumb {
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.difficulty-templates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.difficulty-template {
+  padding: 0.875rem;
+  border: 2px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.difficulty-template:hover {
+  border-color: #667eea;
+  background: var(--bg-tertiary);
+  transform: translateY(-2px);
+}
+
+.difficulty-template--active {
+  border-color: #667eea;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.difficulty-template__title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.difficulty-template__params {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.difficulty-template--active .difficulty-template__title {
+  color: #667eea;
+}
+
+@media (max-width: 768px) {
+  .difficulty-templates {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+  
+  .difficulty-template {
+    padding: 0.75rem 0.5rem;
+  }
+  
+  .difficulty-template__title {
+    font-size: 0.8125rem;
+  }
+  
+  .difficulty-template__params {
+    font-size: 0.6875rem;
+  }
 }
 
 .rating-status {
