@@ -46,9 +46,11 @@ func (s *Service) BroadcastGameState(room *Room) {
 // BroadcastCellUpdates отправляет обновления клеток всем игрокам
 func (s *Service) BroadcastCellUpdates(room *Room, changedCells map[[2]int]bool, gameOver, gameWon bool, revealed, hintsUsed int, loserPlayerID, loserNickname string) {
 	if len(changedCells) == 0 && !gameOver && !gameWon {
+		log.Printf("BroadcastCellUpdates: пропуск (changedCells=%d, gameOver=%v, gameWon=%v)", len(changedCells), gameOver, gameWon)
 		return
 	}
 
+	log.Printf("BroadcastCellUpdates: отправка обновлений (changedCells=%d, gameOver=%v, gameWon=%v, revealed=%d)", len(changedCells), gameOver, gameWon, revealed)
 	updates := CollectCellUpdates(room, changedCells)
 	binaryData, err := EncodeCellUpdateProtobuf(updates, gameOver, gameWon, revealed, hintsUsed, loserPlayerID, loserNickname)
 	if err != nil {

@@ -206,7 +206,14 @@ func (s *Service) handleCellReveal(room *Room, playerID string, row, col int, ce
 	log.Printf("Ячейка открыта: row=%d, col=%d, isMine=%v", row, col, cell.IsMine)
 
 	if cell.IsMine {
-		return s.handleMineExplosion(room, playerID, row, col, nickname, playerColor)
+		room.GameState.Mu.Unlock()
+		err := s.handleMineExplosion(room, playerID, row, col, nickname, playerColor)
+		if err != nil {
+			return err
+		}
+		// Отправляем обновления после взрыва
+		s.BroadcastCellUpdates(room, changedCells, room.GameState.GameOver, room.GameState.GameWon, room.GameState.Revealed, room.GameState.HintsUsed, room.GameState.LoserPlayerID, room.GameState.LoserNickname)
+		return nil
 	}
 
 	// Автоматическое открытие соседних пустых ячеек
@@ -248,10 +255,18 @@ func (s *Service) handleCellReveal(room *Room, playerID string, row, col int, ce
 		s.handleGameWin(room, playerID)
 	}
 
+	// Сохраняем значения перед разблокировкой мьютекса
+	gameOver := room.GameState.GameOver
+	gameWon := room.GameState.GameWon
+	revealed := room.GameState.Revealed
+	hintsUsed := room.GameState.HintsUsed
+	loserPlayerID := room.GameState.LoserPlayerID
+	loserNickname := room.GameState.LoserNickname
+
 	room.GameState.Mu.Unlock()
 
 	// Сохраняем комнату в БД после завершения игры
-	if room.GameState.GameOver {
+	if gameOver {
 		go func() {
 			if err := s.roomManager.SaveRoom(room); err != nil {
 				log.Printf("Предупреждение: не удалось сохранить комнату %s после проигрыша: %v", room.ID, err)
@@ -260,7 +275,7 @@ func (s *Service) handleCellReveal(room *Room, playerID string, row, col int, ce
 	}
 
 	// Отправляем только измененные клетки
-	s.BroadcastCellUpdates(room, changedCells, room.GameState.GameOver, room.GameState.GameWon, room.GameState.Revealed, room.GameState.HintsUsed, room.GameState.LoserPlayerID, room.GameState.LoserNickname)
+	s.BroadcastCellUpdates(room, changedCells, gameOver, gameWon, revealed, hintsUsed, loserPlayerID, loserNickname)
 
 	return nil
 }
@@ -441,6 +456,9 @@ func (s *Service) handleMineExplosion(room *Room, playerID string, row, col int,
 		}
 		s.BroadcastToAll(room, chatMsg)
 	}
+
+	// Отправляем полное состояние игры после взрыва, чтобы показать все мины
+	s.BroadcastGameState(room)
 
 	return nil
 }
