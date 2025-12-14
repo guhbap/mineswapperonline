@@ -302,7 +302,7 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 
 	var err error
 	// Сохраняем игру в историю (для побед и поражений)
-	log.Printf("Сохранение игры в историю: userID=%d, roomID=%s, размер=%dx%d, мины=%d, время=%.2f сек, seed=%d, creatorID=%d, won=%v",
+	log.Printf("Сохранение игры в историю: userID=%d, roomID=%s, размер=%dx%d, мины=%d, время=%.2f сек, seed=%s, creatorID=%d, won=%v",
 		userID, roomID, width, height, mines, gameTime, seed, creatorID, won)
 	gameHistory := models.UserGameHistory{
 		UserID:        userID,
@@ -347,7 +347,7 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 		// Проверяем, может ли игра дать рейтинг
 		// Если seed был указан пользователем явно, игра нерейтинговая
 		if hasCustomSeed {
-			log.Printf("Игра не дает рейтинг: указан seed=%d (игра нерейтинговая)", seed)
+			log.Printf("Игра не дает рейтинг: указан seed=%s (игра нерейтинговая)", seed)
 		} else if !rating.IsRatingEligible(float64(width), float64(height), float64(mines), gameTime) {
 			log.Printf("Игра не дает рейтинг: плотность=%.2f%% (мин. 10%%)",
 				float64(mines)/(float64(width)*float64(height))*100)
