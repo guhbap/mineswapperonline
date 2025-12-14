@@ -159,6 +159,11 @@ func NewWSManagerAdapter(manager *websocket.Manager) *WSManagerAdapter {
 	return &WSManagerAdapter{manager: manager}
 }
 
+// UpdateWSManager обновляет ссылку на wsManager (используется после создания финального wsManager)
+func (a *WSManagerAdapter) UpdateWSManager(manager *websocket.Manager) {
+	a.manager = manager
+}
+
 func (a *WSManagerAdapter) GetWSPlayer(playerID string) game.WSPlayer {
 	player := a.manager.GetWSPlayer(playerID)
 	if player == nil {

@@ -2135,13 +2135,16 @@ func main() {
 	roomHandler := handlers.NewRoomHandler(roomManager)
 
 	// Создаем WebSocket Manager и Game Service
-	// Сначала создаем временный wsManager для адаптера
+	// Сначала создаем временный wsManager для адаптера gameService
 	tempWSManager := ws.NewManager(roomManager, profileHandler, nil)
 	wsManagerAdapter := NewWSManagerAdapter(tempWSManager)
 	gameService := game.NewService(roomManager, profileHandler, wsManagerAdapter)
 	gameServiceAdapter := NewGameServiceAdapter(gameService)
 	// Теперь создаем финальный wsManager с gameServiceAdapter
 	wsManager := ws.NewManager(roomManager, profileHandler, gameServiceAdapter)
+	// ВАЖНО: обновляем wsManagerAdapter, чтобы он указывал на финальный wsManager
+	// Это нужно, чтобы gameService мог найти wsPlayers через правильный wsManager
+	wsManagerAdapter.UpdateWSManager(wsManager)
 
 	router := mux.NewRouter()
 
