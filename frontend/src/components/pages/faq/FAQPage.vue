@@ -186,7 +186,13 @@
           <div class="faq-item">
             <h3 class="faq-question">Как связаться с поддержкой?</h3>
             <div class="faq-answer">
-              <p>Если у вас возникли проблемы или вопросы, которые не освещены в этом FAQ, пожалуйста, сообщите об этом на почту разработчика <a href="mailto:guhbap@gmail.com">guhbap@gmail.com</a>.</p>
+              <p>Если у вас возникли проблемы или вопросы, которые не освещены в этом FAQ, пожалуйста, сообщите об этом на почту разработчика:</p>
+              <div class="support-email">
+                <a href="mailto:guhbap@gmail.com" class="support-email-link">
+                  <span class="email-icon">✉️</span>
+                  <span class="email-address">guhbap@gmail.com</span>
+                </a>
+              </div>
             </div>
           </div>
         </section>
@@ -292,6 +298,50 @@
 .faq-answer strong {
   color: var(--text-primary);
   font-weight: 600;
+}
+
+.support-email {
+  margin: 1rem 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.support-email-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #ffffff;
+  text-decoration: none;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.support-email-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  text-decoration: none;
+  color: #ffffff;
+}
+
+.support-email-link:active {
+  transform: translateY(0);
+  opacity: 0.9;
+}
+
+.email-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.email-address {
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.5px;
 }
 
 @media (max-width: 768px) {
