@@ -61,7 +61,7 @@ type UserGameHistory struct {
 	Height        int       `gorm:"not null" json:"height"`
 	Mines         int       `gorm:"not null" json:"mines"`
 	GameTime      float64   `gorm:"type:double precision;not null;column:game_time" json:"gameTime"`
-	Seed          string    `gorm:"type:varchar(36);not null" json:"seed"`
+	Seed          string    `gorm:"type:varchar(36);not null;column:seed" json:"seed"`
 	HasCustomSeed bool      `gorm:"default:false;column:has_custom_seed" json:"hasCustomSeed"`
 	CreatorID     int       `gorm:"not null;column:creator_id" json:"creatorId"`
 	Won           bool      `gorm:"default:false" json:"won"`

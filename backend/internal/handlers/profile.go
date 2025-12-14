@@ -319,7 +319,8 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 		QuickStart:    quickStart,
 		CreatedAt:     time.Now(),
 	}
-	log.Printf("GameHistory перед сохранением: Seed=%s (len=%d)", gameHistory.Seed, len(gameHistory.Seed))
+	log.Printf("GameHistory перед сохранением: Seed=%s (len=%d), тип=%T", gameHistory.Seed, len(gameHistory.Seed), gameHistory.Seed)
+	// Сохраняем через GORM, но проверяем тип колонки перед сохранением
 	err = h.db.Create(&gameHistory).Error
 	if err != nil {
 		log.Printf("Error saving game to history: %v", err)
@@ -328,6 +329,16 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 		var savedRecord models.UserGameHistory
 		if err := h.db.First(&savedRecord, gameHistory.ID).Error; err == nil {
 			log.Printf("Проверка сохраненного seed: ID=%d, Seed=%s (len=%d)", savedRecord.ID, savedRecord.Seed, len(savedRecord.Seed))
+			if savedRecord.Seed != gameHistory.Seed {
+				log.Printf("ОШИБКА: seed не совпадает! Ожидалось: %s (len=%d), получено: %s (len=%d)",
+					gameHistory.Seed, len(gameHistory.Seed), savedRecord.Seed, len(savedRecord.Seed))
+				// Пытаемся обновить через Raw SQL
+				if err := h.db.Exec(`UPDATE user_game_history SET seed = ? WHERE id = ?`, gameHistory.Seed, gameHistory.ID).Error; err != nil {
+					log.Printf("Ошибка обновления seed через Raw SQL: %v", err)
+				} else {
+					log.Printf("Seed обновлен через Raw SQL: %s", gameHistory.Seed)
+				}
+			}
 		}
 
 		if len(participants) > 0 {

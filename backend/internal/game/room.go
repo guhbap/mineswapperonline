@@ -210,17 +210,22 @@ func (r *Room) ResetGame() {
 
 	// Сохраняем seed из текущего GameState, если он был указан пользователем
 	var savedSeed string = ""
-	if r.GameState != nil && r.HasCustomSeed {
-		savedSeed = r.GameState.Seed
-		log.Printf("ResetGame: сохраняем пользовательский seed=%s", savedSeed)
+	if r.GameState != nil {
+		log.Printf("ResetGame: текущий GameState.Seed=%s (len=%d), HasCustomSeed=%v", r.GameState.Seed, len(r.GameState.Seed), r.HasCustomSeed)
+		if r.HasCustomSeed {
+			savedSeed = r.GameState.Seed
+			log.Printf("ResetGame: сохраняем пользовательский seed=%s (len=%d)", savedSeed, len(savedSeed))
+		} else {
+			log.Printf("ResetGame: seed не был указан пользователем, будет сгенерирован новый UUID")
+		}
 	}
 
 	select {
 	case <-locked:
-		log.Printf("ResetGame: room.Mu успешно заблокирован (Lock), создаем новый GameState")
+		log.Printf("ResetGame: room.Mu успешно заблокирован (Lock), создаем новый GameState с savedSeed=%s (len=%d)", savedSeed, len(savedSeed))
 		r.GameState = NewGameState(r.Rows, r.Cols, r.Mines, r.GameMode, savedSeed)
 		// При сбросе игры HasCustomSeed сохраняется (не сбрасывается)
-		log.Printf("ResetGame: новый GameState создан с seed=%d, сбрасываем StartTime", savedSeed)
+		log.Printf("ResetGame: новый GameState создан, seed=%s (len=%d), сбрасываем StartTime", r.GameState.Seed, len(r.GameState.Seed))
 		r.StartTime = nil
 		log.Printf("ResetGame: разблокируем room.Mu")
 		r.Mu.Unlock()

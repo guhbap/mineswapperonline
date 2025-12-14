@@ -1036,10 +1036,12 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 			seed := ""
 			if room.GameState != nil {
 				seed = room.GameState.Seed
+				log.Printf("RecordGameResult (проигрыш): seed=%s (len=%d)", seed, len(seed))
 			}
 			room.Mu.RUnlock()
 			log.Printf("[MUTEX] handleMineExplosion: room.Mu.RUnlock() разблокирован после сбора участников")
 
+			log.Printf("RecordGameResult (проигрыш): передаем seed=%s (len=%d)", seed, len(seed))
 			if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, chording, quickStart, roomID, seed, hasCustomSeed, creatorID, participants); err != nil {
 				log.Printf("Ошибка записи результата игры: %v", err)
 			}
