@@ -54,13 +54,16 @@
     </div>
 
     <div class="form-group">
-      <label class="form-label">Количество мин</label>
+      <label class="form-label">
+        Количество мин: <span class="range-value">{{ form.mines }}</span>
+      </label>
       <input
         v-model.number="form.mines"
-        type="number"
-        class="form-input"
+        type="range"
+        class="form-range"
         :min="1"
         :max="maxMines"
+        step="1"
       />
       <div class="form-hint">Максимум: {{ maxMines }}</div>
       <div class="difficulty-info">
