@@ -51,10 +51,8 @@ func (h *ProfileHandler) calculateUserRating(userID int, topGamesCount int) floa
 			continue
 		}
 		
-		// Пропускаем игры с seed (нерейтинговые)
-		if record.Seed != 0 {
-			continue
-		}
+		// Seed всегда генерируется автоматически, поэтому проверяем только на выигрыш и соответствие критериям
+		// Игры с явно указанным пользователем seed будут обрабатываться отдельно (пока учитываем все)
 
 		// Рассчитываем рейтинг для игры
 		var gameRating float64
@@ -564,17 +562,16 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 		// Рассчитываем рейтинг только для выигранных игр
 		var gameRating float64
 		if record.Won && rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
-			// Пропускаем игры с seed (нерейтинговые)
-			if record.Seed == 0 {
-				gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
-				
-				// Применяем модификаторы
-				if record.Chording {
-					gameRating = gameRating * 0.8
-				}
-				if record.QuickStart {
-					gameRating = gameRating * 0.9
-				}
+			// Seed всегда генерируется автоматически, поэтому проверяем только на выигрыш и соответствие критериям
+			// Игры с явно указанным пользователем seed будут обрабатываться отдельно (пока учитываем все)
+			gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
+			
+			// Применяем модификаторы
+			if record.Chording {
+				gameRating = gameRating * 0.8
+			}
+			if record.QuickStart {
+				gameRating = gameRating * 0.9
 			}
 		}
 
@@ -670,17 +667,16 @@ func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) 
 		// Рассчитываем рейтинг только для выигранных игр
 		var gameRating float64
 		if record.Won && rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
-			// Пропускаем игры с seed (нерейтинговые)
-			if record.Seed == 0 {
-				gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
-				
-				// Применяем модификаторы
-				if record.Chording {
-					gameRating = gameRating * 0.8
-				}
-				if record.QuickStart {
-					gameRating = gameRating * 0.9
-				}
+			// Seed всегда генерируется автоматически, поэтому проверяем только на выигрыш и соответствие критериям
+			// Игры с явно указанным пользователем seed будут обрабатываться отдельно (пока учитываем все)
+			gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
+			
+			// Применяем модификаторы
+			if record.Chording {
+				gameRating = gameRating * 0.8
+			}
+			if record.QuickStart {
+				gameRating = gameRating * 0.9
 			}
 		}
 
