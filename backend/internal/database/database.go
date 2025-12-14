@@ -101,6 +101,34 @@ func (db *DB) InitSchema() error {
 		}
 	}
 
+	// Явно добавляем новые поля в user_game_history, если их нет
+	if migrator.HasTable(&models.UserGameHistory{}) {
+		// Проверяем и добавляем room_id
+		if !migrator.HasColumn(&models.UserGameHistory{}, "room_id") {
+			if err := db.Exec(`ALTER TABLE user_game_history ADD COLUMN room_id VARCHAR(255)`).Error; err != nil {
+				log.Printf("Warning: failed to add room_id column: %v", err)
+			} else {
+				log.Println("Added room_id column to user_game_history")
+			}
+		}
+		// Проверяем и добавляем seed
+		if !migrator.HasColumn(&models.UserGameHistory{}, "seed") {
+			if err := db.Exec(`ALTER TABLE user_game_history ADD COLUMN seed BIGINT NOT NULL DEFAULT 0`).Error; err != nil {
+				log.Printf("Warning: failed to add seed column: %v", err)
+			} else {
+				log.Println("Added seed column to user_game_history")
+			}
+		}
+		// Проверяем и добавляем creator_id
+		if !migrator.HasColumn(&models.UserGameHistory{}, "creator_id") {
+			if err := db.Exec(`ALTER TABLE user_game_history ADD COLUMN creator_id INTEGER NOT NULL DEFAULT 0`).Error; err != nil {
+				log.Printf("Warning: failed to add creator_id column: %v", err)
+			} else {
+				log.Println("Added creator_id column to user_game_history")
+			}
+		}
+	}
+
 	// Создаем уникальные индексы вручную, если их нет
 	db.Exec(`
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);
