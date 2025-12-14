@@ -12,7 +12,10 @@
         >
           <template #warning>
             <div class="form-warning">
-              ⚠️ Внимание: изменение параметров комнаты пересоздаст игровое поле. Текущий прогресс будет потерян.
+              <svg class="warning-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 9V13M12 17H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Внимание: изменение параметров комнаты пересоздаст игровое поле. Текущий прогресс будет потерян.
             </div>
           </template>
         </RoomForm>
@@ -218,6 +221,15 @@ const handleOverlayClick = () => {
   font-size: 0.875rem;
   border: 1px solid rgba(255, 193, 7, 0.3);
   margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.warning-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
 }
 
 

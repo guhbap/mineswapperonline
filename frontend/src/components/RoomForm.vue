@@ -16,7 +16,14 @@
           class="form-input-button"
           title="Сгенерировать случайное название"
         >
-          🎲
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
+            <circle cx="8" cy="8" r="1.5" fill="currentColor"/>
+            <circle cx="16" cy="8" r="1.5" fill="currentColor"/>
+            <circle cx="8" cy="16" r="1.5" fill="currentColor"/>
+            <circle cx="16" cy="16" r="1.5" fill="currentColor"/>
+            <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+          </svg>
         </button>
       </div>
     </div>
@@ -130,8 +137,12 @@
 
     <div class="form-group rating-status" :class="{ 'rating-status--rated': isRatedGame, 'rating-status--unrated': !isRatedGame }">
       <div class="rating-status__icon">
-        <span v-if="isRatedGame">⭐</span>
-        <span v-else>⚪</span>
+        <svg v-if="isRatedGame" class="rating-status-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <svg v-else class="rating-status-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+        </svg>
       </div>
       <div class="rating-status__content">
         <div class="rating-status__label">
@@ -472,9 +483,13 @@ const checkTemplate = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
   transition: all 0.2s;
   box-sizing: border-box;
+}
+
+.form-input-button svg {
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
 .form-input-button:hover {
@@ -804,9 +819,14 @@ const checkTemplate = () => {
 }
 
 .rating-status__icon {
-  font-size: 2rem;
-  line-height: 1;
+  width: 2rem;
+  height: 2rem;
   flex-shrink: 0;
+}
+
+.rating-status-icon {
+  width: 100%;
+  height: 100%;
 }
 
 .rating-status__content {

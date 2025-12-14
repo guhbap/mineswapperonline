@@ -18,7 +18,14 @@
           class="nickname-generate-button"
           title="Сгенерировать случайный никнейм"
         >
-          🎲
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
+            <circle cx="8" cy="8" r="1.5" fill="currentColor"/>
+            <circle cx="16" cy="8" r="1.5" fill="currentColor"/>
+            <circle cx="8" cy="16" r="1.5" fill="currentColor"/>
+            <circle cx="16" cy="16" r="1.5" fill="currentColor"/>
+            <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+          </svg>
         </button>
       </div>
       <button @click="handleSubmit" class="nickname-modal__button">
@@ -160,9 +167,13 @@ const handleOverlayClick = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
   transition: all 0.2s;
   box-sizing: border-box;
+}
+
+.nickname-generate-button svg {
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
 .nickname-generate-button:hover {

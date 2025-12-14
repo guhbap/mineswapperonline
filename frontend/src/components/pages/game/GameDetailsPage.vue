@@ -20,7 +20,20 @@
           <div class="detail-item">
             <span class="detail-label">Результат:</span>
             <span class="detail-value" :class="{ 'detail-value--won': gameDetails.won, 'detail-value--lost': !gameDetails.won }">
-              {{ gameDetails.won ? '🏆 Победа' : '💥 Поражение' }}
+              <template v-if="gameDetails.won">
+                <svg class="detail-value-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6 9H4.5C3.67157 9 3 9.67157 3 10.5V19.5C3 20.3284 3.67157 21 4.5 21H19.5C20.3284 21 21 20.3284 21 19.5V10.5C21 9.67157 20.3284 9 19.5 9H18M6 9V6C6 4.34315 7.34315 3 9 3H15C16.6569 3 18 4.34315 18 6V9M6 9H18M12 9V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M9 12L12 9L15 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Победа
+              </template>
+              <template v-else>
+                <svg class="detail-value-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                  <path d="M12 8V12M12 16H12.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                Поражение
+              </template>
             </span>
           </div>
           <div class="detail-item">
@@ -302,6 +315,14 @@ function calculateDensity(): number {
 .detail-value--lost {
   color: #dc2626;
   font-weight: 700;
+}
+
+.detail-value-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 0.5rem;
 }
 
 .detail-value--rating {
