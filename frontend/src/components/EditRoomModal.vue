@@ -141,7 +141,7 @@ const handleCancel = () => {
 }
 
 const handleOverlayClick = () => {
-  // Не закрываем при клике на overlay
+  handleCancel()
 }
 </script>
 
