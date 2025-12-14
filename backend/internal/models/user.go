@@ -30,8 +30,8 @@ type LoginRequest struct {
 }
 
 type AuthResponse struct {
-	Token string `json:"token"`
-	User  User   `json:"user"`
+	Token string                 `json:"token"`
+	User  map[string]interface{} `json:"user"` // Используем map для поддержки isAdmin
 }
 
 type UserStats struct {

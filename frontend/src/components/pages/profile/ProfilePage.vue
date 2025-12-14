@@ -93,6 +93,59 @@
             </button>
           </form>
         </div>
+
+        <!-- Админ-панель (только для администратора) -->
+        <div v-if="isOwnProfile && isAdmin" class="admin-section">
+          <h3 class="admin-section-title">🔧 Админ-панель</h3>
+          <div class="admin-panel">
+            <h4 class="admin-panel-title">Сброс пароля пользователя</h4>
+            <form @submit.prevent="handleAdminResetPassword" class="admin-form">
+              <div class="admin-form-group">
+                <label class="admin-label">Найти пользователя по:</label>
+                <div class="admin-radio-group">
+                  <label class="admin-radio-label">
+                    <input
+                      v-model="adminSearchType"
+                      type="radio"
+                      value="username"
+                      class="admin-radio"
+                    />
+                    <span>Username</span>
+                  </label>
+                  <label class="admin-radio-label">
+                    <input
+                      v-model="adminSearchType"
+                      type="radio"
+                      value="email"
+                      class="admin-radio"
+                    />
+                    <span>Email</span>
+                  </label>
+                </div>
+              </div>
+              <TextInput
+                v-model="adminSearchValue"
+                :label="adminSearchType === 'username' ? 'Username пользователя' : 'Email пользователя'"
+                :placeholder="adminSearchType === 'username' ? 'Введите username' : 'Введите email'"
+                name="adminSearch"
+                :disabled="adminResettingPassword"
+              />
+              <TextInput
+                v-model="adminNewPassword"
+                label="Новый пароль"
+                placeholder="Введите новый пароль (минимум 6 символов)"
+                name="adminNewPassword"
+                type="password"
+                :disabled="adminResettingPassword"
+              />
+              <div v-if="adminPasswordError" class="admin-error">{{ adminPasswordError }}</div>
+              <div v-if="adminPasswordSuccess" class="admin-success">{{ adminPasswordSuccess }}</div>
+              <button type="submit" class="admin-button" :disabled="adminResettingPassword">
+                {{ adminResettingPassword ? 'Сброс...' : 'Сбросить пароль' }}
+              </button>
+            </form>
+          </div>
+        </div>
       </div>
 
       <div class="profile-stats">
@@ -243,6 +296,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getProfile, getProfileByUsername, updateColor, changePassword, getTopGames, getRecentGames, type UserProfile, type TopGame, type RecentGame } from '@/api/profile'
+import { resetPasswordByAdmin } from '@/api/auth'
 import { getErrorMessage } from '@/utils/errorHandler'
 import { calculateDifficulty } from '@/utils/ratingCalculator'
 import TextInput from '@/components/inputs/TextInput.vue'
@@ -268,6 +322,13 @@ const confirmPassword = ref('')
 const changingPassword = ref(false)
 const passwordError = ref('')
 const passwordSuccess = ref('')
+const isAdmin = computed(() => authStore.user?.isAdmin || false)
+const adminSearchType = ref<'username' | 'email'>('username')
+const adminSearchValue = ref('')
+const adminNewPassword = ref('')
+const adminResettingPassword = ref(false)
+const adminPasswordError = ref('')
+const adminPasswordSuccess = ref('')
 
 const colorOptions = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
@@ -452,6 +513,49 @@ const handleChangePassword = async () => {
     passwordError.value = getErrorMessage(err, 'Ошибка смены пароля')
   } finally {
     changingPassword.value = false
+  }
+}
+
+const handleAdminResetPassword = async () => {
+  adminPasswordError.value = ''
+  adminPasswordSuccess.value = ''
+
+  // Валидация
+  if (!adminSearchValue.value || !adminNewPassword.value) {
+    adminPasswordError.value = 'Все поля обязательны для заполнения'
+    return
+  }
+
+  if (adminNewPassword.value.length < 6) {
+    adminPasswordError.value = 'Новый пароль должен содержать минимум 6 символов'
+    return
+  }
+
+  adminResettingPassword.value = true
+
+  try {
+    const requestData: any = {
+      newPassword: adminNewPassword.value
+    }
+    if (adminSearchType.value === 'username') {
+      requestData.username = adminSearchValue.value
+    } else {
+      requestData.email = adminSearchValue.value
+    }
+
+    await resetPasswordByAdmin(requestData)
+    adminPasswordSuccess.value = `Пароль успешно сброшен для пользователя ${adminSearchValue.value}`
+    // Очищаем поля формы
+    adminSearchValue.value = ''
+    adminNewPassword.value = ''
+    // Очищаем сообщение об успехе через 5 секунд
+    setTimeout(() => {
+      adminPasswordSuccess.value = ''
+    }, 5000)
+  } catch (err: any) {
+    adminPasswordError.value = getErrorMessage(err, 'Ошибка сброса пароля')
+  } finally {
+    adminResettingPassword.value = false
   }
 }
 
@@ -828,6 +932,115 @@ onMounted(() => {
 }
 
 .change-password-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 2px solid var(--border-color);
+}
+
+.admin-section-title {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.admin-panel {
+  background: var(--bg-secondary);
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  border: 2px solid #f59e0b;
+}
+
+.admin-panel-title {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.admin-form-group {
+  margin-bottom: 1rem;
+}
+
+.admin-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.admin-radio-group {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 0.5rem;
+}
+
+.admin-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.admin-radio {
+  cursor: pointer;
+}
+
+.admin-error {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: #dc2626;
+  padding: 0.75rem;
+  background: rgba(220, 38, 38, 0.1);
+  border-radius: 0.5rem;
+}
+
+.admin-success {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: #22c55e;
+  padding: 0.75rem;
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 0.5rem;
+}
+
+.admin-button {
+  width: 100%;
+  max-width: 300px;
+  padding: 0.875rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  margin-top: 1rem;
+}
+
+.admin-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+.admin-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

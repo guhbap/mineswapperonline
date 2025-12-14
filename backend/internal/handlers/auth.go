@@ -71,7 +71,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	utils.JSONResponse(w, http.StatusOK, models.AuthResponse{
 		Token: token,
-		User:  user,
+		User:  h.userToMap(user),
 	})
 }
 
@@ -114,7 +114,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	utils.JSONResponse(w, http.StatusOK, models.AuthResponse{
 		Token: token,
-		User:  user,
+		User:  h.userToMap(user),
 	})
 }
 
@@ -133,7 +133,18 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		user.Rating = userRating
 	}
 
-	utils.JSONResponse(w, http.StatusOK, user)
+	// Проверяем, является ли пользователь администратором
+	type UserResponse struct {
+		models.User
+		IsAdmin bool `json:"isAdmin"`
+	}
+
+	response := UserResponse{
+		User:    user,
+		IsAdmin: h.config.AdminEmail != "" && user.Email == h.config.AdminEmail,
+	}
+
+	utils.JSONResponse(w, http.StatusOK, response)
 }
 
 // Вспомогательные методы
@@ -206,6 +217,23 @@ func (h *AuthHandler) findUserByEmail(email string) (models.User, error) {
 		return models.User{}, err
 	}
 	return user, err
+}
+
+// userToMap преобразует User в map с добавлением isAdmin
+func (h *AuthHandler) userToMap(user models.User) map[string]interface{} {
+	isAdmin := h.config.AdminEmail != "" && user.Email == h.config.AdminEmail
+	userMap := map[string]interface{}{
+		"id":        user.ID,
+		"username":  user.Username,
+		"email":     user.Email,
+		"rating":    user.Rating,
+		"createdAt": user.CreatedAt,
+		"isAdmin":   isAdmin,
+	}
+	if user.Color != nil {
+		userMap["color"] = *user.Color
+	}
+	return userMap
 }
 
 // ResetPasswordByAdmin позволяет администратору сбросить пароль пользователя

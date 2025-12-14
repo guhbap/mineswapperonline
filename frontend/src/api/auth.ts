@@ -33,6 +33,7 @@ export interface User {
   color?: string
   rating: number
   createdAt: string
+  isAdmin?: boolean
 }
 
 export interface RegisterRequest {
@@ -48,7 +49,7 @@ export interface LoginRequest {
 
 export interface AuthResponse {
   token: string
-  user: User
+  user: User & { isAdmin?: boolean }
 }
 
 export async function register(data: RegisterRequest): Promise<AuthResponse> {
