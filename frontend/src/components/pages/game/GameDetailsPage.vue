@@ -192,7 +192,7 @@ function calculateDensity(): number {
 
 <style scoped>
 .game-details-page {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 2rem;
 }
