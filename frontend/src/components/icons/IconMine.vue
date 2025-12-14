@@ -1,11 +1,15 @@
 <template>
-  <svg :class="className" :style="style" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-    <!-- Зубчатое колесо с 8 зубцами -->
-    <path d="M12 1 L13.4 4.6 L17 5.4 L13.6 6.2 L12 9.8 L10.4 6.2 L7 5.4 L10.6 4.6 L12 1 Z M12 14.2 L13.4 17.8 L17 18.6 L13.6 19.4 L12 23 L10.4 19.4 L7 18.6 L10.6 17.8 L12 14.2 Z M1 12 L4.6 10.6 L5.4 7 L6.2 10.4 L9.8 12 L6.2 13.6 L5.4 17 L4.6 13.4 L1 12 Z M14.2 12 L17.8 13.4 L18.6 17 L19.4 13.6 L23 12 L19.4 10.4 L18.6 7 L17.8 10.6 L14.2 12 Z M4.2 4.2 L6.4 6.4 L5.2 8.6 L3 6.4 L4.2 4.2 Z M19.8 4.2 L22 6.4 L20.8 8.6 L18.6 6.4 L19.8 4.2 Z M4.2 19.8 L6.4 17.6 L8.6 18.8 L6.4 21 L4.2 19.8 Z M19.8 19.8 L21 17.6 L18.8 15.4 L16.6 17.6 L19.8 19.8 Z"/>
-    <!-- Внутренний круг -->
-    <circle cx="12" cy="12" r="4.5" fill="currentColor"/>
-    <!-- Горизонтальная линия -->
-    <line x1="7.5" y1="12" x2="16.5" y2="12" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+  <svg :class="className" :style="style" viewBox="0 0 32 32" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="16" cy="16" r="12" stroke="currentColor" stroke-width="2"/>
+    <path d="M16 2V5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="bevel"/>
+    <path d="M16 27V30" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="bevel"/>
+    <path d="M30.0049 15.9951L27.0049 15.9951" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="bevel"/>
+    <path d="M19 16H13" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="bevel"/>
+    <path d="M5.00488 15.9951L2.00488 15.9951" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="bevel"/>
+    <path d="M25.9009 6.09717L23.7796 8.21849" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="bevel"/>
+    <path d="M8.22314 23.7749L6.10182 25.8962" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="bevel"/>
+    <path d="M25.9009 25.896L23.7796 23.7747" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="bevel"/>
+    <path d="M8.22314 8.21826L6.10182 6.09694" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="bevel"/>
   </svg>
 </template>
 
