@@ -20,7 +20,7 @@
             <h2 class="username">{{ profile.user.username }}</h2>
             <p v-if="isOwnProfile" class="email">{{ profile.user.email }}</p>
             <div class="user-rating">
-              <span class="rating-label">Рейтинг:</span>
+              <span class="">Рейтинг:</span>
               <span class="rating-value">{{ Math.round(profile.user.rating || 0) }}</span>
             </div>
             <div class="status-badge" :class="{ 'status-online': profile.stats.isOnline, 'status-offline': !profile.stats.isOnline }">
