@@ -6,7 +6,6 @@
       <div class="modal__form">
         <RoomForm
           v-model="form"
-          v-model:has-password="hasPassword"
           :error="error"
           :show-advanced-options="true"
           :show-all-game-modes="false"
@@ -50,7 +49,6 @@ const form = ref<RoomFormData>({
   seed: null,
 })
 
-const hasPassword = ref(false)
 const error = ref('')
 
 const maxMines = computed(() => {
@@ -85,7 +83,8 @@ const handleSubmit = () => {
     gameMode: form.value.gameMode,
     quickStart: form.value.quickStart,
     chording: form.value.chording,
-    ...(hasPassword.value && form.value.password ? { password: form.value.password } : {}),
+    // Пароль отправляется только если поле заполнено
+    ...(form.value.password && form.value.password.trim() ? { password: form.value.password.trim() } : {}),
     ...(form.value.seed != null && form.value.seed !== '' ? { seed: form.value.seed } : {}),
   }
 
@@ -105,8 +104,8 @@ const handleCancel = () => {
     gameMode: 'classic',
     quickStart: false,
     chording: false,
+    seed: null,
   }
-  hasPassword.value = false
 }
 
 const handleOverlayClick = () => {

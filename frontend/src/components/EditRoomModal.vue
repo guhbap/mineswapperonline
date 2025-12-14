@@ -6,7 +6,6 @@
       <div class="modal__form">
         <RoomForm
           v-model="form"
-          v-model:has-password="hasPassword"
           :error="error"
           :show-advanced-options="true"
           :show-all-game-modes="false"
@@ -57,7 +56,6 @@ const form = ref<RoomFormData>({
   seed: null,
 })
 
-const hasPassword = ref(false)
 const error = ref('')
 const loading = ref(false)
 
@@ -69,12 +67,12 @@ watch([() => props.show, () => props.room], ([isShowing, room]) => {
       rows: room.rows,
       cols: room.cols,
       mines: room.mines,
-      password: '',
+      password: '', // Пароль не показываем при редактировании (по соображениям безопасности)
       gameMode: (room.gameMode ?? 'classic') as 'classic' | 'training' | 'fair',
       quickStart: room.quickStart ?? false,
       chording: room.chording ?? false,
+      seed: null,
     }
-    hasPassword.value = room.hasPassword
     error.value = ''
   }
 }, { immediate: true })
@@ -116,17 +114,17 @@ const handleSubmit = async () => {
     }
 
     // Обрабатываем пароль:
-    // - Если пользователь убрал галочку пароля - отправляем пустую строку (удаляем пароль)
-    // - Если пользователь установил галочку и ввел пароль - отправляем новый пароль
-    // - Если пароль не менялся (галочка осталась, но пароль не вводился) - не отправляем поле
-    if (!hasPassword.value) {
-      // Пользователь убрал пароль
+    // - Если поле пароля заполнено - отправляем новый пароль
+    // - Если поле пароля пустое - отправляем пустую строку (удаляем пароль)
+    // - Если поле пароля не менялось (пустое и комната уже имела пароль) - не отправляем поле (не меняем пароль)
+    if (form.value.password && form.value.password.trim()) {
+      // Пользователь ввел новый пароль
+      data.password = form.value.password.trim()
+    } else if (form.value.password === '' && props.room?.hasPassword) {
+      // Пользователь очистил поле пароля, но комната имела пароль - удаляем пароль
       data.password = ''
-    } else if (form.value.password) {
-      // Пользователь установил новый пароль
-      data.password = form.value.password
     }
-    // Если hasPassword.value === true, но password пустой - не отправляем (не меняем пароль)
+    // Если поле пустое и комната не имела пароля - не отправляем поле (не меняем)
 
     const updatedRoom = await updateRoom(props.room.id, data)
     emit('submit', updatedRoom)

@@ -91,22 +91,15 @@
     </div>
 
     <div class="form-group">
-      <label class="form-label">
-        <input
-          v-model="hasPassword"
-          type="checkbox"
-          class="form-checkbox"
-        />
-        Защитить паролем
-      </label>
+      <label class="form-label">Пароль (опционально)</label>
       <input
-        v-if="hasPassword"
         v-model="form.password"
         type="password"
         class="form-input"
-        placeholder="Пароль"
+        placeholder="Оставьте пустым, чтобы не защищать паролем"
         maxlength="20"
       />
+      <div class="form-hint">Пароль будет установлен только если поле заполнено</div>
     </div>
 
     <div v-if="showAdvancedOptions" class="form-group">
@@ -214,7 +207,7 @@ export interface RoomFormData {
 
 const props = defineProps<{
   modelValue: RoomFormData
-  hasPassword: boolean
+  hasPassword?: boolean // Оставляем для обратной совместимости, но не используем
   error?: string
   showAdvancedOptions?: boolean
   showAllGameModes?: boolean
@@ -223,18 +216,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: RoomFormData]
-  'update:hasPassword': [value: boolean]
+  'update:hasPassword': [value: boolean] // Оставляем для обратной совместимости
   'generate-name': []
 }>()
 
 const form = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value)
-})
-
-const hasPassword = computed({
-  get: () => props.hasPassword,
-  set: (value) => emit('update:hasPassword', value)
 })
 
 const error = computed(() => props.error)
