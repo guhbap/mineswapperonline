@@ -342,28 +342,31 @@ func (m *Manager) handleCursor(room *game.Room, player *Player, playerID string,
 	log.Printf("[WS] handleCursor: начало, playerID=%s, cursor=%v", playerID, msg.Cursor != nil)
 	if msg.Cursor != nil {
 		log.Printf("[WS] handleCursor: курсор не nil, x=%.2f, y=%.2f", msg.Cursor.X, msg.Cursor.Y)
-		player.Mu.Lock()
+		log.Printf("[WS] handleCursor: вызов UpdateCursor (мьютекс будет заблокирован внутри)")
 		updated := player.UpdateCursor(msg.Cursor.X, msg.Cursor.Y)
 		log.Printf("[WS] handleCursor: UpdateCursor вернул %v", updated)
 		if !updated {
-			player.Mu.Unlock()
 			log.Printf("[WS] handleCursor: курсор не обновлен (throttling), пропускаем сообщение")
 			return // Пропускаем это сообщение
 		}
 
+		log.Printf("[WS] handleCursor: курсор обновлен, заполняем данные сообщения")
+		// Получаем данные игрока с блокировкой мьютекса
+		player.Mu.Lock()
 		truncatedPlayerID := truncatePlayerID(playerID)
 		msg.PlayerID = truncatedPlayerID
 		msg.Cursor.PlayerID = truncatedPlayerID
 		msg.Nickname = player.Nickname
 		msg.Color = player.Color
 		player.Mu.Unlock()
+		log.Printf("[WS] handleCursor: данные заполнены, отправка BroadcastToOthers")
 
-		log.Printf("[WS] handleCursor: отправка BroadcastToOthers")
 		m.gameService.BroadcastToOthers(room, playerID, *msg)
 		log.Printf("[WS] handleCursor: BroadcastToOthers завершен")
 	} else {
 		log.Printf("[WS] handleCursor: курсор nil, пропускаем")
 	}
+	log.Printf("[WS] handleCursor: функция завершена")
 }
 
 // handleCellClick обрабатывает клик по ячейке
