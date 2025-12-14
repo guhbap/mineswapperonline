@@ -156,7 +156,7 @@
                 </div>
                 <div class="game-complexity">
                   <span class="complexity-label">Сложность:</span>
-                  <span class="complexity-value">{{ calculateDifficulty(game.width, game.height, game.mines) }}</span>
+                  <span class="complexity-value">{{ calculateDifficulty(game.width, game.height, game.mines).toFixed(2) }}</span>
                 </div>
               </div>
               <div class="game-time-info">
