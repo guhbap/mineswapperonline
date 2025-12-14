@@ -128,16 +128,28 @@
             {{ cellData.cell.n }}
           </span>
           <svg v-else-if="cellData.cell.r && cellData.cell.m" class="cell-mine" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="8" fill="currentColor"/>
-            <path d="M8 8L10 6M16 8L14 6M10 6L12 4L14 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="12" cy="12" r="2" fill="white"/>
-            <path d="M12 10V8" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+            <!-- Основной корпус мины -->
+            <circle cx="12" cy="14" r="7" fill="currentColor" stroke="#333" stroke-width="1"/>
+            <!-- Сегменты мины -->
+            <path d="M12 7L12 14M7 14L12 7M17 14L12 7" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M9 11L12 7L15 11M9 17L12 7L15 17" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+            <!-- Фитиль -->
+            <line x1="12" y1="7" x2="12" y2="4" stroke="#8b5a3c" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="12" cy="3" r="1" fill="#ff6b6b"/>
+            <!-- Центральная точка -->
+            <circle cx="12" cy="14" r="2" fill="#333"/>
           </svg>
           <svg v-else-if="(gameState?.go || gameState?.gw) && cellData.cell.m && !cellData.cell.r" class="cell-mine" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="8" fill="currentColor"/>
-            <path d="M8 8L10 6M16 8L14 6M10 6L12 4L14 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="12" cy="12" r="2" fill="white"/>
-            <path d="M12 10V8" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+            <!-- Основной корпус мины -->
+            <circle cx="12" cy="14" r="7" fill="currentColor" stroke="#333" stroke-width="1"/>
+            <!-- Сегменты мины -->
+            <path d="M12 7L12 14M7 14L12 7M17 14L12 7" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M9 11L12 7L15 11M9 17L12 7L15 17" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+            <!-- Фитиль -->
+            <line x1="12" y1="7" x2="12" y2="4" stroke="#8b5a3c" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="12" cy="3" r="1" fill="#ff6b6b"/>
+            <!-- Центральная точка -->
+            <circle cx="12" cy="14" r="2" fill="#333"/>
           </svg>
           <svg
             v-else-if="cellData.cell.f"
@@ -277,19 +289,31 @@
           <strong>{{ gameState.ln }}</strong>
         </router-link> подорвался на мине
         <svg class="mine-inline-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="12" cy="12" r="8" fill="currentColor"/>
-          <path d="M8 8L10 6M16 8L14 6M10 6L12 4L14 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <circle cx="12" cy="12" r="2" fill="white"/>
-          <path d="M12 10V8" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+          <!-- Основной корпус мины -->
+          <circle cx="12" cy="14" r="7" fill="currentColor" stroke="#333" stroke-width="1"/>
+          <!-- Сегменты мины -->
+          <path d="M12 7L12 14M7 14L12 7M17 14L12 7" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M9 11L12 7L15 11M9 17L12 7L15 17" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+          <!-- Фитиль -->
+          <line x1="12" y1="7" x2="12" y2="4" stroke="#8b5a3c" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="12" cy="3" r="1" fill="#ff6b6b"/>
+          <!-- Центральная точка -->
+          <circle cx="12" cy="14" r="2" fill="#333"/>
         </svg>
       </p>
       <p v-else>
         Вы подорвались на мине
         <svg class="mine-inline-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="12" cy="12" r="8" fill="currentColor"/>
-          <path d="M8 8L10 6M16 8L14 6M10 6L12 4L14 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <circle cx="12" cy="12" r="2" fill="white"/>
-          <path d="M12 10V8" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+          <!-- Основной корпус мины -->
+          <circle cx="12" cy="14" r="7" fill="currentColor" stroke="#333" stroke-width="1"/>
+          <!-- Сегменты мины -->
+          <path d="M12 7L12 14M7 14L12 7M17 14L12 7" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M9 11L12 7L15 11M9 17L12 7L15 17" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+          <!-- Фитиль -->
+          <line x1="12" y1="7" x2="12" y2="4" stroke="#8b5a3c" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="12" cy="3" r="1" fill="#ff6b6b"/>
+          <!-- Центральная точка -->
+          <circle cx="12" cy="14" r="2" fill="#333"/>
         </svg>
       </p>
       <button @click="handleNewGame" class="game-message__button">
@@ -1325,6 +1349,18 @@ onUnmounted(() => {
   width: 1.25rem;
   height: 1.25rem;
   flex-shrink: 0;
+}
+
+[data-theme="dark"] .cell-mine circle[fill="currentColor"] {
+  fill: #dc2626;
+}
+
+[data-theme="dark"] .cell-mine path[stroke="#333"],
+[data-theme="dark"] .cell-mine line[stroke="#333"],
+[data-theme="dark"] .cell-mine circle[stroke="#333"],
+[data-theme="dark"] .cell-mine circle[fill="#333"] {
+  stroke: #fff;
+  fill: #fff;
 }
 
 .hint-button-icon,
