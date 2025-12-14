@@ -657,6 +657,13 @@ onMounted(() => {
   font-weight: 600;
 }
 
+/* Обеспечиваем контрастность текста в светлой теме */
+[data-theme="light"] .user-rating {
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
 .rating-label {
   font-size: 0.875rem;
   opacity: 0.9;
