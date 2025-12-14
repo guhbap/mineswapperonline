@@ -66,7 +66,7 @@ type GameState struct {
 	Rows          int              `json:"r"`
 	Cols          int              `json:"c"`
 	Mines         int              `json:"m"`
-	Seed          int64            `json:"seed,omitempty"` // Seed для генерации поля
+	Seed          string           `json:"seed,omitempty"` // Seed для генерации поля (UUID)
 	GameOver      bool             `json:"go"`
 	GameWon       bool             `json:"gw"`
 	Revealed      int              `json:"rv"`
@@ -147,8 +147,8 @@ func NewServer(roomManager *game.RoomManager, db *database.DB) *Server {
 
 func NewGameState(rows, cols, mines int, gameMode string) *GameState {
 	// Эта функция используется только в main.go для совместимости
-	// Внутри используется game.NewGameState с seed=0
-	gs := game.NewGameState(rows, cols, mines, gameMode, 0)
+	// Внутри используется game.NewGameState с пустым seed (будет сгенерирован UUID)
+	gs := game.NewGameState(rows, cols, mines, gameMode, "")
 	return convertGameStateToMain(gs)
 }
 
@@ -742,7 +742,7 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 									roomID := room.ID
 									creatorID := room.CreatorID
 									hasCustomSeed := room.HasCustomSeed
-									seed := int64(0)
+									seed := ""
 									if room.GameState != nil {
 										seed = room.GameState.Seed
 									}
@@ -826,7 +826,7 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 					roomID := room.ID
 					creatorID := room.CreatorID
 					hasCustomSeed := room.HasCustomSeed
-					seed := int64(0)
+					seed := ""
 					if room.GameState != nil {
 						seed = room.GameState.Seed
 					}
@@ -873,15 +873,15 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 
 	// Для classic режима с QuickStart: делаем первую клетку нулевой
 	// НО только если не используется seed (seed == 0 означает что seed не был установлен или это старая игра)
-	if gameMode == "classic" && isFirstClick && room.QuickStart && room.GameState.Seed == 0 {
+	if gameMode == "classic" && isFirstClick && room.QuickStart && room.GameState.Seed == "" {
 		log.Printf("handleCellClick: QuickStart включен, делаем первую клетку нулевой (без seed)")
 		room.GameState.Mu.Unlock()
 		room.GameState.EnsureFirstClickSafe(row, col)
 		room.GameState.Mu.Lock()
 		// Обновляем ссылку на ячейку после перемещения мин
 		cell = &room.GameState.Board[row][col]
-	} else if gameMode == "classic" && isFirstClick && room.QuickStart && room.GameState.Seed != 0 {
-		log.Printf("handleCellClick: QuickStart включен, но используется seed=%d, не перемещаем мины", room.GameState.Seed)
+	} else if gameMode == "classic" && isFirstClick && room.QuickStart && room.GameState.Seed != "" {
+		log.Printf("handleCellClick: QuickStart включен, но используется seed=%s, не перемещаем мины", room.GameState.Seed)
 		// При использовании seed мины уже размещены так, чтобы первая клетка была безопасной (если QuickStart был включен при создании)
 		// Если первая клетка оказалась миной - это означает что QuickStart не был учтен при генерации, но мы не можем переместить мины без нарушения seed
 	}
@@ -1031,7 +1031,7 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 			roomID := room.ID
 			creatorID := room.CreatorID
 			hasCustomSeed := room.HasCustomSeed
-			seed := int64(0)
+			seed := ""
 			if room.GameState != nil {
 				seed = room.GameState.Seed
 			}
@@ -1164,7 +1164,7 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 				roomID := room.ID
 				creatorID := room.CreatorID
 				hasCustomSeed := room.HasCustomSeed
-				seed := int64(0)
+				seed := ""
 				if room.GameState != nil {
 					seed = room.GameState.Seed
 				}
@@ -1456,7 +1456,7 @@ func (s *Server) handleHint(room *game.Room, playerID string, hint *Hint) {
 				roomID := room.ID
 				creatorID := room.CreatorID
 				hasCustomSeed := room.HasCustomSeed
-				seed := int64(0)
+				seed := ""
 				if room.GameState != nil {
 					seed = room.GameState.Seed
 				}

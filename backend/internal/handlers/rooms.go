@@ -33,7 +33,7 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		GameMode   string `json:"gameMode"`
 		QuickStart bool   `json:"quickStart"`
 		Chording   bool   `json:"chording"`
-		Seed       *int64 `json:"seed,omitempty"` // Опциональный seed
+		Seed       *string `json:"seed,omitempty"` // Опциональный seed (UUID)
 	}
 
 	if err := utils.DecodeJSON(r, &req); err != nil {
@@ -60,10 +60,10 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		gameMode = "classic" // По умолчанию
 	}
 
-	var seed int64 = 0
-	if req.Seed != nil && *req.Seed > 0 {
+	var seed string = ""
+	if req.Seed != nil && *req.Seed != "" {
 		seed = *req.Seed
-		log.Printf("CreateRoom: пользователь указал seed=%d", seed)
+		log.Printf("CreateRoom: пользователь указал seed=%s", seed)
 	} else {
 		log.Printf("CreateRoom: seed не указан, будет сгенерирован автоматически")
 	}

@@ -294,7 +294,7 @@ type GameParticipant struct {
 	Color    string
 }
 
-func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool, chording bool, quickStart bool, roomID string, seed int64, hasCustomSeed bool, creatorID int, participants []GameParticipant) error {
+func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool, chording bool, quickStart bool, roomID string, seed string, hasCustomSeed bool, creatorID int, participants []GameParticipant) error {
 	// Если participants не передан, используем пустой слайс
 	if participants == nil {
 		participants = []GameParticipant{}

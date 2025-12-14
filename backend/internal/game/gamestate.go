@@ -3,21 +3,22 @@ package game
 import (
 	"log"
 	mathrand "math/rand"
-	"time"
+
+	"minesweeperonline/internal/utils"
 )
 
 // NewGameState создает новое состояние игры
-// seed: если 0, генерируется новый seed; иначе используется переданный
-func NewGameState(rows, cols, mines int, gameMode string, seed int64) *GameState {
-	log.Printf("NewGameState: начало создания, rows=%d, cols=%d, mines=%d, gameMode=%s, seed=%d", rows, cols, mines, gameMode, seed)
+// seed: если пустая строка, генерируется новый UUID; иначе используется переданный
+func NewGameState(rows, cols, mines int, gameMode string, seed string) *GameState {
+	log.Printf("NewGameState: начало создания, rows=%d, cols=%d, mines=%d, gameMode=%s, seed=%s", rows, cols, mines, gameMode, seed)
 	// По умолчанию classic
 	if gameMode == "" {
 		gameMode = "classic"
 	}
 	
-	// Генерируем seed для воспроизводимости, если не передан
-	if seed == 0 {
-		seed = time.Now().UnixNano()
+	// Генерируем UUID для seed, если не передан
+	if seed == "" {
+		seed = utils.GenerateUUID()
 	}
 	gs := &GameState{
 		Rows:          rows,
@@ -33,7 +34,7 @@ func NewGameState(rows, cols, mines int, gameMode string, seed int64) *GameState
 		Board:         make([][]Cell, rows),
 		FlagSetInfo:   make(map[int]FlagInfo),
 	}
-	log.Printf("NewGameState: структура создана, seed=%d, инициализируем поле", seed)
+	log.Printf("NewGameState: структура создана, seed=%s, инициализируем поле", seed)
 
 	// Инициализация поля
 	for i := range gs.Board {
@@ -44,9 +45,10 @@ func NewGameState(rows, cols, mines int, gameMode string, seed int64) *GameState
 	// В режимах training и fair мины НЕ размещаются заранее - они определяются динамически при клике
 	// В классическом режиме размещаем мины случайно
 	if gameMode == "classic" {
-		log.Printf("NewGameState: размещаем мины в классическом режиме с seed=%d", seed)
-		// Используем seed для генерации
-		rng := mathrand.New(mathrand.NewSource(seed))
+		log.Printf("NewGameState: размещаем мины в классическом режиме с seed=%s", seed)
+		// Конвертируем UUID в int64 для использования в math/rand
+		seedInt64 := utils.UUIDToInt64(seed)
+		rng := mathrand.New(mathrand.NewSource(seedInt64))
 		minesPlaced := 0
 		for minesPlaced < mines {
 			row := rng.Intn(rows)
@@ -184,7 +186,8 @@ func (gs *GameState) EnsureFirstClickSafe(firstRow, firstCol int) {
 	}
 
 	// Перемещаем мины в случайные свободные места
-	rng := mathrand.New(mathrand.NewSource(gs.Seed))
+	seedInt64 := utils.UUIDToInt64(gs.Seed)
+	rng := mathrand.New(mathrand.NewSource(seedInt64))
 	for range minesToMove {
 		attempts := 0
 		for attempts < 100 {

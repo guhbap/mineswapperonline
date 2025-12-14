@@ -46,10 +46,10 @@ func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, co
 	room.Chording = chording
 
 	// Сохраняем seed из текущего GameState, если он был указан пользователем
-	var savedSeed int64 = 0
+	var savedSeed string = ""
 	if room.GameState != nil && room.HasCustomSeed {
 		savedSeed = room.GameState.Seed
-		log.Printf("UpdateRoom: сохраняем пользовательский seed=%d", savedSeed)
+		log.Printf("UpdateRoom: сохраняем пользовательский seed=%s", savedSeed)
 	}
 
 	// Пересоздаем игровое поле с новыми параметрами

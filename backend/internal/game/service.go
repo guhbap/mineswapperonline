@@ -4,6 +4,8 @@ import (
 	"log"
 	"math/rand"
 	"time"
+
+	"minesweeperonline/internal/utils"
 )
 
 // GameService предоставляет методы для работы с игровой логикой
@@ -231,7 +233,7 @@ func (s *GameService) handleMineExplosion(room *Room, playerID string, userID in
 		roomID := room.ID
 		creatorID := room.CreatorID
 		hasCustomSeed := room.HasCustomSeed
-		seed := int64(0)
+		seed := ""
 		if room.GameState != nil {
 			seed = room.GameState.Seed
 		}
@@ -268,7 +270,7 @@ func (s *GameService) handleGameWin(room *Room) {
 	roomID := room.ID
 	creatorID := room.CreatorID
 	hasCustomSeed := room.HasCustomSeed
-	seed := int64(0)
+	seed := ""
 	if room.GameState != nil {
 		seed = room.GameState.Seed
 	}
@@ -377,10 +379,11 @@ func (s *GameService) determineMinePlacement(room *Room, clickRow, clickCol int)
 
 	// Используем seed для детерминированной генерации
 	seed := room.GameState.Seed
-	if seed == 0 {
-		seed = time.Now().UnixNano() // Fallback seed если не установлен
+	if seed == "" {
+		seed = utils.GenerateUUID() // Fallback seed если не установлен
 	}
-	rng := rand.New(rand.NewSource(seed + int64(clickRow*room.GameState.Cols+clickCol)))
+	seedInt64 := utils.UUIDToInt64(seed) + int64(clickRow*room.GameState.Cols+clickCol)
+	rng := rand.New(rand.NewSource(seedInt64))
 
 	placed := 0
 	attempts := 0

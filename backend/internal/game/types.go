@@ -39,7 +39,7 @@ type GameState struct {
 	Rows          int         `json:"r"`
 	Cols          int         `json:"c"`
 	Mines         int         `json:"m"`
-	Seed          int64       `json:"seed,omitempty"`    // Seed для генерации поля
+	Seed          string      `json:"seed,omitempty"`    // Seed для генерации поля (UUID)
 	GameOver      bool        `json:"go"`
 	GameWon       bool        `json:"gw"`
 	Revealed      int         `json:"rv"`

@@ -34,7 +34,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  submit: [data: { name: string; password?: string; rows: number; cols: number; mines: number; gameMode: string; quickStart: boolean; chording: boolean; seed?: number | null }]
+  submit: [data: { name: string; password?: string; rows: number; cols: number; mines: number; gameMode: string; quickStart: boolean; chording: boolean; seed?: string | null }]
   cancel: []
 }>()
 
@@ -86,7 +86,7 @@ const handleSubmit = () => {
     quickStart: form.value.quickStart,
     chording: form.value.chording,
     ...(hasPassword.value && form.value.password ? { password: form.value.password } : {}),
-    ...(form.value.seed != null && form.value.seed !== 0 ? { seed: form.value.seed } : {}),
+    ...(form.value.seed != null && form.value.seed !== '' ? { seed: form.value.seed } : {}),
   }
 
   emit('submit', data)

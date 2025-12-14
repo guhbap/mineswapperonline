@@ -436,7 +436,7 @@ type GameStateMessage struct {
 	Rows          int32                  `protobuf:"varint,2,opt,name=rows,proto3" json:"rows,omitempty"`
 	Cols          int32                  `protobuf:"varint,3,opt,name=cols,proto3" json:"cols,omitempty"`
 	Mines         int32                  `protobuf:"varint,4,opt,name=mines,proto3" json:"mines,omitempty"`
-	Seed          int64                  `protobuf:"varint,13,opt,name=seed,proto3" json:"seed,omitempty"` // Seed для генерации поля
+	Seed          string                 `protobuf:"bytes,13,opt,name=seed,proto3" json:"seed,omitempty"` // Seed для генерации поля (UUID)
 	GameOver      bool                   `protobuf:"varint,5,opt,name=game_over,json=gameOver,proto3" json:"game_over,omitempty"`
 	GameWon       bool                   `protobuf:"varint,6,opt,name=game_won,json=gameWon,proto3" json:"game_won,omitempty"`
 	Revealed      int32                  `protobuf:"varint,7,opt,name=revealed,proto3" json:"revealed,omitempty"`
@@ -507,11 +507,11 @@ func (x *GameStateMessage) GetMines() int32 {
 	return 0
 }
 
-func (x *GameStateMessage) GetSeed() int64 {
+func (x *GameStateMessage) GetSeed() string {
 	if x != nil {
 		return x.Seed
 	}
-	return 0
+	return ""
 }
 
 func (x *GameStateMessage) GetGameOver() bool {
@@ -1583,7 +1583,7 @@ const file_messages_proto_rawDesc = "" +
 	"\x04rows\x18\x02 \x01(\x05R\x04rows\x12\x12\n" +
 	"\x04cols\x18\x03 \x01(\x05R\x04cols\x12\x14\n" +
 	"\x05mines\x18\x04 \x01(\x05R\x05mines\x12\x12\n" +
-	"\x04seed\x18\r \x01(\x03R\x04seed\x12\x1b\n" +
+	"\x04seed\x18\r \x01(\tR\x04seed\x12\x1b\n" +
 	"\tgame_over\x18\x05 \x01(\bR\bgameOver\x12\x19\n" +
 	"\bgame_won\x18\x06 \x01(\bR\agameWon\x12\x1a\n" +
 	"\brevealed\x18\a \x01(\x05R\brevealed\x12\x1d\n" +

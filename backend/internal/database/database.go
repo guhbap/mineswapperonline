@@ -111,12 +111,25 @@ func (db *DB) InitSchema() error {
 				log.Println("Added room_id column to user_game_history")
 			}
 		}
-		// Проверяем и добавляем seed
+		// Проверяем и добавляем seed (UUID)
 		if !migrator.HasColumn(&models.UserGameHistory{}, "seed") {
-			if err := db.Exec(`ALTER TABLE user_game_history ADD COLUMN seed BIGINT NOT NULL DEFAULT 0`).Error; err != nil {
+			if err := db.Exec(`ALTER TABLE user_game_history ADD COLUMN seed VARCHAR(36) NOT NULL DEFAULT ''`).Error; err != nil {
 				log.Printf("Warning: failed to add seed column: %v", err)
 			} else {
 				log.Println("Added seed column to user_game_history")
+			}
+		} else {
+			// Если колонка существует, проверяем тип и изменяем если нужно
+			var columnType string
+			if err := db.Raw(`SELECT data_type FROM information_schema.columns WHERE table_name = 'user_game_history' AND column_name = 'seed'`).Scan(&columnType).Error; err == nil {
+				if columnType == "bigint" {
+					log.Println("Converting seed column from BIGINT to VARCHAR(36)")
+					if err := db.Exec(`ALTER TABLE user_game_history ALTER COLUMN seed TYPE VARCHAR(36) USING ''`).Error; err != nil {
+						log.Printf("Warning: failed to convert seed column type: %v", err)
+					} else {
+						log.Println("Converted seed column to VARCHAR(36)")
+					}
+				}
 			}
 		}
 		// Проверяем и добавляем creator_id

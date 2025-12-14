@@ -81,7 +81,7 @@
         <div v-if="isRatedGame && maxRatingGain > 0" class="rating-status__gain">
           Макс. рейтинг: {{ Math.round(maxRatingGain) }}
         </div>
-        <div v-else-if="!isRatedGame && form.seed != null && form.seed !== 0" class="rating-status__hint">
+        <div v-else-if="!isRatedGame && form.seed != null && form.seed !== ''" class="rating-status__hint">
           Указан seed - игра нерейтинговая
         </div>
         <div v-else-if="!isRatedGame" class="rating-status__hint">
@@ -136,7 +136,7 @@
     <div v-if="showAdvancedOptions" class="form-group">
       <label class="form-label">Seed (опционально)</label>
       <input
-        v-model.number="form.seed"
+        v-model="form.seed"
         type="number"
         class="form-input"
         placeholder="Оставьте пустым для случайной генерации"
@@ -209,7 +209,7 @@ export interface RoomFormData {
   gameMode: 'classic' | 'training' | 'fair'
   quickStart: boolean
   chording: boolean
-  seed?: number | null
+  seed?: string | null
 }
 
 const props = defineProps<{
@@ -258,7 +258,7 @@ const difficulty = computed(() => {
 // Если указан seed - игра нерейтинговая
 const isRatedGame = computed(() => {
   // Если указан seed - игра нерейтинговая
-  if (form.value.seed != null && form.value.seed !== 0) return false
+  if (form.value.seed != null && form.value.seed !== '') return false
   // Проверяем минимальную плотность мин (10%)
   const cells = form.value.cols * form.value.rows
   if (cells <= 0) return false

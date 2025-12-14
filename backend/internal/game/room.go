@@ -13,7 +13,7 @@ func NewRoomManager() *RoomManager {
 	}
 }
 
-func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, gameMode string, quickStart bool, chording bool, seed int64, hasCustomSeed bool) *Room {
+func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, gameMode string, quickStart bool, chording bool, seed string, hasCustomSeed bool) *Room {
 	// По умолчанию classic, если не указан
 	if gameMode == "" {
 		gameMode = "classic"
@@ -36,11 +36,13 @@ func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, ga
 	}
 }
 
-func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int, gameMode string, quickStart bool, chording bool, seed int64) *Room {
+func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int, gameMode string, quickStart bool, chording bool, seed string) *Room {
 	roomID := utils.GenerateID()
-	// Определяем, был ли seed указан пользователем явно (seed > 0 означает, что он был указан)
-	hasCustomSeed := seed > 0
+	// Определяем, был ли seed указан пользователем явно (непустая строка означает, что он был указан)
+	hasCustomSeed := seed != ""
+	log.Printf("RoomManager.CreateRoom: seed=%s, hasCustomSeed=%v", seed, hasCustomSeed)
 	room := NewRoom(roomID, name, password, rows, cols, mines, creatorID, gameMode, quickStart, chording, seed, hasCustomSeed)
+	log.Printf("RoomManager.CreateRoom: комната создана, GameState.Seed=%s", room.GameState.Seed)
 	rm.mu.Lock()
 	rm.rooms[roomID] = room
 	rm.mu.Unlock()
@@ -207,10 +209,10 @@ func (r *Room) ResetGame() {
 	}()
 
 	// Сохраняем seed из текущего GameState, если он был указан пользователем
-	var savedSeed int64 = 0
+	var savedSeed string = ""
 	if r.GameState != nil && r.HasCustomSeed {
 		savedSeed = r.GameState.Seed
-		log.Printf("ResetGame: сохраняем пользовательский seed=%d", savedSeed)
+		log.Printf("ResetGame: сохраняем пользовательский seed=%s", savedSeed)
 	}
 
 	select {

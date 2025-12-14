@@ -130,7 +130,7 @@ func (rm *RoomManager) LoadRooms() error {
 			gameMode,
 			dbRoom.QuickStart,
 			dbRoom.Chording,
-			0, // seed=0 при загрузке из БД (seed будет восстановлен из GameStateData)
+			"", // seed="" при загрузке из БД (seed будет восстановлен из GameStateData)
 			false, // hasCustomSeed=false при загрузке из БД (по умолчанию)
 		)
 		room.CreatedAt = dbRoom.CreatedAt
