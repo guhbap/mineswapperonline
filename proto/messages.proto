@@ -36,6 +36,7 @@ message GameStateMessage {
   int32 rows = 2;
   int32 cols = 3;
   int32 mines = 4;
+  int64 seed = 13;  // Seed для генерации поля
   bool game_over = 5;
   bool game_won = 6;
   int32 revealed = 7;

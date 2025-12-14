@@ -60,6 +60,7 @@ func encodeGameStateProtobuf(gs *GameState) ([]byte, error) {
 		Rows:           int32(gs.Rows),
 		Cols:           int32(gs.Cols),
 		Mines:          int32(gs.Mines),
+		Seed:           gs.Seed,
 		GameOver:       gs.GameOver,
 		GameWon:        gs.GameWon,
 		Revealed:       int32(gs.Revealed),

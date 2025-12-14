@@ -66,6 +66,7 @@ type GameState struct {
 	Rows          int              `json:"r"`
 	Cols          int              `json:"c"`
 	Mines         int              `json:"m"`
+	Seed          int64            `json:"seed,omitempty"` // Seed для генерации поля
 	GameOver      bool             `json:"go"`
 	GameWon       bool             `json:"gw"`
 	Revealed      int              `json:"rv"`
@@ -1240,7 +1241,7 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 	log.Printf("Отправка обновленного состояния игры после клика")
 	// Разблокируем мьютекс перед отправкой состояния игры
 	room.GameState.Mu.Unlock()
-	
+
 	// Сохраняем комнату в БД после завершения игры (проигрыш)
 	if room.GameState.GameOver {
 		go func() {
@@ -2164,7 +2165,7 @@ func main() {
 
 	roomManager := game.NewRoomManager()
 	roomManager.SetDB(db)
-	
+
 	// Устанавливаем функции для кодирования/декодирования GameState
 	roomManager.SetGameStateEncoder(EncodeGameStateForPersistence)
 	roomManager.SetGameStateDecoder(DecodeGameStateFromPersistence)
