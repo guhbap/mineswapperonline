@@ -201,11 +201,12 @@ function calculateDensity(): number {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 2rem;
   margin-bottom: 2rem;
 }
 
 .game-details-title {
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -219,6 +220,8 @@ function calculateDensity(): number {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  font-size: 0.9375rem;
+  white-space: nowrap;
 }
 
 .back-link:hover {
