@@ -14,7 +14,7 @@ type Player struct {
 	Nickname           string
 	Color              string
 	Conn               *websocket.Conn
-	mu                 sync.Mutex
+	Mu                 sync.Mutex
 	LastCursorX        float64
 	LastCursorY        float64
 	LastCursorSendTime time.Time
@@ -22,36 +22,36 @@ type Player struct {
 
 // GetNickname возвращает никнейм игрока
 func (p *Player) GetNickname() string {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.Mu.Lock()
+	defer p.Mu.Unlock()
 	return p.Nickname
 }
 
 // GetColor возвращает цвет игрока
 func (p *Player) GetColor() string {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.Mu.Lock()
+	defer p.Mu.Unlock()
 	return p.Color
 }
 
 // GetUserID возвращает ID пользователя
 func (p *Player) GetUserID() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.Mu.Lock()
+	defer p.Mu.Unlock()
 	return p.UserID
 }
 
 // SetNickname устанавливает никнейм игрока
 func (p *Player) SetNickname(nickname string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.Mu.Lock()
+	defer p.Mu.Unlock()
 	p.Nickname = nickname
 }
 
 // UpdateCursor обновляет позицию курсора с throttling
 func (p *Player) UpdateCursor(x, y float64) bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.Mu.Lock()
+	defer p.Mu.Unlock()
 	
 	now := time.Now()
 	timeSinceLastSend := now.Sub(p.LastCursorSendTime)

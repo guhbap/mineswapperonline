@@ -42,3 +42,17 @@ func Int64ToUUID(val int64) string {
 	return fmt.Sprintf("%016x-%04x-%04x-%04x-%012x", val, val>>48, val>>32, val>>16, val)
 }
 
+// RandInt возвращает случайное число от 0 до n-1
+func RandInt(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	b := make([]byte, 4)
+	rand.Read(b)
+	val := int(b[0])<<24 | int(b[1])<<16 | int(b[2])<<8 | int(b[3])
+	if val < 0 {
+		val = -val
+	}
+	return val % n
+}
+

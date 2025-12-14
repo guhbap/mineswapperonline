@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"minesweeperonline/internal/database"
+	"minesweeperonline/internal/game"
 	"minesweeperonline/internal/models"
 	"minesweeperonline/internal/rating"
 	"minesweeperonline/internal/utils"
@@ -288,16 +289,10 @@ func isValidHexColor(color string) bool {
 // Rating is NOT given for:
 // - Playing less complex fields than previously played (prevents farming easy fields)
 // This prevents farming rating on easy fields and penalizes worse performance
-type GameParticipant struct {
-	UserID   int
-	Nickname string
-	Color    string
-}
-
-func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool, chording bool, quickStart bool, roomID string, seed string, hasCustomSeed bool, creatorID int, participants []GameParticipant) error {
+func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool, chording bool, quickStart bool, roomID string, seed string, hasCustomSeed bool, creatorID int, participants []game.GameParticipant) error {
 	// Если participants не передан, используем пустой слайс
 	if participants == nil {
-		participants = []GameParticipant{}
+		participants = []game.GameParticipant{}
 	}
 
 	var err error

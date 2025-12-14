@@ -22,3 +22,8 @@ func DecodeJSON(r *http.Request, v interface{}) error {
 	return json.NewDecoder(r.Body).Decode(v)
 }
 
+// DecodeJSONFromBytes декодирует JSON из байтов
+func DecodeJSONFromBytes(data []byte, v interface{}) error {
+	return json.Unmarshal(data, v)
+}
+

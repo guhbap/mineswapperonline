@@ -16,12 +16,13 @@ import (
 	"minesweeperonline/internal/handlers"
 	"minesweeperonline/internal/middleware"
 	"minesweeperonline/internal/utils"
+	ws "minesweeperonline/internal/websocket"
 
 	"github.com/gorilla/mux"
-	"github.com/gorilla/websocket"
+	gorillaWS "github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
+var upgrader = gorillaWS.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true // Разрешаем все источники для разработки
 	},
@@ -32,7 +33,7 @@ type Player struct {
 	UserID             int    `json:"userId,omitempty"` // ID пользователя из БД, если авторизован
 	Nickname           string `json:"nickname"`
 	Color              string `json:"color"`
-	Conn               *websocket.Conn
+	Conn               *gorillaWS.Conn
 	mu                 sync.Mutex
 	LastCursorX        float64   // Последняя отправленная позиция курсора X
 	LastCursorY        float64   // Последняя отправленная позиция курсора Y
@@ -244,7 +245,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	room := s.roomManager.GetRoom(roomID)
 	if room == nil {
 		errorMsg, _ := encodeErrorProtobuf("Room not found")
-		conn.WriteMessage(websocket.BinaryMessage, errorMsg)
+		conn.WriteMessage(gorillaWS.BinaryMessage, errorMsg)
 		conn.Close()
 		return
 	}
@@ -318,7 +319,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		for range pingTicker.C {
 			player.mu.Lock()
-			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			if err := conn.WriteMessage(gorillaWS.PingMessage, nil); err != nil {
 				log.Printf("Ошибка отправки ping игроку %s: %v", playerID, err)
 				player.mu.Unlock()
 				return
@@ -339,7 +340,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	for {
 		messageType, data, err := conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			if gorillaWS.IsUnexpectedCloseError(err, gorillaWS.CloseGoingAway, gorillaWS.CloseAbnormalClosure) {
 				log.Printf("Ошибка чтения сообщения: %v", err)
 			}
 			break
@@ -352,13 +353,13 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		var parseErr error
 
 		// Обрабатываем бинарные сообщения (protobuf)
-		if messageType == websocket.BinaryMessage {
+		if messageType == gorillaWS.BinaryMessage {
 			msg, parseErr = decodeClientMessageProtobuf(data)
 			if parseErr != nil {
 				log.Printf("Ошибка декодирования protobuf сообщения: %v", parseErr)
 				continue
 			}
-		} else if messageType == websocket.TextMessage {
+		} else if messageType == gorillaWS.TextMessage {
 			// Fallback: парсим JSON сообщение (для обратной совместимости)
 			var jsonMsg Message
 			if parseErr := json.Unmarshal(data, &jsonMsg); parseErr != nil {
@@ -383,7 +384,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			player.mu.Lock()
 			if player.Conn != nil {
 				pongMsg, _ := encodePongProtobuf()
-				if err := player.Conn.WriteMessage(websocket.BinaryMessage, pongMsg); err != nil {
+				if err := player.Conn.WriteMessage(gorillaWS.BinaryMessage, pongMsg); err != nil {
 					log.Printf("Ошибка отправки pong игроку %s: %v", playerID, err)
 				}
 			}
@@ -726,10 +727,10 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 									log.Printf("[MUTEX] handleCellClick (взрыв chording): блокируем room.Mu.RLock() для сбора участников")
 									room.Mu.RLock()
 									log.Printf("[MUTEX] handleCellClick (взрыв chording): room.Mu.RLock() заблокирован для сбора участников")
-									participants := make([]handlers.GameParticipant, 0)
+									participants := make([]game.GameParticipant, 0)
 									for _, p := range room.Players {
 										if p.UserID > 0 {
-											participants = append(participants, handlers.GameParticipant{
+											participants = append(participants, game.GameParticipant{
 												UserID:   p.UserID,
 												Nickname: p.Nickname,
 												Color:    p.Color,
@@ -812,10 +813,10 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 					log.Printf("[MUTEX] handleCellClick (chording победа): блокируем room.Mu.RLock() для сбора участников")
 					room.Mu.RLock()
 					log.Printf("[MUTEX] handleCellClick (chording победа): room.Mu.RLock() заблокирован для сбора участников")
-					participants := make([]handlers.GameParticipant, 0)
+					participants := make([]game.GameParticipant, 0)
 					for _, p := range room.Players {
 						if p.UserID > 0 {
-							participants = append(participants, handlers.GameParticipant{
+							participants = append(participants, game.GameParticipant{
 								UserID:   p.UserID,
 								Nickname: p.Nickname,
 								Color:    p.Color,
@@ -1014,13 +1015,13 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 		// Записываем поражение в БД (поражения не влияют на рейтинг)
 		if userID > 0 && s.profileHandler != nil {
 			// Собираем список участников игры
-			participants := make([]handlers.GameParticipant, 0)
+			participants := make([]game.GameParticipant, 0)
 			log.Printf("[MUTEX] handleMineExplosion: блокируем room.Mu.RLock() для сбора участников")
 			room.Mu.RLock()
 			log.Printf("[MUTEX] handleMineExplosion: room.Mu.RLock() заблокирован для сбора участников")
 			for _, p := range room.Players {
 				if p.UserID > 0 {
-					participants = append(participants, handlers.GameParticipant{
+					participants = append(participants, game.GameParticipant{
 						UserID:   p.UserID,
 						Nickname: p.Nickname,
 						Color:    p.Color,
@@ -1151,10 +1152,10 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 				log.Printf("[MUTEX] handleCellClick (победа goroutine): блокируем room.Mu.RLock() для сбора участников")
 				room.Mu.RLock()
 				log.Printf("[MUTEX] handleCellClick (победа goroutine): room.Mu.RLock() заблокирован для сбора участников")
-				participants := make([]handlers.GameParticipant, 0)
+				participants := make([]game.GameParticipant, 0)
 				for _, p := range room.Players {
 					if p.UserID > 0 {
-						participants = append(participants, handlers.GameParticipant{
+						participants = append(participants, game.GameParticipant{
 							UserID:   p.UserID,
 							Nickname: p.Nickname,
 							Color:    p.Color,
@@ -1443,10 +1444,10 @@ func (s *Server) handleHint(room *game.Room, playerID string, hint *Hint) {
 				log.Printf("[MUTEX] handleHint (победа goroutine): блокируем room.Mu.RLock() для сбора участников")
 				room.Mu.RLock()
 				log.Printf("[MUTEX] handleHint (победа goroutine): room.Mu.RLock() заблокирован для сбора участников")
-				participants := make([]handlers.GameParticipant, 0)
+				participants := make([]game.GameParticipant, 0)
 				for _, p := range room.Players {
 					if p.UserID > 0 {
-						participants = append(participants, handlers.GameParticipant{
+						participants = append(participants, game.GameParticipant{
 							UserID:   p.UserID,
 							Nickname: p.Nickname,
 							Color:    p.Color,
@@ -1542,7 +1543,7 @@ func (s *Server) sendGameStateToPlayer(room *game.Room, player *Player) {
 
 	log.Printf("Отправка gameState (protobuf): Rows=%d, Cols=%d, Mines=%d, Revealed=%d, Size=%d bytes",
 		gameStateCopy.Rows, gameStateCopy.Cols, gameStateCopy.Mines, gameStateCopy.Revealed, len(binaryData))
-	if err := player.Conn.WriteMessage(websocket.BinaryMessage, binaryData); err != nil {
+	if err := player.Conn.WriteMessage(gorillaWS.BinaryMessage, binaryData); err != nil {
 		log.Printf("Ошибка отправки состояния игры: %v", err)
 	} else {
 		log.Printf("Состояние игры успешно отправлено (binary)")
@@ -1583,7 +1584,7 @@ func (s *Server) broadcastCellUpdates(room *game.Room, changedCells map[[2]int]b
 		if wsPlayer != nil {
 			wsPlayer.mu.Lock()
 			if wsPlayer.Conn != nil {
-				if err := wsPlayer.Conn.WriteMessage(websocket.BinaryMessage, binaryData); err != nil {
+				if err := wsPlayer.Conn.WriteMessage(gorillaWS.BinaryMessage, binaryData); err != nil {
 					log.Printf("Ошибка отправки обновлений клеток игроку %s: %v", id, err)
 				}
 			}
@@ -1627,7 +1628,7 @@ func (s *Server) broadcastGameState(room *game.Room) {
 		if wsPlayer != nil {
 			wsPlayer.mu.Lock()
 			if wsPlayer.Conn != nil {
-				if err := wsPlayer.Conn.WriteMessage(websocket.BinaryMessage, binaryData); err != nil {
+				if err := wsPlayer.Conn.WriteMessage(gorillaWS.BinaryMessage, binaryData); err != nil {
 					log.Printf("Ошибка отправки состояния игры игроку %s: %v", id, err)
 				} else {
 					log.Printf("Состояние игры отправлено игроку %s (protobuf)", id)
@@ -1676,7 +1677,7 @@ func (s *Server) broadcastToOthers(room *game.Room, senderID string, msg Message
 		if wsPlayer != nil {
 			wsPlayer.mu.Lock()
 			if wsPlayer.Conn != nil {
-				if err := wsPlayer.Conn.WriteMessage(websocket.BinaryMessage, binaryData); err != nil {
+				if err := wsPlayer.Conn.WriteMessage(gorillaWS.BinaryMessage, binaryData); err != nil {
 					log.Printf("Ошибка отправки сообщения игроку %s: %v", id, err)
 				} else {
 					sentCount++
@@ -1714,7 +1715,7 @@ func (s *Server) broadcastToAll(room *game.Room, msg Message) {
 		if wsPlayer != nil {
 			wsPlayer.mu.Lock()
 			if wsPlayer.Conn != nil {
-				if err := wsPlayer.Conn.WriteMessage(websocket.BinaryMessage, binaryData); err != nil {
+				if err := wsPlayer.Conn.WriteMessage(gorillaWS.BinaryMessage, binaryData); err != nil {
 					log.Printf("Ошибка отправки сообщения чата игроку %s: %v", id, err)
 				}
 			}
@@ -1748,7 +1749,7 @@ func (s *Server) sendPlayerListToPlayer(room *game.Room, targetPlayer *Player) {
 	targetPlayer.mu.Lock()
 	defer targetPlayer.mu.Unlock()
 	if targetPlayer.Conn != nil {
-		if err := targetPlayer.Conn.WriteMessage(websocket.BinaryMessage, binaryData); err != nil {
+		if err := targetPlayer.Conn.WriteMessage(gorillaWS.BinaryMessage, binaryData); err != nil {
 			log.Printf("Ошибка отправки списка игроков: %v", err)
 		}
 	}
@@ -2087,7 +2088,7 @@ func (s *Server) broadcastPlayerList(room *game.Room) {
 		if wsPlayer != nil {
 			wsPlayer.mu.Lock()
 			if wsPlayer.Conn != nil {
-				if err := wsPlayer.Conn.WriteMessage(websocket.BinaryMessage, binaryData); err != nil {
+				if err := wsPlayer.Conn.WriteMessage(gorillaWS.BinaryMessage, binaryData); err != nil {
 					log.Printf("Ошибка отправки списка игроков: %v", err)
 				}
 			}
@@ -2129,10 +2130,18 @@ func main() {
 		log.Printf("Предупреждение: не удалось загрузить комнаты из БД: %v", err)
 	}
 
-	server := NewServer(roomManager, db)
 	profileHandler := handlers.NewProfileHandler(db)
 	authHandler := handlers.NewAuthHandler(db, profileHandler)
 	roomHandler := handlers.NewRoomHandler(roomManager)
+
+	// Создаем WebSocket Manager и Game Service
+	// Сначала создаем временный wsManager для адаптера
+	tempWSManager := ws.NewManager(roomManager, profileHandler, nil)
+	wsManagerAdapter := NewWSManagerAdapter(tempWSManager)
+	gameService := game.NewService(roomManager, profileHandler, wsManagerAdapter)
+	gameServiceAdapter := NewGameServiceAdapter(gameService)
+	// Теперь создаем финальный wsManager с gameServiceAdapter
+	wsManager := ws.NewManager(roomManager, profileHandler, gameServiceAdapter)
 
 	router := mux.NewRouter()
 
@@ -2141,7 +2150,7 @@ func main() {
 	r.Use(middleware.OptionalAuthMiddleware)
 	r.HandleFunc("/auth/register", authHandler.Register).Methods("POST", "OPTIONS")
 	r.HandleFunc("/auth/login", authHandler.Login).Methods("POST", "OPTIONS")
-	r.HandleFunc("/ws", server.handleWebSocket)
+	r.HandleFunc("/ws", wsManager.HandleWebSocket)
 	r.HandleFunc("/rooms", roomHandler.GetRooms).Methods("GET", "OPTIONS")
 	r.HandleFunc("/rooms", roomHandler.CreateRoom).Methods("POST", "OPTIONS")
 	r.HandleFunc("/rooms/join", roomHandler.JoinRoom).Methods("POST", "OPTIONS")

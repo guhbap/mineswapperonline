@@ -1,79 +1,91 @@
 package game
 
 import (
+	"fmt"
 	"log"
-	"math/rand"
 	"time"
-
-	"minesweeperonline/internal/utils"
 )
 
-// GameService предоставляет методы для работы с игровой логикой
-type GameService struct {
-	resultRecorder GameResultRecorder
+// ProfileHandler интерфейс для работы с профилями
+type ProfileHandler interface {
+	RecordGameResult(userID, cols, rows, mines int, gameTime float64, won bool, chording, quickStart bool, roomID, seed string, hasCustomSeed bool, creatorID int, participants []GameParticipant) error
 }
 
-// NewGameService создает новый экземпляр GameService
-func NewGameService(resultRecorder GameResultRecorder) *GameService {
-	return &GameService{
-		resultRecorder: resultRecorder,
+// Service обрабатывает игровую логику
+type Service struct {
+	roomManager    *RoomManager
+	profileHandler ProfileHandler
+	wsManager      WSManager
+}
+
+// WSPlayer интерфейс для WebSocket игрока
+type WSPlayer interface {
+	GetNickname() string
+	GetColor() string
+	GetUserID() int
+	GetMu() interface{}
+	GetConn() interface{}
+	SetNickname(nickname string)
+	UpdateCursor(x, y float64) bool
+}
+
+// WSManager интерфейс для доступа к WebSocket менеджеру
+type WSManager interface {
+	GetWSPlayer(playerID string) WSPlayer
+}
+
+// NewService создает новый сервис игровой логики
+func NewService(roomManager *RoomManager, profileHandler ProfileHandler, wsManager WSManager) *Service {
+	return &Service{
+		roomManager:    roomManager,
+		profileHandler: profileHandler,
+		wsManager:      wsManager,
 	}
 }
 
 // HandleCellClick обрабатывает клик по ячейке
-func (s *GameService) HandleCellClick(room *Room, playerID string, row, col int, isFlag bool) {
-	log.Printf("handleCellClick: начало, row=%d, col=%d, flag=%v", row, col, isFlag)
-
+func (s *Service) HandleCellClick(room *Room, playerID string, click *CellClick) error {
+	log.Printf("HandleCellClick: начало, row=%d, col=%d, flag=%v", click.Row, click.Col, click.Flag)
+	
 	room.GameState.Mu.Lock()
 	defer room.GameState.Mu.Unlock()
 
 	if room.GameState.GameOver || room.GameState.GameWon {
 		log.Printf("Игра уже окончена, клик игнорируется")
-		return
+		return nil
 	}
 
+	row, col := click.Row, click.Col
 	if row < 0 || row >= room.GameState.Rows || col < 0 || col >= room.GameState.Cols {
 		log.Printf("Некорректные координаты: row=%d, col=%d", row, col)
-		return
+		return fmt.Errorf("invalid coordinates")
 	}
 
 	cell := &room.GameState.Board[row][col]
 
 	// Получаем информацию об игроке
-	// Примечание: в реальной реализации Player будет из websocket пакета
-	// Здесь используем упрощенный подход - данные передаются отдельно
 	room.Mu.RLock()
 	player := room.Players[playerID]
 	var nickname string
 	var playerColor string
-	var userID int
 	if player != nil {
 		nickname = player.Nickname
 		playerColor = player.Color
-		userID = player.UserID
 	}
 	room.Mu.RUnlock()
 
-	if isFlag {
-		s.handleFlagToggle(room, playerID, row, col, cell, playerColor)
-		return
+	if click.Flag {
+		return s.handleFlagToggle(room, playerID, row, col, cell, nickname, playerColor)
 	}
 
-	// Проверка: нельзя открыть ячейку с флагом
-	if cell.IsFlagged {
-		log.Printf("Нельзя открыть ячейку с флагом: row=%d, col=%d", row, col)
-		return
-	}
-
-	// Обработка открытия ячейки
-	s.handleCellReveal(room, playerID, row, col, cell, userID, nickname)
+	return s.handleCellReveal(room, playerID, row, col, cell, nickname, playerColor)
 }
 
 // handleFlagToggle обрабатывает переключение флага
-func (s *GameService) handleFlagToggle(room *Room, playerID string, row, col int, cell *Cell, playerColor string) {
+func (s *Service) handleFlagToggle(room *Room, playerID string, row, col int, cell *Cell, nickname, playerColor string) error {
 	if cell.IsRevealed {
 		log.Printf("Нельзя поставить флаг на открытую ячейку: row=%d, col=%d", row, col)
-		return
+		return nil
 	}
 
 	wasFlagged := cell.IsFlagged
@@ -86,7 +98,7 @@ func (s *GameService) handleFlagToggle(room *Room, playerID string, row, col int
 				timeSinceFlagSet := now.Sub(flagInfo.SetTime)
 				if timeSinceFlagSet < 1*time.Second {
 					log.Printf("Нельзя снять флаг сразу после установки другим игроком: row=%d, col=%d", row, col)
-					return
+					return nil
 				}
 			}
 		}
@@ -102,132 +114,359 @@ func (s *GameService) handleFlagToggle(room *Room, playerID string, row, col int
 
 	cell.IsFlagged = !cell.IsFlagged
 	log.Printf("Флаг переключен: row=%d, col=%d, flagged=%v", row, col, cell.IsFlagged)
+
+	gameMode := room.GameMode
+	room.GameState.Mu.Unlock()
+
+	go func() {
+		s.BroadcastGameState(room)
+	}()
+
+	if gameMode == "training" {
+		go func() {
+			s.CalculateCellHints(room)
+			s.BroadcastGameState(room)
+		}()
+	}
+
+	if nickname != "" {
+		action := "поставил флаг"
+		if wasFlagged {
+			action = "убрал флаг"
+		}
+		chatMsg := Message{
+			Type:     "chat",
+			PlayerID: playerID,
+			Nickname: nickname,
+			Color:    playerColor,
+			Chat: &ChatMessage{
+				Text:     fmt.Sprintf("%s %s на (%d, %d)", nickname, action, row+1, col+1),
+				IsSystem: true,
+				Action:   "flag",
+				Row:      row,
+				Col:      col,
+			},
+		}
+		s.BroadcastToAll(room, chatMsg)
+	}
+
+	return nil
 }
 
 // handleCellReveal обрабатывает открытие ячейки
-func (s *GameService) handleCellReveal(room *Room, playerID string, row, col int, cell *Cell, userID int, nickname string) {
-	// Устанавливаем время начала игры при первом клике
+func (s *Service) handleCellReveal(room *Room, playerID string, row, col int, cell *Cell, nickname, playerColor string) error {
+	if cell.IsFlagged {
+		log.Printf("Нельзя открыть ячейку с флагом: row=%d, col=%d", row, col)
+		return nil
+	}
+
+	gameMode := room.GameMode
+
+	// Chording: если клик на открытую клетку с цифрой
+	if room.Chording && cell.IsRevealed && cell.NeighborMines > 0 {
+		return s.handleChording(room, playerID, row, col, cell, nickname, playerColor)
+	}
+
+	if cell.IsRevealed {
+		log.Printf("Клик на открытую клетку без chording, игнорируем")
+		return nil
+	}
+
+	// Если это первое открытие, устанавливаем время начала игры
 	isFirstClick := room.GameState.Revealed == 0
 	if isFirstClick && room.StartTime == nil {
-		log.Printf("[MUTEX] handleCellReveal: блокируем room.Mu.Lock() для комнаты %s (установка StartTime)", room.ID)
-		room.Mu.Lock()
-		log.Printf("[MUTEX] handleCellReveal: room.Mu.Lock() заблокирован для комнаты %s (установка StartTime)", room.ID)
 		now := time.Now()
 		room.StartTime = &now
-		log.Printf("[MUTEX] handleCellReveal: разблокируем room.Mu.Unlock() для комнаты %s (установка StartTime)", room.ID)
-		room.Mu.Unlock()
-		log.Printf("[MUTEX] handleCellReveal: room.Mu.Unlock() разблокирован для комнаты %s (установка StartTime)", room.ID)
 		log.Printf("StartTime установлен при первом клике: %v", now)
 	}
 
-	// В режимах training и fair мины размещаются динамически
-	log.Printf("[MUTEX] handleCellReveal: блокируем room.Mu.RLock() для комнаты %s (получение gameMode)", room.ID)
-	room.Mu.RLock()
-	log.Printf("[MUTEX] handleCellReveal: room.Mu.RLock() заблокирован для комнаты %s (получение gameMode)", room.ID)
-	gameMode := room.GameMode
-	log.Printf("[MUTEX] handleCellReveal: разблокируем room.Mu.RUnlock() для комнаты %s (получение gameMode)", room.ID)
-	room.Mu.RUnlock()
-	log.Printf("[MUTEX] handleCellReveal: room.Mu.RUnlock() разблокирован для комнаты %s (получение gameMode)", room.ID)
-
-	if gameMode == "training" || gameMode == "fair" {
+	// Для classic режима с QuickStart: делаем первую клетку нулевой
+	if gameMode == "classic" && isFirstClick && room.QuickStart && room.GameState.Seed == "" {
+		log.Printf("QuickStart включен, делаем первую клетку нулевой")
 		room.GameState.Mu.Unlock()
-		mineGrid := s.determineMinePlacement(room, row, col)
+		room.GameState.EnsureFirstClickSafe(row, col)
 		room.GameState.Mu.Lock()
-
-		// Применяем размещение мин
-		changedCells := make(map[[2]int]bool)
-		for i := 0; i < room.GameState.Rows; i++ {
-			for j := 0; j < room.GameState.Cols; j++ {
-				if !room.GameState.Board[i][j].IsRevealed {
-					oldMine := room.GameState.Board[i][j].IsMine
-					room.GameState.Board[i][j].IsMine = mineGrid[i][j]
-					if oldMine != mineGrid[i][j] {
-						changedCells[[2]int{i, j}] = true
-						// Помечаем соседей для пересчета
-						for di := -1; di <= 1; di++ {
-							for dj := -1; dj <= 1; dj++ {
-								if di == 0 && dj == 0 {
-									continue
-								}
-								ni, nj := i+di, j+dj
-								if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
-									changedCells[[2]int{ni, nj}] = true
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-
-		// Пересчитываем соседние мины
-		for pos := range changedCells {
-			i, j := pos[0], pos[1]
-			if !room.GameState.Board[i][j].IsMine {
-				count := 0
-				for di := -1; di <= 1; di++ {
-					for dj := -1; dj <= 1; dj++ {
-						if di == 0 && dj == 0 {
-							continue
-						}
-						ni, nj := i+di, j+dj
-						if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
-							if room.GameState.Board[ni][nj].IsMine {
-								count++
-							}
-						}
-					}
-				}
-				room.GameState.Board[i][j].NeighborMines = count
-			}
-		}
-
 		cell = &room.GameState.Board[row][col]
+	}
+
+	// В режимах training и fair мины размещаются динамически при клике
+	var changedCells map[[2]int]bool
+	if gameMode == "training" || gameMode == "fair" {
+		changedCells = s.handleDynamicMinePlacement(room, row, col)
+		cell = &room.GameState.Board[row][col]
+	} else {
+		changedCells = make(map[[2]int]bool)
+		changedCells[[2]int{row, col}] = true
 	}
 
 	// Открываем ячейку
 	cell.IsRevealed = true
 	room.GameState.Revealed++
-	changedCells := make(map[[2]int]bool)
 	changedCells[[2]int{row, col}] = true
+	log.Printf("Ячейка открыта: row=%d, col=%d, isMine=%v", row, col, cell.IsMine)
 
 	if cell.IsMine {
-		s.handleMineExplosion(room, playerID, userID, nickname)
-		return
+		return s.handleMineExplosion(room, playerID, row, col, nickname, playerColor)
 	}
 
 	// Автоматическое открытие соседних пустых ячеек
 	if cell.NeighborMines == 0 {
-		room.GameState.RevealNeighbors(row, col, changedCells)
+		s.revealNeighbors(room, row, col, changedCells)
+	}
+
+	// В режиме training пересчитываем подсказки асинхронно
+	if gameMode == "training" {
+		go func() {
+			s.CalculateCellHints(room)
+			s.BroadcastGameState(room)
+		}()
+	}
+
+	// Отправляем сервисное сообщение об открытии поля
+	if nickname != "" {
+		chatMsg := Message{
+			Type:     "chat",
+			PlayerID: playerID,
+			Nickname: nickname,
+			Color:    playerColor,
+			Chat: &ChatMessage{
+				Text:     fmt.Sprintf("%s открыл поле на (%d, %d)", nickname, row+1, col+1),
+				IsSystem: true,
+				Action:   "reveal",
+				Row:      row,
+				Col:      col,
+			},
+		}
+		s.BroadcastToAll(room, chatMsg)
 	}
 
 	// Проверка победы
 	totalCells := room.GameState.Rows * room.GameState.Cols
 	if room.GameState.Revealed == totalCells-room.GameState.Mines {
-		s.handleGameWin(room)
+		room.GameState.GameWon = true
+		log.Printf("Победа! Все ячейки открыты!")
+		s.handleGameWin(room, playerID)
 	}
+
+	room.GameState.Mu.Unlock()
+
+	// Сохраняем комнату в БД после завершения игры
+	if room.GameState.GameOver {
+		go func() {
+			if err := s.roomManager.SaveRoom(room); err != nil {
+				log.Printf("Предупреждение: не удалось сохранить комнату %s после проигрыша: %v", room.ID, err)
+			}
+		}()
+	}
+
+	// Отправляем только измененные клетки
+	s.BroadcastCellUpdates(room, changedCells, room.GameState.GameOver, room.GameState.GameWon, room.GameState.Revealed, room.GameState.HintsUsed, room.GameState.LoserPlayerID, room.GameState.LoserNickname)
+
+	return nil
+}
+
+// handleChording обрабатывает chording (клик на открытую клетку с цифрой)
+func (s *Service) handleChording(room *Room, playerID string, row, col int, cell *Cell, nickname, playerColor string) error {
+	flagCount := 0
+	for di := -1; di <= 1; di++ {
+		for dj := -1; dj <= 1; dj++ {
+			if di == 0 && dj == 0 {
+				continue
+			}
+			ni, nj := row+di, col+dj
+			if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
+				if room.GameState.Board[ni][nj].IsFlagged {
+					flagCount++
+				}
+			}
+		}
+	}
+
+	if flagCount != cell.NeighborMines {
+		log.Printf("Chording не активирован (флагов: %d, нужно: %d)", flagCount, cell.NeighborMines)
+		return nil
+	}
+
+	log.Printf("Chording активирован, открываем соседние клетки")
+	changedCells := make(map[[2]int]bool)
+	for di := -1; di <= 1; di++ {
+		for dj := -1; dj <= 1; dj++ {
+			if di == 0 && dj == 0 {
+				continue
+			}
+			ni, nj := row+di, col+dj
+			if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
+				neighborCell := &room.GameState.Board[ni][nj]
+				if !neighborCell.IsRevealed && !neighborCell.IsFlagged {
+					neighborCell.IsRevealed = true
+					room.GameState.Revealed++
+					changedCells[[2]int{ni, nj}] = true
+
+					if neighborCell.IsMine {
+						room.GameState.GameOver = true
+						s.setLoserInfo(room, playerID)
+						s.recordGameResult(room, playerID, false)
+						room.GameState.Mu.Unlock()
+						go func() {
+							s.BroadcastGameState(room)
+						}()
+						return nil
+					}
+
+					if neighborCell.NeighborMines == 0 {
+						s.revealNeighbors(room, ni, nj, changedCells)
+					}
+				}
+			}
+		}
+	}
+
+	// Проверка победы
+	totalCells := room.GameState.Rows * room.GameState.Cols
+	if room.GameState.Revealed == totalCells-room.GameState.Mines {
+		room.GameState.GameWon = true
+		s.handleGameWin(room, playerID)
+	}
+
+	room.GameState.Mu.Unlock()
+	go func() {
+		s.BroadcastGameState(room)
+	}()
+
+	return nil
+}
+
+// handleDynamicMinePlacement обрабатывает динамическое размещение мин
+func (s *Service) handleDynamicMinePlacement(room *Room, clickRow, clickCol int) map[[2]int]bool {
+	log.Printf("Режим %s, начинаем динамическое размещение мин", room.GameMode)
+	room.GameState.Mu.Unlock()
+	mineGrid := s.DetermineMinePlacement(room, clickRow, clickCol)
+	room.GameState.Mu.Lock()
+
+	changedCells := make(map[[2]int]bool)
+	for i := 0; i < room.GameState.Rows; i++ {
+		for j := 0; j < room.GameState.Cols; j++ {
+			if !room.GameState.Board[i][j].IsRevealed {
+				oldMine := room.GameState.Board[i][j].IsMine
+				room.GameState.Board[i][j].IsMine = mineGrid[i][j]
+				if oldMine != mineGrid[i][j] {
+					changedCells[[2]int{i, j}] = true
+					for di := -1; di <= 1; di++ {
+						for dj := -1; dj <= 1; dj++ {
+							if di == 0 && dj == 0 {
+								continue
+							}
+							ni, nj := i+di, j+dj
+							if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
+								changedCells[[2]int{ni, nj}] = true
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Пересчитываем соседние мины
+	for pos := range changedCells {
+		i, j := pos[0], pos[1]
+		if !room.GameState.Board[i][j].IsMine {
+			count := 0
+			for di := -1; di <= 1; di++ {
+				for dj := -1; dj <= 1; dj++ {
+					if di == 0 && dj == 0 {
+						continue
+					}
+					ni, nj := i+di, j+dj
+					if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
+						if room.GameState.Board[ni][nj].IsMine {
+							count++
+						}
+					}
+				}
+			}
+			room.GameState.Board[i][j].NeighborMines = count
+		}
+	}
+
+	return changedCells
 }
 
 // handleMineExplosion обрабатывает взрыв мины
-func (s *GameService) handleMineExplosion(room *Room, playerID string, userID int, nickname string) {
+func (s *Service) handleMineExplosion(room *Room, playerID string, row, col int, nickname, playerColor string) error {
 	room.GameState.GameOver = true
-	room.GameState.LoserPlayerID = playerID
-	room.GameState.LoserNickname = nickname
+	s.setLoserInfo(room, playerID)
 
-	// Вычисляем время игры
-	room.Mu.RLock()
+	if s.wsManager != nil {
+		wsPlayer := s.wsManager.GetWSPlayer(playerID)
+		var userID int
+		if wsPlayer != nil {
+			userID = wsPlayer.GetUserID()
+		} else {
+			roomPlayer := room.GetPlayer(playerID)
+			if roomPlayer != nil {
+				userID = roomPlayer.UserID
+			}
+		}
+
+		if userID > 0 {
+			s.recordGameResult(room, playerID, false)
+		}
+	}
+
+	log.Printf("Игра окончена - подорвалась мина! Игрок: %s", nickname)
+
+	// В режиме fair вычисляем подсказки при проигрыше
+	gameMode := room.GameMode
+	if gameMode == "fair" {
+		room.GameState.Mu.Unlock()
+		s.CalculateCellHints(room)
+		room.GameState.Mu.Lock()
+	}
+
+	// Отправляем сервисное сообщение о взрыве
+	if nickname != "" {
+		chatMsg := Message{
+			Type:     "chat",
+			PlayerID: playerID,
+			Nickname: nickname,
+			Color:    playerColor,
+			Chat: &ChatMessage{
+				Text:     fmt.Sprintf("%s подорвался на мине на (%d, %d) 💣", nickname, row+1, col+1),
+				IsSystem: true,
+				Action:   "explode",
+				Row:      row,
+				Col:      col,
+			},
+		}
+		s.BroadcastToAll(room, chatMsg)
+	}
+
+	return nil
+}
+
+// handleGameWin обрабатывает победу
+func (s *Service) handleGameWin(room *Room, playerID string) {
 	var gameTime float64
+	room.Mu.RLock()
 	if room.StartTime != nil {
 		gameTime = time.Since(*room.StartTime).Seconds()
-	} else {
-		gameTime = 0.0
 	}
+	loserID := room.GameState.LoserPlayerID
 	room.Mu.RUnlock()
 
-	// Записываем поражение в БД
-	if userID > 0 && s.resultRecorder != nil {
-		participants := s.collectParticipants(room)
+	go func() {
 		room.Mu.RLock()
+		participants := make([]GameParticipant, 0)
+		for _, p := range room.Players {
+			if p.UserID > 0 {
+				participants = append(participants, GameParticipant{
+					UserID:   p.UserID,
+					Nickname: p.Nickname,
+					Color:    p.Color,
+				})
+			}
+		}
 		chording := room.Chording
 		quickStart := room.QuickStart
 		roomID := room.ID
@@ -238,56 +477,77 @@ func (s *GameService) handleMineExplosion(room *Room, playerID string, userID in
 			seed = room.GameState.Seed
 		}
 		room.Mu.RUnlock()
-		if err := s.resultRecorder.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, chording, quickStart, roomID, seed, hasCustomSeed, creatorID, participants); err != nil {
-			log.Printf("Ошибка записи результата игры: %v", err)
-		}
-	}
 
-	log.Printf("Игра окончена - подорвалась мина! Игрок: %s (%s)", nickname, playerID)
-}
-
-// handleGameWin обрабатывает победу
-func (s *GameService) handleGameWin(room *Room) {
-	room.GameState.GameWon = true
-	log.Printf("Победа! Все ячейки открыты!")
-
-	// Вычисляем время игры
-	room.Mu.RLock()
-	var gameTime float64
-	if room.StartTime != nil {
-		gameTime = time.Since(*room.StartTime).Seconds()
-	} else {
-		gameTime = 0.0
-	}
-	loserID := room.GameState.LoserPlayerID
-	participants := s.collectParticipants(room)
-	room.Mu.RUnlock()
-
-	// Записываем победу для всех игроков, которые не проиграли
-	room.Mu.RLock()
-	chording := room.Chording
-	quickStart := room.QuickStart
-	roomID := room.ID
-	creatorID := room.CreatorID
-	hasCustomSeed := room.HasCustomSeed
-	seed := ""
-	if room.GameState != nil {
-		seed = room.GameState.Seed
-	}
-	for _, p := range room.Players {
-		if p.ID != loserID && p.UserID > 0 && s.resultRecorder != nil {
-			if err := s.resultRecorder.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, roomID, seed, hasCustomSeed, creatorID, participants); err != nil {
-				log.Printf("Ошибка записи результата игры: %v", err)
+		for _, p := range room.Players {
+			if p.ID != loserID && p.UserID > 0 && s.profileHandler != nil {
+				if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, roomID, seed, hasCustomSeed, creatorID, participants); err != nil {
+					log.Printf("Ошибка записи результата игры: %v", err)
+				}
 			}
 		}
-	}
-	room.Mu.RUnlock()
+
+		if err := s.roomManager.SaveRoom(room); err != nil {
+			log.Printf("Предупреждение: не удалось сохранить комнату %s после победы: %v", room.ID, err)
+		}
+	}()
 }
 
-// collectParticipants собирает список участников игры
-func (s *GameService) collectParticipants(room *Room) []GameParticipant {
-	participants := make([]GameParticipant, 0)
+// setLoserInfo устанавливает информацию о проигравшем
+func (s *Service) setLoserInfo(room *Room, playerID string) {
+	var nickname string
+	if s.wsManager != nil {
+		wsPlayer := s.wsManager.GetWSPlayer(playerID)
+		if wsPlayer != nil {
+			nickname = wsPlayer.GetNickname()
+		} else {
+			roomPlayer := room.GetPlayer(playerID)
+			if roomPlayer != nil {
+				nickname = roomPlayer.Nickname
+			}
+		}
+	} else {
+		roomPlayer := room.GetPlayer(playerID)
+		if roomPlayer != nil {
+			nickname = roomPlayer.Nickname
+		}
+	}
+
+	if nickname != "" {
+		room.GameState.LoserPlayerID = playerID
+		room.GameState.LoserNickname = nickname
+	}
+}
+
+// recordGameResult записывает результат игры
+func (s *Service) recordGameResult(room *Room, playerID string, won bool) {
+	var userID int
+	if s.wsManager != nil {
+		wsPlayer := s.wsManager.GetWSPlayer(playerID)
+		if wsPlayer != nil {
+			userID = wsPlayer.GetUserID()
+		} else {
+			roomPlayer := room.GetPlayer(playerID)
+			if roomPlayer != nil {
+				userID = roomPlayer.UserID
+			}
+		}
+	} else {
+		roomPlayer := room.GetPlayer(playerID)
+		if roomPlayer != nil {
+			userID = roomPlayer.UserID
+		}
+	}
+
+	if userID == 0 || s.profileHandler == nil {
+		return
+	}
+
+	var gameTime float64
 	room.Mu.RLock()
+	if room.StartTime != nil {
+		gameTime = time.Since(*room.StartTime).Seconds()
+	}
+	participants := make([]GameParticipant, 0)
 	for _, p := range room.Players {
 		if p.UserID > 0 {
 			participants = append(participants, GameParticipant{
@@ -297,111 +557,46 @@ func (s *GameService) collectParticipants(room *Room) []GameParticipant {
 			})
 		}
 	}
+	chording := room.Chording
+	quickStart := room.QuickStart
+	roomID := room.ID
+	creatorID := room.CreatorID
+	hasCustomSeed := room.HasCustomSeed
+	seed := ""
+	if room.GameState != nil {
+		seed = room.GameState.Seed
+	}
 	room.Mu.RUnlock()
-	return participants
+
+	go func() {
+		if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, won, chording, quickStart, roomID, seed, hasCustomSeed, creatorID, participants); err != nil {
+			log.Printf("Ошибка записи результата игры: %v", err)
+		}
+		if err := s.roomManager.SaveRoom(room); err != nil {
+			log.Printf("Предупреждение: не удалось сохранить комнату %s: %v", roomID, err)
+		}
+	}()
 }
 
-// determineMinePlacement определяет размещение мин при клике в режимах training и fair
-func (s *GameService) determineMinePlacement(room *Room, clickRow, clickCol int) [][]bool {
-	log.Printf("determineMinePlacement: начало, clickRow=%d, clickCol=%d", clickRow, clickCol)
-
-	// Создаем LabelMap на основе открытых ячеек
-	lm := NewLabelMap(room.GameState.Cols, room.GameState.Rows)
-
-	revealedCount := 0
-	for i := 0; i < room.GameState.Rows; i++ {
-		for j := 0; j < room.GameState.Cols; j++ {
-			if room.GameState.Board[i][j].IsRevealed {
-				lm.SetLabel(i, j, room.GameState.Board[i][j].NeighborMines)
-				revealedCount++
+// revealNeighbors открывает соседние пустые ячейки
+func (s *Service) revealNeighbors(room *Room, row, col int, changedCells map[[2]int]bool) {
+	for di := -1; di <= 1; di++ {
+		for dj := -1; dj <= 1; dj++ {
+			if di == 0 && dj == 0 {
+				continue
+			}
+			ni, nj := row+di, col+dj
+			if ni >= 0 && ni < room.GameState.Rows && nj >= 0 && nj < room.GameState.Cols {
+				cell := &room.GameState.Board[ni][nj]
+				if !cell.IsRevealed && !cell.IsFlagged && !cell.IsMine {
+					cell.IsRevealed = true
+					room.GameState.Revealed++
+					changedCells[[2]int{ni, nj}] = true
+					if cell.NeighborMines == 0 {
+						s.revealNeighbors(room, ni, nj, changedCells)
+					}
+				}
 			}
 		}
 	}
-	log.Printf("determineMinePlacement: установлено %d меток", revealedCount)
-
-	// Подсчитываем уже размещенные мины
-	placedMines := 0
-	for i := 0; i < room.GameState.Rows; i++ {
-		for j := 0; j < room.GameState.Cols; j++ {
-			if !room.GameState.Board[i][j].IsRevealed && room.GameState.Board[i][j].IsMine {
-				placedMines++
-			}
-		}
-	}
-
-	remainingMines := room.GameState.Mines - placedMines
-	if remainingMines < 0 {
-		remainingMines = 0
-	}
-
-	solver := MakeSolver(lm, remainingMines)
-	boundaryIdx := lm.GetBoundaryIndex(clickRow, clickCol)
-	hasSafeCells := solver.HasSafeCells()
-
-	var shape *MineShape
-	if boundaryIdx == -1 {
-		outsideIsSafe := len(lm.GetBoundary()) == 0 || solver.OutsideIsSafe() || (!hasSafeCells && solver.OutsideCanBeSafe())
-		if outsideIsSafe {
-			shape = solver.AnyShapeWithOneEmpty()
-			if shape != nil {
-				return shape.MineGridWithEmpty(clickRow, clickCol)
-			}
-		} else {
-			shape = solver.AnyShapeWithRemaining()
-			if shape != nil {
-				return shape.MineGridWithMine(clickRow, clickCol)
-			}
-		}
-	} else {
-		canBeSafe := solver.CanBeSafe(boundaryIdx)
-		canBeDangerous := solver.CanBeDangerous(boundaryIdx)
-		if canBeSafe && (!canBeDangerous || !hasSafeCells) {
-			shape = solver.AnySafeShape(boundaryIdx)
-		} else {
-			shape = solver.AnyDangerousShape(boundaryIdx)
-		}
-	}
-
-	if shape != nil {
-		return shape.MineGrid()
-	}
-
-	// Fallback: случайное размещение
-	mineGrid := make([][]bool, room.GameState.Rows)
-	for i := 0; i < room.GameState.Rows; i++ {
-		mineGrid[i] = make([]bool, room.GameState.Cols)
-	}
-
-	minesToPlace := remainingMines
-	if minesToPlace == 0 && room.GameState.Mines > 0 {
-		minesToPlace = room.GameState.Mines
-	}
-
-	// Используем seed для детерминированной генерации
-	seed := room.GameState.Seed
-	if seed == "" {
-		seed = utils.GenerateUUID() // Fallback seed если не установлен
-	}
-	seedInt64 := utils.UUIDToInt64(seed) + int64(clickRow*room.GameState.Cols+clickCol)
-	rng := rand.New(rand.NewSource(seedInt64))
-
-	placed := 0
-	attempts := 0
-	maxAttempts := room.GameState.Rows * room.GameState.Cols * 2
-	for placed < minesToPlace && attempts < maxAttempts {
-		row := rng.Intn(room.GameState.Rows)
-		col := rng.Intn(room.GameState.Cols)
-		attempts++
-
-		if (row == clickRow && col == clickCol) || room.GameState.Board[row][col].IsRevealed {
-			continue
-		}
-
-		if !mineGrid[row][col] {
-			mineGrid[row][col] = true
-			placed++
-		}
-	}
-
-	return mineGrid
 }
