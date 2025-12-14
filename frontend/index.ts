@@ -7,6 +7,8 @@ import RouterPage from '@/routerPage.vue'
 import MainPage from '@/components/pages/main/MainPage.vue'
 import LoginPage from '@/components/pages/auth/LoginPage.vue'
 import RegisterPage from '@/components/pages/auth/RegisterPage.vue'
+import ForgotPasswordPage from '@/components/pages/auth/ForgotPasswordPage.vue'
+import ResetPasswordPage from '@/components/pages/auth/ResetPasswordPage.vue'
 import ProfilePage from '@/components/pages/profile/ProfilePage.vue'
 import RatingPage from '@/components/pages/rating/RatingPage.vue'
 import FAQPage from '@/components/pages/faq/FAQPage.vue'
@@ -31,6 +33,26 @@ const routes: RouteRecordRaw[] = [
       title: 'Регистрация - Сапер Онлайн',
       description: 'Зарегистрируйтесь, чтобы играть в Сапера онлайн и сохранять свой прогресс',
       keywords: 'регистрация, создать аккаунт, сапер онлайн, зарегистрироваться'
+    }
+  },
+  {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: ForgotPasswordPage,
+    meta: {
+      title: 'Восстановление пароля - Сапер Онлайн',
+      description: 'Восстановите доступ к своему аккаунту',
+      keywords: 'восстановление пароля, забыл пароль, сброс пароля'
+    }
+  },
+  {
+    path: '/reset-password',
+    name: 'ResetPassword',
+    component: ResetPasswordPage,
+    meta: {
+      title: 'Сброс пароля - Сапер Онлайн',
+      description: 'Установите новый пароль для вашего аккаунта',
+      keywords: 'сброс пароля, новый пароль'
     }
   },
   {
@@ -121,7 +143,7 @@ router.beforeEach(async (to, from, next) => {
   const isAuthenticated = authStore.isAuthenticated
 
   // Публичные маршруты (доступны без авторизации)
-  const publicRoutes = ['/login', '/register', '/']
+  const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/']
   const isPublicRoute = publicRoutes.includes(to.path) || to.path.startsWith('/room/')
 
   // Защищенные маршруты (требуют авторизации)

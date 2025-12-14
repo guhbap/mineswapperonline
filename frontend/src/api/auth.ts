@@ -66,3 +66,46 @@ export async function getMe(): Promise<User> {
   return response.data
 }
 
+export interface RequestPasswordResetRequest {
+  email: string
+}
+
+export interface RequestPasswordResetResponse {
+  status: string
+  message: string
+  resetToken?: string // Только для разработки!
+  expiresIn?: string
+  note?: string
+}
+
+export async function requestPasswordReset(data: RequestPasswordResetRequest): Promise<RequestPasswordResetResponse> {
+  const response = await axios.post<RequestPasswordResetResponse>(`${API_BASE}/auth/request-password-reset`, data)
+  return response.data
+}
+
+export interface ResetPasswordRequest {
+  token: string
+  newPassword: string
+}
+
+export interface ResetPasswordResponse {
+  status: string
+  message: string
+}
+
+export async function resetPassword(data: ResetPasswordRequest): Promise<ResetPasswordResponse> {
+  const response = await axios.post<ResetPasswordResponse>(`${API_BASE}/auth/reset-password`, data)
+  return response.data
+}
+
+export interface ResetPasswordByAdminRequest {
+  username?: string
+  email?: string
+  newPassword: string
+}
+
+export async function resetPasswordByAdmin(data: ResetPasswordByAdminRequest): Promise<ResetPasswordResponse> {
+  const response = await axios.post<ResetPasswordResponse>(`${API_BASE}/auth/reset-password-admin`, data)
+  return response.data
+}
+

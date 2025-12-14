@@ -1,0 +1,227 @@
+<template>
+  <div class="auth-page">
+    <div class="auth-page__theme-toggle">
+      <ThemeToggle />
+    </div>
+    <div class="auth-container">
+      <h1 class="auth-title">Сброс пароля</h1>
+      <form @submit.prevent="handleSubmit" class="auth-form">
+        <TextInput
+          v-model="newPassword"
+          label="Новый пароль"
+          placeholder="Введите новый пароль (минимум 6 символов)"
+          name="newPassword"
+          type="password"
+          :disabled="loading"
+        />
+        <TextInput
+          v-model="confirmPassword"
+          label="Подтвердите пароль"
+          placeholder="Повторите новый пароль"
+          name="confirmPassword"
+          type="password"
+          :disabled="loading"
+        />
+        <div v-if="error" class="error-message">{{ error }}</div>
+        <div v-if="success" class="success-message">
+          <p>{{ success }}</p>
+          <router-link to="/login" class="auth-link">Перейти к входу</router-link>
+        </div>
+        <button type="submit" class="auth-button" :disabled="loading || success">
+          {{ loading ? 'Сброс...' : 'Сбросить пароль' }}
+        </button>
+        <div class="auth-footer">
+          <span>Вспомнили пароль?</span>
+          <router-link to="/login" class="auth-link">Войти</router-link>
+        </div>
+      </form>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { resetPassword } from '@/api/auth'
+import TextInput from '@/components/inputs/TextInput.vue'
+import ThemeToggle from '@/components/ThemeToggle.vue'
+import { getErrorMessage } from '@/utils/errorHandler'
+
+const route = useRoute()
+const router = useRouter()
+
+const token = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+const loading = ref(false)
+const error = ref<string | null>(null)
+const success = ref<string | null>(null)
+
+onMounted(() => {
+  const tokenParam = route.query.token as string
+  if (!tokenParam) {
+    error.value = 'Токен сброса пароля не найден. Пожалуйста, запросите новый.'
+  } else {
+    token.value = tokenParam
+  }
+})
+
+const handleSubmit = async () => {
+  error.value = null
+  success.value = null
+
+  if (!token.value) {
+    error.value = 'Токен сброса пароля не найден'
+    return
+  }
+
+  if (!newPassword.value || !confirmPassword.value) {
+    error.value = 'Все поля обязательны для заполнения'
+    return
+  }
+
+  if (newPassword.value.length < 6) {
+    error.value = 'Пароль должен содержать минимум 6 символов'
+    return
+  }
+
+  if (newPassword.value !== confirmPassword.value) {
+    error.value = 'Пароли не совпадают'
+    return
+  }
+
+  loading.value = true
+
+  try {
+    await resetPassword({
+      token: token.value,
+      newPassword: newPassword.value
+    })
+    success.value = 'Пароль успешно изменен! Теперь вы можете войти с новым паролем.'
+    // Перенаправляем на страницу входа через 3 секунды
+    setTimeout(() => {
+      router.push('/login')
+    }, 3000)
+  } catch (err: any) {
+    error.value = getErrorMessage(err, 'Ошибка сброса пароля')
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
+<style scoped>
+.auth-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 2rem;
+  background: var(--bg-primary, #f9fafb);
+  position: relative;
+}
+
+.auth-page__theme-toggle {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
+}
+
+.auth-container {
+  width: 100%;
+  max-width: 400px;
+  background: var(--bg-secondary, #ffffff);
+  padding: 2.5rem;
+  border-radius: 1rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.auth-title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 2rem;
+  text-align: center;
+  color: var(--text-primary, #111827);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.error-message {
+  color: #ef4444;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: #fee2e2;
+  border-radius: 0.5rem;
+}
+
+.success-message {
+  color: #22c55e;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: #dcfce7;
+  border-radius: 0.5rem;
+}
+
+.success-message .auth-link {
+  display: inline-block;
+  margin-top: 0.75rem;
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+.success-message .auth-link:hover {
+  color: #764ba2;
+}
+
+.auth-button {
+  width: 100%;
+  padding: 0.875rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  margin-top: 1rem;
+}
+
+.auth-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.auth-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-footer {
+  margin-top: 1.5rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--text-secondary, #6b7280);
+}
+
+.auth-link {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 600;
+  margin-left: 0.5rem;
+  transition: color 0.2s;
+}
+
+.auth-link:hover {
+  color: #764ba2;
+}
+</style>
+

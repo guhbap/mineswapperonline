@@ -2131,7 +2131,7 @@ func main() {
 	}
 
 	profileHandler := handlers.NewProfileHandler(db)
-	authHandler := handlers.NewAuthHandler(db, profileHandler)
+	authHandler := handlers.NewAuthHandler(db, profileHandler, cfg)
 	roomHandler := handlers.NewRoomHandler(roomManager)
 
 	// Создаем WebSocket Manager и Game Service
@@ -2153,6 +2153,8 @@ func main() {
 	r.Use(middleware.OptionalAuthMiddleware)
 	r.HandleFunc("/auth/register", authHandler.Register).Methods("POST", "OPTIONS")
 	r.HandleFunc("/auth/login", authHandler.Login).Methods("POST", "OPTIONS")
+	r.HandleFunc("/auth/request-password-reset", authHandler.RequestPasswordReset).Methods("POST", "OPTIONS")
+	r.HandleFunc("/auth/reset-password", authHandler.ResetPasswordByToken).Methods("POST", "OPTIONS")
 	r.HandleFunc("/ws", wsManager.HandleWebSocket)
 	r.HandleFunc("/rooms", roomHandler.GetRooms).Methods("GET", "OPTIONS")
 	r.HandleFunc("/rooms", roomHandler.CreateRoom).Methods("POST", "OPTIONS")
@@ -2166,6 +2168,7 @@ func main() {
 	protected.HandleFunc("/profile/activity", profileHandler.UpdateActivity).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/profile/color", profileHandler.UpdateColor).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/profile/change-password", profileHandler.ChangePassword).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/auth/reset-password-admin", authHandler.ResetPasswordByAdmin).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/rooms/{id}", roomHandler.UpdateRoom).Methods("PUT", "OPTIONS")
 
 	// Публичный маршрут для просмотра профиля по username

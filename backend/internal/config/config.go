@@ -12,6 +12,7 @@ type Config struct {
 	DbUser      string
 	DbPassword  string
 	NeedMigrate bool
+	AdminEmail  string // Email администратора, который может сбрасывать пароли
 }
 
 func ReadConfig() (*Config, error) {
@@ -26,6 +27,7 @@ func ReadConfig() (*Config, error) {
 	dbUser := envconfig.Get("POSTGRES_USER", "postgres")
 	dbPassword := envconfig.Get("POSTGRES_PASSWORD", "postgres")
 	needMigrate := envconfig.GetBool("NEED_MIGRATE", true)
+	adminEmail := envconfig.Get("ADMIN_EMAIL", "")
 	return &Config{
 		Port:        port,
 		DbHost:      dbHost,
@@ -34,5 +36,6 @@ func ReadConfig() (*Config, error) {
 		DbUser:      dbUser,
 		DbPassword:  dbPassword,
 		NeedMigrate: needMigrate,
+		AdminEmail:  adminEmail,
 	}, nil
 }
