@@ -83,4 +83,43 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* Глобальные стили для гиперссылок */
+a {
+  color: #667eea;
+  text-decoration: none;
+  transition: color 0.2s ease, opacity 0.2s ease;
+  font-weight: 500;
+}
+
+a:hover {
+  color: #764ba2;
+  text-decoration: underline;
+}
+
+a:visited {
+  color: #667eea;
+}
+
+a:active {
+  color: #764ba2;
+  opacity: 0.8;
+}
+
+/* Стили для ссылок в темной теме */
+[data-theme="dark"] a {
+  color: #818cf8;
+}
+
+[data-theme="dark"] a:hover {
+  color: #a78bfa;
+}
+
+[data-theme="dark"] a:visited {
+  color: #818cf8;
+}
+
+[data-theme="dark"] a:active {
+  color: #a78bfa;
+}
 </style>
