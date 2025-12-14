@@ -207,11 +207,21 @@ func (m *Manager) handleMessages(conn *websocket.Conn, room *game.Room, player *
 		// Обрабатываем бинарные сообщения (protobuf)
 		if messageType == websocket.BinaryMessage {
 			log.Printf("[WS IN] Игрок %s: получено бинарное сообщение, размер=%d байт", playerID, len(data))
+			previewLen := 20
+			if len(data) < previewLen {
+				previewLen = len(data)
+			}
+			log.Printf("[WS IN] Игрок %s: первые %d байт данных: %x", playerID, previewLen, data[:previewLen])
 			msg, parseErr = decodeClientMessageProtobuf(data)
 			if parseErr != nil {
 				log.Printf("[WS IN] Ошибка декодирования protobuf сообщения от игрока %s: %v", playerID, parseErr)
 				continue
 			}
+			if msg == nil {
+				log.Printf("[WS IN] КРИТИЧЕСКАЯ ОШИБКА: decodeClientMessageProtobuf вернул nil без ошибки для игрока %s", playerID)
+				continue
+			}
+			log.Printf("[WS IN] Игрок %s: сообщение успешно декодировано, type=%s", playerID, msg.Type)
 		} else if messageType == websocket.TextMessage {
 			// Fallback: парсим JSON сообщение (для обратной совместимости)
 			log.Printf("[WS IN] Игрок %s: получено текстовое сообщение, размер=%d байт", playerID, len(data))
@@ -231,6 +241,8 @@ func (m *Manager) handleMessages(conn *websocket.Conn, room *game.Room, player *
 			continue
 		}
 
+		log.Printf("[WS IN] Игрок %s: сообщение декодировано, type=%s, переходим к обработке", playerID, msg.Type)
+
 		// Детальное логирование входящих сообщений
 		if msg.Type == "cellClick" && msg.CellClick != nil {
 			log.Printf("[WS IN] Игрок %s: cellClick - row=%d, col=%d, flag=%v", playerID, msg.CellClick.Row, msg.CellClick.Col, msg.CellClick.Flag)
@@ -245,6 +257,7 @@ func (m *Manager) handleMessages(conn *websocket.Conn, room *game.Room, player *
 			log.Printf("[WS IN] Игрок %s: тип=%s", playerID, msg.Type)
 		}
 
+		log.Printf("[WS IN] Игрок %s: обработка сообщения type=%s в switch", playerID, msg.Type)
 		switch msg.Type {
 		case "ping":
 			m.handlePing(player, playerID)
@@ -255,12 +268,21 @@ func (m *Manager) handleMessages(conn *websocket.Conn, room *game.Room, player *
 		case "cursor":
 			m.handleCursor(room, player, playerID, msg)
 		case "cellClick":
+			log.Printf("[WS IN] Игрок %s: вызов handleCellClick", playerID)
 			m.handleCellClick(room, playerID, msg)
+			log.Printf("[WS IN] Игрок %s: handleCellClick завершен", playerID)
 		case "hint":
+			log.Printf("[WS IN] Игрок %s: вызов handleHint", playerID)
 			m.handleHint(room, playerID, msg)
+			log.Printf("[WS IN] Игрок %s: handleHint завершен", playerID)
 		case "newGame":
+			log.Printf("[WS IN] Игрок %s: вызов handleNewGame", playerID)
 			m.handleNewGame(room, roomID)
+			log.Printf("[WS IN] Игрок %s: handleNewGame завершен", playerID)
+		default:
+			log.Printf("[WS IN] Игрок %s: неизвестный тип сообщения в switch: %s", playerID, msg.Type)
 		}
+		log.Printf("[WS IN] Игрок %s: обработка сообщения завершена, продолжаем цикл", playerID)
 	}
 }
 

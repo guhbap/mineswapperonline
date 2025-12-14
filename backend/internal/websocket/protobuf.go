@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"fmt"
+	"log"
 	"minesweeperonline/internal/game"
 	pb "minesweeperonline/proto"
 
@@ -154,15 +155,26 @@ type CellUpdate struct {
 func decodeClientMessageProtobuf(data []byte) (*game.Message, error) {
 	var clientMsg pb.ClientMessage
 	if err := proto.Unmarshal(data, &clientMsg); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ошибка unmarshal protobuf: %w", err)
 	}
 
 	msg := &game.Message{}
+
+	// Детальное логирование для диагностики
+	log.Printf("[DECODE] Декодирование ClientMessage: nickname=%v, cursor=%v, cellClick=%v, hint=%v, newGame=%v, chat=%v, ping=%v",
+		clientMsg.GetNickname() != "",
+		clientMsg.GetCursor() != nil,
+		clientMsg.GetCellClick() != nil,
+		clientMsg.GetHint() != nil,
+		clientMsg.GetNewGame() != nil,
+		clientMsg.GetChat() != nil,
+		clientMsg.GetPing() != nil)
 
 	switch {
 	case clientMsg.GetNickname() != "":
 		msg.Type = "nickname"
 		msg.Nickname = clientMsg.GetNickname()
+		log.Printf("[DECODE] Определен тип: nickname=%s", msg.Nickname)
 
 	case clientMsg.GetCursor() != nil:
 		cursorProto := clientMsg.GetCursor()
@@ -172,6 +184,7 @@ func decodeClientMessageProtobuf(data []byte) (*game.Message, error) {
 			X:        cursorProto.X,
 			Y:        cursorProto.Y,
 		}
+		log.Printf("[DECODE] Определен тип: cursor, x=%.2f, y=%.2f", msg.Cursor.X, msg.Cursor.Y)
 
 	case clientMsg.GetCellClick() != nil:
 		clickProto := clientMsg.GetCellClick()
@@ -181,6 +194,7 @@ func decodeClientMessageProtobuf(data []byte) (*game.Message, error) {
 			Col:  int(clickProto.Col),
 			Flag: clickProto.Flag,
 		}
+		log.Printf("[DECODE] Определен тип: cellClick, row=%d, col=%d, flag=%v", msg.CellClick.Row, msg.CellClick.Col, msg.CellClick.Flag)
 
 	case clientMsg.GetHint() != nil:
 		hintProto := clientMsg.GetHint()
@@ -189,9 +203,11 @@ func decodeClientMessageProtobuf(data []byte) (*game.Message, error) {
 			Row: int(hintProto.Row),
 			Col: int(hintProto.Col),
 		}
+		log.Printf("[DECODE] Определен тип: hint, row=%d, col=%d", msg.Hint.Row, msg.Hint.Col)
 
 	case clientMsg.GetNewGame() != nil:
 		msg.Type = "newGame"
+		log.Printf("[DECODE] Определен тип: newGame")
 
 	case clientMsg.GetChat() != nil:
 		chatProto := clientMsg.GetChat()
@@ -203,14 +219,18 @@ func decodeClientMessageProtobuf(data []byte) (*game.Message, error) {
 			Row:      int(chatProto.Row),
 			Col:      int(chatProto.Col),
 		}
+		log.Printf("[DECODE] Определен тип: chat, text=%s", msg.Chat.Text)
 
 	case clientMsg.GetPing() != nil:
 		msg.Type = "ping"
+		log.Printf("[DECODE] Определен тип: ping")
 
 	default:
+		log.Printf("[DECODE] ОШИБКА: неизвестный тип сообщения в ClientMessage")
 		return nil, fmt.Errorf("unknown message type in ClientMessage")
 	}
 
+	log.Printf("[DECODE] Сообщение успешно декодировано: type=%s", msg.Type)
 	return msg, nil
 }
 
