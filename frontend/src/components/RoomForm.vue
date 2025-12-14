@@ -63,7 +63,7 @@
       </div>
     </div>
 
-    <div class="form-group">
+    <div v-if="currentTemplate === 'custom'" class="form-group">
       <label class="form-label">Размер поля</label>
       <div class="form-row">
         <div class="form-col">
@@ -97,7 +97,7 @@
       </div>
     </div>
 
-    <div class="form-group">
+    <div v-if="currentTemplate === 'custom'" class="form-group">
       <label class="form-label">
         Количество мин: <span class="range-value">{{ form.mines }}</span>
       </label>
@@ -111,6 +111,17 @@
         @input="checkTemplate"
       />
       <div class="form-hint">Максимум: {{ maxMines }}</div>
+      <div class="difficulty-info">
+        <span class="difficulty-label">Сложность поля:</span>
+        <span class="difficulty-value">{{ difficulty.toFixed(2) }}</span>
+      </div>
+    </div>
+
+    <div v-else class="form-group">
+      <div class="difficulty-info">
+        <span class="difficulty-label">Текущие параметры:</span>
+        <span class="difficulty-value">{{ form.rows }}×{{ form.cols }}, {{ form.mines }} мин</span>
+      </div>
       <div class="difficulty-info">
         <span class="difficulty-label">Сложность поля:</span>
         <span class="difficulty-value">{{ difficulty.toFixed(2) }}</span>
