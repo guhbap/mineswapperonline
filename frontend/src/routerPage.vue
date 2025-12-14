@@ -161,6 +161,13 @@ const handleMainClick = () => {
   background-clip: text;
 }
 
+[data-theme="dark"] .logo-text {
+  background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
 .nav__links {
   display: flex;
   gap: 0.5rem;
@@ -189,16 +196,29 @@ const handleMainClick = () => {
   font-size: 0.9375rem;
 }
 
+/* Улучшаем читаемость в темной теме */
+[data-theme="dark"] .nav__link {
+  color: var(--text-primary);
+}
+
 .nav__link:hover {
   color: #667eea;
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
   transform: translateY(-1px);
 }
 
+[data-theme="dark"] .nav__link:hover {
+  color: #818cf8;
+}
+
 .nav__link--active {
   color: #667eea;
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+}
+
+[data-theme="dark"] .nav__link--active {
+  color: #818cf8;
 }
 
 .nav__link--active::after {
@@ -213,6 +233,10 @@ const handleMainClick = () => {
   border-radius: 2px;
 }
 
+[data-theme="dark"] .nav__link--active::after {
+  background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+}
+
 .nav__link-icon {
   font-size: 1rem;
   line-height: 1;
@@ -223,6 +247,10 @@ const handleMainClick = () => {
   font-size: 0.875rem;
   padding: 0.625rem 1rem;
   color: var(--text-secondary);
+}
+
+[data-theme="dark"] .nav__link--auth {
+  color: var(--text-primary);
 }
 
 .nav__link--register {
