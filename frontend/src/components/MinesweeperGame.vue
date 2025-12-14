@@ -240,11 +240,11 @@
         >
           <strong>{{ gameState.ln }}</strong>
         </router-link> подорвался на мине
-        <IconMineOld class="mine-inline-icon" />
+        <IconMine class="mine-inline-icon" />
       </p>
       <p v-else>
         Вы подорвались на мине
-        <IconMineOld class="mine-inline-icon" />
+        <IconMine class="mine-inline-icon" />
       </p>
       <button @click="handleNewGame" class="game-message__button">
         Новая игра
@@ -301,7 +301,6 @@ import { useAuthStore } from '@/stores/auth'
 import { calculateDifficulty, calculateGameRating, isRatingEligible } from '@/utils/ratingCalculator'
 import Chat from '@/components/Chat.vue'
 import IconMine from '@/components/icons/IconMine.vue'
-import IconMineOld from '@/components/icons/IconMineOld.vue'
 import IconFlag from '@/components/icons/IconFlag.vue'
 import IconEye from '@/components/icons/IconEye.vue'
 import IconLightbulb from '@/components/icons/IconLightbulb.vue'

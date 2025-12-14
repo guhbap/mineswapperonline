@@ -211,7 +211,7 @@
               <div class="game-field">
                 <span class="game-field-size">{{ game.height }}×{{ game.width }}</span>
                 <span class="game-mines">
-                  <IconMineOld class="game-mines-icon" />
+                  <IconMine class="game-mines-icon" />
                   {{ game.mines }}
                 </span>
               </div>
@@ -262,7 +262,7 @@
                 <div class="game-field">
                   <span class="game-field-size">{{ game.height }}×{{ game.width }}</span>
                   <span class="game-mines">
-                  <IconMineOld class="game-mines-icon" />
+                  <IconMine class="game-mines-icon" />
                   {{ game.mines }}
                 </span>
                 </div>
@@ -317,9 +317,9 @@ import { resetPasswordByAdmin } from '@/api/auth'
 import { getErrorMessage } from '@/utils/errorHandler'
 import { calculateDifficulty } from '@/utils/ratingCalculator'
 import TextInput from '@/components/inputs/TextInput.vue'
-import IconMineOld from '@/components/icons/IconMineOld.vue'
 import IconClock from '@/components/icons/IconClock.vue'
 import IconSettings from '@/components/icons/IconSettings.vue'
+import IconMine from '@/components/icons/IconMine.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
