@@ -129,10 +129,10 @@ func IsRatingEligible(width, height, mines, gameTime float64) bool {
 	if cells <= 0 {
 		return false
 	}
-	// density := mines / cells
-	// if density < 0.1 {
-	// 	return false
-	// }
+	density := mines / cells
+	if density < 0.1 {
+		return false
+	}
 	return true
 }
 

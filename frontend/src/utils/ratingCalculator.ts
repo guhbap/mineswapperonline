@@ -34,7 +34,7 @@ export function calculateGameRating(
   const timeFactor = Math.log(gameTime + 1)
   if (timeFactor <= 0) return 0
   let rating = K * d / timeFactor
-  
+
   // Применяем множители
   if (chording) {
     rating = rating * 0.8
@@ -42,7 +42,7 @@ export function calculateGameRating(
   if (quickStart) {
     rating = rating * 0.9
   }
-  
+
   return rating
 }
 

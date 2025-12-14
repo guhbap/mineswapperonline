@@ -260,11 +260,7 @@ const isRatedGame = computed(() => {
   // Если указан seed - игра нерейтинговая
   if (form.value.seed != null && form.value.seed !== '') return false
   // Проверяем минимальную плотность мин (10%)
-  const cells = form.value.cols * form.value.rows
-  if (cells <= 0) return false
-  // const density = form.value.mines / cells
-  // return density >= 0.1
-  return true
+  return isRatingEligible(form.value.cols, form.value.rows, form.value.mines, 20)
 })
 
 // Максимальный рейтинг при минимальном времени (0.1 секунды для расчета)
