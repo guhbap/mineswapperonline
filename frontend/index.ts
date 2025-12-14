@@ -108,8 +108,16 @@ const router = createRouter({
 })
 
 // Защита роутов и обновление мета-тегов
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
+  
+  // Если есть токен в localStorage, но пользователь еще не загружен, инициализируем store
+  const hasToken = localStorage.getItem('token')
+  if (hasToken && !authStore.user) {
+    // Дожидаемся инициализации перед проверкой авторизации
+    await authStore.init()
+  }
+  
   const isAuthenticated = authStore.isAuthenticated
 
   // Публичные маршруты (доступны без авторизации)
@@ -117,6 +125,7 @@ router.beforeEach((to, from, next) => {
   const isPublicRoute = publicRoutes.includes(to.path) || to.path.startsWith('/room/')
 
   // Защищенные маршруты (требуют авторизации)
+  // Проверяем только точное совпадение /profile, не /profile/:username
   const protectedRoutes = ['/profile']
   if (protectedRoutes.includes(to.path) && !isAuthenticated) {
     next('/login')
