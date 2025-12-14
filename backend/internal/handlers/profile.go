@@ -216,7 +216,7 @@ type GameParticipant struct {
 	Color    string
 }
 
-func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool, chording bool, quickStart bool, participants []GameParticipant) error {
+func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool, chording bool, quickStart bool, roomID string, seed int64, creatorID int, participants []GameParticipant) error {
 	// Если participants не передан, используем пустой слайс
 	if participants == nil {
 		participants = []GameParticipant{}
@@ -232,14 +232,17 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 	}
 
 	// Сохраняем игру в историю (для побед и поражений)
-	log.Printf("Сохранение игры в историю: userID=%d, размер=%dx%d, мины=%d, время=%.2f сек, won=%v",
-		userID, width, height, mines, gameTime, won)
+	log.Printf("Сохранение игры в историю: userID=%d, roomID=%s, размер=%dx%d, мины=%d, время=%.2f сек, seed=%d, creatorID=%d, won=%v",
+		userID, roomID, width, height, mines, gameTime, seed, creatorID, won)
 	gameHistory := models.UserGameHistory{
 		UserID:     userID,
+		RoomID:     roomID,
 		Width:      width,
 		Height:     height,
 		Mines:      mines,
 		GameTime:   gameTime,
+		Seed:       seed,
+		CreatorID:  creatorID,
 		Chording:   chording,
 		QuickStart: quickStart,
 		CreatedAt:  time.Now(),

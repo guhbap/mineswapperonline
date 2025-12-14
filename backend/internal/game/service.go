@@ -228,8 +228,14 @@ func (s *GameService) handleMineExplosion(room *Room, playerID string, userID in
 		room.Mu.RLock()
 		chording := room.Chording
 		quickStart := room.QuickStart
+		roomID := room.ID
+		creatorID := room.CreatorID
+		seed := int64(0)
+		if room.GameState != nil {
+			seed = room.GameState.Seed
+		}
 		room.Mu.RUnlock()
-		if err := s.resultRecorder.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, chording, quickStart, participants); err != nil {
+		if err := s.resultRecorder.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, chording, quickStart, roomID, seed, creatorID, participants); err != nil {
 			log.Printf("Ошибка записи результата игры: %v", err)
 		}
 	}
@@ -258,9 +264,15 @@ func (s *GameService) handleGameWin(room *Room) {
 	room.Mu.RLock()
 	chording := room.Chording
 	quickStart := room.QuickStart
+	roomID := room.ID
+	creatorID := room.CreatorID
+	seed := int64(0)
+	if room.GameState != nil {
+		seed = room.GameState.Seed
+	}
 	for _, p := range room.Players {
 		if p.ID != loserID && p.UserID > 0 && s.resultRecorder != nil {
-			if err := s.resultRecorder.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, participants); err != nil {
+			if err := s.resultRecorder.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, roomID, seed, creatorID, participants); err != nil {
 				log.Printf("Ошибка записи результата игры: %v", err)
 			}
 		}
@@ -361,12 +373,19 @@ func (s *GameService) determineMinePlacement(room *Room, clickRow, clickCol int)
 		minesToPlace = room.GameState.Mines
 	}
 
+	// Используем seed для детерминированной генерации
+	seed := room.GameState.Seed
+	if seed == 0 {
+		seed = time.Now().UnixNano() // Fallback seed если не установлен
+	}
+	rng := rand.New(rand.NewSource(seed + int64(clickRow*room.GameState.Cols+clickCol)))
+
 	placed := 0
 	attempts := 0
 	maxAttempts := room.GameState.Rows * room.GameState.Cols * 2
 	for placed < minesToPlace && attempts < maxAttempts {
-		row := rand.Intn(room.GameState.Rows)
-		col := rand.Intn(room.GameState.Cols)
+		row := rng.Intn(room.GameState.Rows)
+		col := rng.Intn(room.GameState.Cols)
 		attempts++
 
 		if (row == clickRow && col == clickCol) || room.GameState.Board[row][col].IsRevealed {

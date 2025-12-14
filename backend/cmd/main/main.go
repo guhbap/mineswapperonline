@@ -793,11 +793,17 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 									log.Printf("[MUTEX] handleCellClick (взрыв chording): разблокируем room.Mu.RUnlock() после сбора участников")
 									chording := room.Chording
 									quickStart := room.QuickStart
+									roomID := room.ID
+									creatorID := room.CreatorID
+									seed := int64(0)
+									if room.GameState != nil {
+										seed = room.GameState.Seed
+									}
 									room.Mu.RUnlock()
 									log.Printf("[MUTEX] handleCellClick (взрыв chording): room.Mu.RUnlock() разблокирован после сбора участников")
 
 									go func() {
-										if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, chording, quickStart, participants); err != nil {
+										if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, chording, quickStart, roomID, seed, creatorID, participants); err != nil {
 											log.Printf("Ошибка записи результата игры: %v", err)
 										}
 										// Сохраняем комнату в БД после проигрыша
@@ -870,11 +876,17 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 					log.Printf("[MUTEX] handleCellClick (chording победа): разблокируем room.Mu.RUnlock() после сбора участников")
 					chording := room.Chording
 					quickStart := room.QuickStart
+					roomID := room.ID
+					creatorID := room.CreatorID
+					seed := int64(0)
+					if room.GameState != nil {
+						seed = room.GameState.Seed
+					}
 					room.Mu.RUnlock()
 					log.Printf("[MUTEX] handleCellClick (chording победа): room.Mu.RUnlock() разблокирован после сбора участников")
 
 					go func() {
-						if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, participants); err != nil {
+						if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, roomID, seed, creatorID, participants); err != nil {
 							log.Printf("Ошибка записи результата игры: %v", err)
 						}
 					}()
@@ -912,13 +924,18 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 	}
 
 	// Для classic режима с QuickStart: делаем первую клетку нулевой
-	if gameMode == "classic" && isFirstClick && room.QuickStart {
-		log.Printf("handleCellClick: QuickStart включен, делаем первую клетку нулевой")
+	// НО только если не используется seed (seed == 0 означает что seed не был установлен или это старая игра)
+	if gameMode == "classic" && isFirstClick && room.QuickStart && room.GameState.Seed == 0 {
+		log.Printf("handleCellClick: QuickStart включен, делаем первую клетку нулевой (без seed)")
 		room.GameState.Mu.Unlock()
 		room.GameState.EnsureFirstClickSafe(row, col)
 		room.GameState.Mu.Lock()
 		// Обновляем ссылку на ячейку после перемещения мин
 		cell = &room.GameState.Board[row][col]
+	} else if gameMode == "classic" && isFirstClick && room.QuickStart && room.GameState.Seed != 0 {
+		log.Printf("handleCellClick: QuickStart включен, но используется seed=%d, не перемещаем мины", room.GameState.Seed)
+		// При использовании seed мины уже размещены так, чтобы первая клетка была безопасной (если QuickStart был включен при создании)
+		// Если первая клетка оказалась миной - это означает что QuickStart не был учтен при генерации, но мы не можем переместить мины без нарушения seed
 	}
 
 	// В режимах training и fair мины размещаются динамически при клике
@@ -1063,10 +1080,16 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 			log.Printf("[MUTEX] handleMineExplosion: разблокируем room.Mu.RUnlock() после сбора участников")
 			chording := room.Chording
 			quickStart := room.QuickStart
+			roomID := room.ID
+			creatorID := room.CreatorID
+			seed := int64(0)
+			if room.GameState != nil {
+				seed = room.GameState.Seed
+			}
 			room.Mu.RUnlock()
 			log.Printf("[MUTEX] handleMineExplosion: room.Mu.RUnlock() разблокирован после сбора участников")
 
-			if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, chording, quickStart, participants); err != nil {
+			if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, chording, quickStart, roomID, seed, creatorID, participants); err != nil {
 				log.Printf("Ошибка записи результата игры: %v", err)
 			}
 		}
@@ -1189,10 +1212,16 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 				// Записываем победу для всех игроков в комнате, которые не проиграли
 				chording := room.Chording
 				quickStart := room.QuickStart
+				roomID := room.ID
+				creatorID := room.CreatorID
+				seed := int64(0)
+				if room.GameState != nil {
+					seed = room.GameState.Seed
+				}
 				for _, p := range room.Players {
 					// Записываем победу только для игроков, которые не проиграли
 					if p.ID != loserID && p.UserID > 0 && s.profileHandler != nil {
-						if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, participants); err != nil {
+						if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, roomID, seed, creatorID, participants); err != nil {
 							log.Printf("Ошибка записи результата игры: %v", err)
 						}
 					}
@@ -1474,9 +1503,15 @@ func (s *Server) handleHint(room *game.Room, playerID string, hint *Hint) {
 				// Записываем победу для всех игроков в комнате, которые не проиграли
 				chording := room.Chording
 				quickStart := room.QuickStart
+				roomID := room.ID
+				creatorID := room.CreatorID
+				seed := int64(0)
+				if room.GameState != nil {
+					seed = room.GameState.Seed
+				}
 				for _, p := range room.Players {
 					if p.ID != loserID && p.UserID > 0 && s.profileHandler != nil {
-						if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, participants); err != nil {
+						if err := s.profileHandler.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, roomID, seed, creatorID, participants); err != nil {
 							log.Printf("Ошибка записи результата игры: %v", err)
 						}
 					}

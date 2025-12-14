@@ -3,6 +3,7 @@ package game
 import (
 	"log"
 	mathrand "math/rand"
+	"time"
 )
 
 // NewGameState создает новое состояние игры
@@ -12,10 +13,14 @@ func NewGameState(rows, cols, mines int, gameMode string) *GameState {
 	if gameMode == "" {
 		gameMode = "classic"
 	}
+	
+	// Генерируем seed для воспроизводимости
+	seed := time.Now().UnixNano()
 	gs := &GameState{
 		Rows:          rows,
 		Cols:          cols,
 		Mines:         mines,
+		Seed:          seed,
 		GameOver:      false,
 		GameWon:       false,
 		Revealed:      0,
@@ -25,7 +30,7 @@ func NewGameState(rows, cols, mines int, gameMode string) *GameState {
 		Board:         make([][]Cell, rows),
 		FlagSetInfo:   make(map[int]FlagInfo),
 	}
-	log.Printf("NewGameState: структура создана, инициализируем поле")
+	log.Printf("NewGameState: структура создана, seed=%d, инициализируем поле", seed)
 
 	// Инициализация поля
 	for i := range gs.Board {
@@ -36,11 +41,13 @@ func NewGameState(rows, cols, mines int, gameMode string) *GameState {
 	// В режимах training и fair мины НЕ размещаются заранее - они определяются динамически при клике
 	// В классическом режиме размещаем мины случайно
 	if gameMode == "classic" {
-		log.Printf("NewGameState: размещаем мины в классическом режиме")
+		log.Printf("NewGameState: размещаем мины в классическом режиме с seed=%d", seed)
+		// Используем seed для генерации
+		rng := mathrand.New(mathrand.NewSource(seed))
 		minesPlaced := 0
 		for minesPlaced < mines {
-			row := mathrand.Intn(rows)
-			col := mathrand.Intn(cols)
+			row := rng.Intn(rows)
+			col := rng.Intn(cols)
 			if !gs.Board[row][col].IsMine {
 				gs.Board[row][col].IsMine = true
 				minesPlaced++
@@ -84,6 +91,7 @@ func (gs *GameState) Copy() *GameState {
 		Rows:          gs.Rows,
 		Cols:          gs.Cols,
 		Mines:         gs.Mines,
+		Seed:          gs.Seed,
 		GameOver:      gs.GameOver,
 		GameWon:       gs.GameWon,
 		Revealed:      gs.Revealed,
@@ -173,11 +181,12 @@ func (gs *GameState) EnsureFirstClickSafe(firstRow, firstCol int) {
 	}
 
 	// Перемещаем мины в случайные свободные места
+	rng := mathrand.New(mathrand.NewSource(gs.Seed))
 	for range minesToMove {
 		attempts := 0
 		for attempts < 100 {
-			newRow := mathrand.Intn(gs.Rows)
-			newCol := mathrand.Intn(gs.Cols)
+			newRow := rng.Intn(gs.Rows)
+			newCol := rng.Intn(gs.Cols)
 
 			if !gs.isInRadius(newRow, newCol, firstRow, firstCol, 1) &&
 				!gs.Board[newRow][newCol].IsMine {
