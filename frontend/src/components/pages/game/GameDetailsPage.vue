@@ -36,6 +36,12 @@
               {{ gameDetails.rating > 0 ? `+${Math.round(gameDetails.rating)}` : '—' }}
             </span>
           </div>
+          <div v-if="!gameDetails.won && possibleRating > 0" class="detail-item">
+            <span class="detail-label">Возможный рейтинг:</span>
+            <span class="detail-value detail-value--possible-rating">
+              +{{ Math.round(possibleRating) }}
+            </span>
+          </div>
           <div class="detail-item">
             <span class="detail-label">Время начала:</span>
             <span class="detail-value">{{ formatDateTime(gameDetails.startTime) }}</span>
@@ -60,6 +66,10 @@
           <div class="detail-item">
             <span class="detail-label">Плотность:</span>
             <span class="detail-value">{{ calculateDensity() }}%</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Сложность:</span>
+            <span class="detail-value detail-value--difficulty">{{ formatDifficulty() }}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">Seed:</span>
@@ -129,9 +139,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { getGameDetails, type GameDetails } from '@/api/profile'
+import { calculateDifficulty, calculateGameRating, isRatingEligible } from '@/utils/ratingCalculator'
 import IconTrophy from '@/components/icons/IconTrophy.vue'
 import IconExplosion from '@/components/icons/IconExplosion.vue'
 
@@ -197,6 +208,43 @@ function calculateDensity(): number {
   const totalCells = gameDetails.value.width * gameDetails.value.height
   return Math.round((gameDetails.value.mines / totalCells) * 100 * 100) / 100
 }
+
+function formatDifficulty(): string {
+  if (!gameDetails.value) return '—'
+  const difficulty = calculateDifficulty(
+    gameDetails.value.width,
+    gameDetails.value.height,
+    gameDetails.value.mines
+  )
+  return difficulty.toFixed(2)
+}
+
+const possibleRating = computed(() => {
+  if (!gameDetails.value || gameDetails.value.won) return 0
+  
+  // Если игра имеет кастомный seed, она нерейтинговая
+  if (gameDetails.value.hasCustomSeed) return 0
+  
+  // Проверяем, была ли игра рейтинговой (плотность >= 10%)
+  const eligible = isRatingEligible(
+    gameDetails.value.width,
+    gameDetails.value.height,
+    gameDetails.value.mines,
+    gameDetails.value.duration
+  )
+  
+  if (!eligible) return 0
+  
+  // Рассчитываем возможный рейтинг при победе с текущим временем
+  return calculateGameRating(
+    gameDetails.value.width,
+    gameDetails.value.height,
+    gameDetails.value.mines,
+    gameDetails.value.duration,
+    gameDetails.value.chording,
+    gameDetails.value.quickStart
+  )
+})
 </script>
 
 <style scoped>
@@ -325,6 +373,18 @@ function calculateDensity(): number {
   color: #667eea;
   font-weight: 700;
   font-size: 1.125rem;
+}
+
+.detail-value--possible-rating {
+  color: #f59e0b;
+  font-weight: 600;
+  font-size: 1rem;
+  font-style: italic;
+}
+
+.detail-value--difficulty {
+  color: #8b5cf6;
+  font-weight: 600;
 }
 
 .detail-value--seed {
