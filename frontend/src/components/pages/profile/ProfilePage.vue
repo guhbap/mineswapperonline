@@ -125,11 +125,19 @@
               </div>
             </div>
             <div class="game-rating">
-              <div class="rating-gain" v-if="game.rating > 0">
-                +{{ Math.round(game.rating) }}
+              <div v-if="game.rating > 0" class="rating-details">
+                <div class="rating-gain">
+                  +{{ Math.round(game.ratingContributed) }}
+                </div>
+                <div class="rating-label">засчитано</div>
+                <div class="rating-percent">
+                  {{ Math.round(game.ratingPercent) }}%
+                </div>
+                <div class="rating-base" v-if="game.ratingContributed !== game.rating">
+                  (из {{ Math.round(game.rating) }})
+                </div>
               </div>
-              <div class="rating-label" v-if="game.rating > 0">рейтинг</div>
-              <div class="rating-label" v-else style="color: var(--text-secondary);">—</div>
+              <div v-else class="rating-label" style="color: var(--text-secondary);">—</div>
             </div>
           </div>
         </div>
@@ -786,14 +794,42 @@ onMounted(() => {
 
 .game-rating {
   text-align: right;
-  min-width: 120px;
+  min-width: 140px;
+}
+
+.rating-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
 }
 
 .rating-gain {
   font-size: 1.25rem;
   font-weight: 700;
   color: #22c55e;
-  margin-bottom: 0.25rem;
+  line-height: 1.2;
+}
+
+.rating-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.rating-percent {
+  font-size: 0.875rem;
+  color: #667eea;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.rating-base {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+  line-height: 1.2;
+  opacity: 0.7;
 }
 
 .rating-change {

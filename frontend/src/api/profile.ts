@@ -63,6 +63,8 @@ export interface TopGame {
   mines: number
   gameTime: number
   rating: number
+  ratingPercent: number  // Процент засчитанного рейтинга (100%, 95%, 90.25% и т.д.)
+  ratingContributed: number  // Конкретно полученный рейтинг (рейтинг * коэффициент)
   won: boolean
   createdAt: string
 }

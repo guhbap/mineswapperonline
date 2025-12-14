@@ -566,14 +566,16 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 
 	// Получаем все игры пользователя для расчета рейтинга
 	type GameHistory struct {
-		ID        int     `json:"id"`
-		Width     int     `json:"width"`
-		Height    int     `json:"height"`
-		Mines     int     `json:"mines"`
-		GameTime  float64 `json:"gameTime"`
-		Rating    float64 `json:"rating"`
-		Won       bool    `json:"won"`
-		CreatedAt string  `json:"createdAt"`
+		ID                int     `json:"id"`
+		Width             int     `json:"width"`
+		Height            int     `json:"height"`
+		Mines             int     `json:"mines"`
+		GameTime          float64 `json:"gameTime"`
+		Rating            float64 `json:"rating"`            // Рейтинг игры (до применения коэффициента)
+		RatingPercent     float64 `json:"ratingPercent"`     // Процент засчитанного рейтинга (0.95^позиция * 100)
+		RatingContributed float64 `json:"ratingContributed"` // Конкретно полученный рейтинг (рейтинг * коэффициент)
+		Won               bool    `json:"won"`
+		CreatedAt         string  `json:"createdAt"`
 	}
 
 	var historyRecords []models.UserGameHistory
@@ -629,6 +631,17 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 	})
 	if len(wonGames) > 10 {
 		wonGames = wonGames[:10]
+	}
+
+	// Вычисляем процент засчитанного и полученный рейтинг для каждой игры
+	for i := range wonGames {
+		// Коэффициент для i-й игры: 0.95^i
+		// i=0 (первая игра) -> коэффициент = 1.0 (100%)
+		// i=1 (вторая игра) -> коэффициент = 0.95 (95%)
+		// i=2 (третья игра) -> коэффициент = 0.9025 (90.25%)
+		coefficient := math.Pow(0.95, float64(i))
+		wonGames[i].RatingPercent = coefficient * 100.0
+		wonGames[i].RatingContributed = wonGames[i].Rating * coefficient
 	}
 
 	utils.JSONResponse(w, http.StatusOK, wonGames)
