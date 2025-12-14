@@ -2165,6 +2165,7 @@ func main() {
 	protected.HandleFunc("/profile", profileHandler.GetProfile).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/profile/activity", profileHandler.UpdateActivity).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/profile/color", profileHandler.UpdateColor).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/profile/change-password", profileHandler.ChangePassword).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/rooms/{id}", roomHandler.UpdateRoom).Methods("PUT", "OPTIONS")
 
 	// Публичный маршрут для просмотра профиля по username

@@ -41,6 +41,13 @@ export async function updateColor(color: string): Promise<void> {
   await axios.post(`${API_BASE}/profile/color`, { color })
 }
 
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await axios.post(`${API_BASE}/profile/change-password`, {
+    currentPassword,
+    newPassword
+  })
+}
+
 export interface LeaderboardEntry {
   id: number
   username: string

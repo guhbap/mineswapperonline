@@ -57,6 +57,42 @@
           <p v-if="savingColor" class="color-saving">Сохранение...</p>
           <p v-if="colorError" class="color-error">{{ colorError }}</p>
         </div>
+
+        <!-- Смена пароля (только для своего профиля) -->
+        <div v-if="isOwnProfile" class="change-password-section">
+          <h3 class="change-password-title">Смена пароля</h3>
+          <form @submit.prevent="handleChangePassword" class="change-password-form">
+            <TextInput
+              v-model="currentPassword"
+              label="Текущий пароль"
+              placeholder="Введите текущий пароль"
+              name="currentPassword"
+              type="password"
+              :disabled="changingPassword"
+            />
+            <TextInput
+              v-model="newPassword"
+              label="Новый пароль"
+              placeholder="Введите новый пароль (минимум 6 символов)"
+              name="newPassword"
+              type="password"
+              :disabled="changingPassword"
+            />
+            <TextInput
+              v-model="confirmPassword"
+              label="Подтвердите новый пароль"
+              placeholder="Повторите новый пароль"
+              name="confirmPassword"
+              type="password"
+              :disabled="changingPassword"
+            />
+            <div v-if="passwordError" class="password-error">{{ passwordError }}</div>
+            <div v-if="passwordSuccess" class="password-success">{{ passwordSuccess }}</div>
+            <button type="submit" class="change-password-button" :disabled="changingPassword">
+              {{ changingPassword ? 'Сохранение...' : 'Изменить пароль' }}
+            </button>
+          </form>
+        </div>
       </div>
 
       <div class="profile-stats">
@@ -206,9 +242,10 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { getProfile, getProfileByUsername, updateColor, getTopGames, getRecentGames, type UserProfile, type TopGame, type RecentGame } from '@/api/profile'
+import { getProfile, getProfileByUsername, updateColor, changePassword, getTopGames, getRecentGames, type UserProfile, type TopGame, type RecentGame } from '@/api/profile'
 import { getErrorMessage } from '@/utils/errorHandler'
 import { calculateDifficulty } from '@/utils/ratingCalculator'
+import TextInput from '@/components/inputs/TextInput.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -225,6 +262,12 @@ const topGamesError = ref('')
 const recentGames = ref<RecentGame[]>([])
 const recentGamesLoading = ref(false)
 const recentGamesError = ref('')
+const currentPassword = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+const changingPassword = ref(false)
+const passwordError = ref('')
+const passwordSuccess = ref('')
 
 const colorOptions = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
@@ -369,6 +412,46 @@ const clearColor = async () => {
     selectedColor.value = profile.value?.user.color || ''
   } finally {
     savingColor.value = false
+  }
+}
+
+const handleChangePassword = async () => {
+  passwordError.value = ''
+  passwordSuccess.value = ''
+
+  // Валидация
+  if (!currentPassword.value || !newPassword.value || !confirmPassword.value) {
+    passwordError.value = 'Все поля обязательны для заполнения'
+    return
+  }
+
+  if (newPassword.value.length < 6) {
+    passwordError.value = 'Новый пароль должен содержать минимум 6 символов'
+    return
+  }
+
+  if (newPassword.value !== confirmPassword.value) {
+    passwordError.value = 'Новые пароли не совпадают'
+    return
+  }
+
+  changingPassword.value = true
+
+  try {
+    await changePassword(currentPassword.value, newPassword.value)
+    passwordSuccess.value = 'Пароль успешно изменен'
+    // Очищаем поля формы
+    currentPassword.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+    // Очищаем сообщение об успехе через 3 секунды
+    setTimeout(() => {
+      passwordSuccess.value = ''
+    }, 3000)
+  } catch (err: any) {
+    passwordError.value = getErrorMessage(err, 'Ошибка смены пароля')
+  } finally {
+    changingPassword.value = false
   }
 }
 
@@ -684,6 +767,69 @@ onMounted(() => {
   margin-top: 0.5rem;
   font-size: 0.875rem;
   color: #dc2626;
+}
+
+.change-password-section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 2px solid var(--border-color);
+}
+
+.change-password-title {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+}
+
+.change-password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.password-error {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: #dc2626;
+  padding: 0.75rem;
+  background: rgba(220, 38, 38, 0.1);
+  border-radius: 0.5rem;
+}
+
+.password-success {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: #22c55e;
+  padding: 0.75rem;
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 0.5rem;
+}
+
+.change-password-button {
+  width: 100%;
+  max-width: 300px;
+  padding: 0.875rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  margin-top: 1rem;
+}
+
+.change-password-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.change-password-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 @media (max-width: 768px) {

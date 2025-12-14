@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"minesweeperonline/internal/auth"
 	"minesweeperonline/internal/database"
 	"minesweeperonline/internal/game"
 	"minesweeperonline/internal/models"
@@ -246,6 +247,74 @@ func (h *ProfileHandler) UpdateColor(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("Error updating color for user %d: %v", userID, err)
 		utils.JSONError(w, http.StatusInternalServerError, "Failed to update color")
+		return
+	}
+
+	utils.JSONResponse(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *ProfileHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		utils.JSONError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	userID := r.Context().Value("userID").(int)
+
+	var req struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}
+
+	if err := utils.DecodeJSON(r, &req); err != nil {
+		utils.JSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Валидация паролей
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		utils.JSONError(w, http.StatusBadRequest, "Current password and new password are required")
+		return
+	}
+
+	if len(req.NewPassword) < 6 {
+		utils.JSONError(w, http.StatusBadRequest, "New password must be at least 6 characters")
+		return
+	}
+
+	// Получаем пользователя из БД
+	user, err := h.FindUserByID(userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			utils.JSONError(w, http.StatusNotFound, "User not found")
+		} else {
+			log.Printf("Error finding user %d: %v", userID, err)
+			utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
+		}
+		return
+	}
+
+	// Проверяем текущий пароль
+	if !auth.CheckPasswordHash(req.CurrentPassword, user.PasswordHash) {
+		utils.JSONError(w, http.StatusUnauthorized, "Invalid current password")
+		return
+	}
+
+	// Хешируем новый пароль
+	newPasswordHash, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		log.Printf("Error hashing new password for user %d: %v", userID, err)
+		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	// Обновляем пароль в БД
+	err = h.db.Model(&models.User{}).
+		Where("id = ?", userID).
+		Update("password_hash", newPasswordHash).Error
+	if err != nil {
+		log.Printf("Error updating password for user %d: %v", userID, err)
+		utils.JSONError(w, http.StatusInternalServerError, "Failed to update password")
 		return
 	}
 
