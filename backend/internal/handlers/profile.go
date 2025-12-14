@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"log"
+	"math"
 	"net/http"
 	"sort"
 	"time"
@@ -81,14 +82,23 @@ func (h *ProfileHandler) calculateUserRating(userID int, topGamesCount int) floa
 		return gameRatings[i].Rating > gameRatings[j].Rating
 	})
 
-	// Суммируем топ-N игр
+	// Суммируем топ-N игр с весовыми коэффициентами
+	// Первая игра (лучшая) дает 100% рейтинга (коэффициент 1.0)
+	// Вторая - 95% (0.95)
+	// Третья - 90.25% (0.95^2)
+	// N-я игра дает 0.95^(n-1) процентов
 	totalRating := 0.0
 	count := topGamesCount
 	if len(gameRatings) < count {
 		count = len(gameRatings)
 	}
 	for i := 0; i < count; i++ {
-		totalRating += gameRatings[i].Rating
+		// Коэффициент для i-й игры: 0.95^i
+		// i=0 (первая игра) -> коэффициент = 1.0 (100%)
+		// i=1 (вторая игра) -> коэффициент = 0.95 (95%)
+		// i=2 (третья игра) -> коэффициент = 0.9025 (90.25%)
+		coefficient := math.Pow(0.95, float64(i))
+		totalRating += gameRatings[i].Rating * coefficient
 	}
 
 	return totalRating
