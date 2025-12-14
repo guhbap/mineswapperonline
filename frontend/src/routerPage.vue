@@ -9,24 +9,15 @@
               class="nav__link"
               :class="{ 'nav__link--active': $route.path === '/' || $route.path === '' }"
             >
-              <svg class="nav__link-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 12L5 10M5 10L12 3L19 10M5 10V20C5 20.5523 5.44772 21 6 21H9M19 10L21 12M19 10V20C19 20.5523 18.5523 21 18 21H15M9 21C9.55228 21 10 20.5523 10 20V16C10 15.4477 10.4477 15 11 15H13C13.5523 15 14 15.4477 14 16V20C14 20.5523 14.4477 21 15 21M9 21H15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
+              <IconHome class="nav__link-icon" />
               <span>Главная</span>
             </a>
             <router-link to="/rating" class="nav__link" :class="{ 'nav__link--active': $route.path === '/rating' }">
-              <svg class="nav__link-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M6 9H4.5C3.67157 9 3 9.67157 3 10.5V19.5C3 20.3284 3.67157 21 4.5 21H19.5C20.3284 21 21 20.3284 21 19.5V10.5C21 9.67157 20.3284 9 19.5 9H18M6 9V6C6 4.34315 7.34315 3 9 3H15C16.6569 3 18 4.34315 18 6V9M6 9H18M12 9V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M9 12L12 9L15 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
+              <IconTrophy class="nav__link-icon" />
               <span>Рейтинг</span>
             </router-link>
             <router-link to="/faq" class="nav__link" :class="{ 'nav__link--active': $route.path === '/faq' }">
-              <svg class="nav__link-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                <path d="M9.09 9C9.3251 8.33167 9.78915 7.76811 10.4 7.40913C11.0108 7.05016 11.7289 6.91894 12.4272 7.03871C13.1255 7.15849 13.7588 7.52152 14.2151 8.06353C14.6713 8.60553 14.9211 9.29152 14.92 10C14.92 12 11.92 13 11.92 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M12 17H12.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
+              <IconQuestion class="nav__link-icon" />
               <span>FAQ</span>
             </router-link>
           </div>
@@ -41,11 +32,7 @@
               <span class="user-name">{{ authStore.user?.username }}</span>
             </router-link>
             <button @click="handleLogout" class="nav__logout">
-              <svg class="logout-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M9 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M16 17L21 12L16 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
+              <IconLogout class="logout-icon" />
               <span>Выйти</span>
             </button>
           </template>
@@ -68,6 +55,10 @@
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import ThemeToggle from '@/components/ThemeToggle.vue'
+import IconHome from '@/components/icons/IconHome.vue'
+import IconTrophy from '@/components/icons/IconTrophy.vue'
+import IconQuestion from '@/components/icons/IconQuestion.vue'
+import IconLogout from '@/components/icons/IconLogout.vue'
 
 const router = useRouter()
 const route = useRoute()

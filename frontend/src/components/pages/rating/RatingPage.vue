@@ -2,10 +2,7 @@
   <main class="rating-page">
     <div class="rating-header">
       <h1 class="rating-title">
-        <svg class="rating-title-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M6 9H4.5C3.67157 9 3 9.67157 3 10.5V19.5C3 20.3284 3.67157 21 4.5 21H19.5C20.3284 21 21 20.3284 21 19.5V10.5C21 9.67157 20.3284 9 19.5 9H18M6 9V6C6 4.34315 7.34315 3 9 3H15C16.6569 3 18 4.34315 18 6V9M6 9H18M12 9V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M9 12L12 9L15 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+        <IconTrophy class="rating-title-icon" />
         Рейтинг игроков
       </h1>
       <p class="rating-subtitle">Топ игроков по рейтинговым очкам</p>
@@ -44,21 +41,9 @@
         }"
       >
         <div class="entry-rank">
-          <svg v-if="index === 0" class="rank-icon rank-icon--gold" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="10" fill="#ffd700" stroke="#ffed4e" stroke-width="2"/>
-            <path d="M8 8L10 6M16 8L14 6M10 6L12 4L14 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="12" cy="12" r="2" fill="white"/>
-          </svg>
-          <svg v-else-if="index === 1" class="rank-icon rank-icon--silver" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="10" fill="#c0c0c0" stroke="#e8e8e8" stroke-width="2"/>
-            <path d="M8 8L10 6M16 8L14 6M10 6L12 4L14 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="12" cy="12" r="2" fill="white"/>
-          </svg>
-          <svg v-else-if="index === 2" class="rank-icon rank-icon--bronze" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="10" fill="#cd7f32" stroke="#daa520" stroke-width="2"/>
-            <path d="M8 8L10 6M16 8L14 6M10 6L12 4L14 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="12" cy="12" r="2" fill="white"/>
-          </svg>
+          <IconMedalGold v-if="index === 0" class="rank-icon rank-icon--gold" />
+          <IconMedalSilver v-else-if="index === 1" class="rank-icon rank-icon--silver" />
+          <IconMedalBronze v-else-if="index === 2" class="rank-icon rank-icon--bronze" />
           <span v-else class="rank-number">{{ index + 1 }}</span>
         </div>
         <div class="entry-player">
@@ -87,6 +72,10 @@
 import { ref, onMounted } from 'vue'
 import { getLeaderboard, type LeaderboardEntry } from '@/api/profile'
 import { getErrorMessage } from '@/utils/errorHandler'
+import IconTrophy from '@/components/icons/IconTrophy.vue'
+import IconMedalGold from '@/components/icons/IconMedalGold.vue'
+import IconMedalSilver from '@/components/icons/IconMedalSilver.vue'
+import IconMedalBronze from '@/components/icons/IconMedalBronze.vue'
 
 const leaderboard = ref<LeaderboardEntry[]>([])
 const loading = ref(true)

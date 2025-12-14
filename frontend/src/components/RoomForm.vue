@@ -16,14 +16,7 @@
           class="form-input-button"
           title="Сгенерировать случайное название"
         >
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
-            <circle cx="8" cy="8" r="1.5" fill="currentColor"/>
-            <circle cx="16" cy="8" r="1.5" fill="currentColor"/>
-            <circle cx="8" cy="16" r="1.5" fill="currentColor"/>
-            <circle cx="16" cy="16" r="1.5" fill="currentColor"/>
-            <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
-          </svg>
+          <IconDice />
         </button>
       </div>
     </div>
@@ -137,12 +130,8 @@
 
     <div class="form-group rating-status" :class="{ 'rating-status--rated': isRatedGame, 'rating-status--unrated': !isRatedGame }">
       <div class="rating-status__icon">
-        <svg v-if="isRatedGame" class="rating-status-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <svg v-else class="rating-status-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-        </svg>
+        <IconStar v-if="isRatedGame" class="rating-status-icon" />
+        <IconCircle v-else class="rating-status-icon" />
       </div>
       <div class="rating-status__content">
         <div class="rating-status__label">
@@ -277,6 +266,9 @@
 import { ref, computed, watch } from 'vue'
 import { generateRandomName } from '@/utils/nameGenerator'
 import { calculateMaxRating, isRatingEligible, calculateDifficulty } from '@/utils/ratingCalculator'
+import IconDice from '@/components/icons/IconDice.vue'
+import IconStar from '@/components/icons/IconStar.vue'
+import IconCircle from '@/components/icons/IconCircle.vue'
 
 export interface RoomFormData {
   name: string

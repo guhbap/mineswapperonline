@@ -17,14 +17,10 @@
           @input="handleSearch"
           :disabled="disabled"
         />
-        <svg
+        <IconChevronDown
           class="search-select__arrow"
           :class="{ 'search-select__arrow--open': isOpen }"
-          viewBox="0 0 12 12"
-          fill="none"
-        >
-          <path d="M6 9L1 4h10z" fill="currentColor" />
-        </svg>
+        />
       </div>
       <transition name="dropdown">
         <div v-if="isOpen" class="search-select__dropdown">
@@ -48,6 +44,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import IconChevronDown from '@/components/icons/IconChevronDown.vue'
 
 interface Option {
   value: string
