@@ -544,6 +544,9 @@ const checkTemplate = () => {
   flex-direction: column;
   gap: 1rem;
   animation: slideDown 0.2s ease-out;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 @keyframes slideDown {
@@ -611,6 +614,9 @@ const checkTemplate = () => {
 .form-hint {
   font-size: 0.75rem;
   color: var(--text-secondary);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .difficulty-info {
