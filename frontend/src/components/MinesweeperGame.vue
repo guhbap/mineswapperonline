@@ -363,16 +363,16 @@ const currentRating = computed(() => {
   if (!gameState.value || !gameStartTime.value || gameState.value.go || gameState.value.gw) {
     return null
   }
-  
+
   const gameTime = currentGameTime.value
   const chording = props.room?.chording ?? false
   const quickStart = props.room?.quickStart ?? false
-  
+
   // Проверяем, может ли игра дать рейтинг
   if (!isRatingEligible(gameState.value.c, gameState.value.r, gameState.value.m, gameTime)) {
     return null
   }
-  
+
   return calculateGameRating(gameState.value.c, gameState.value.r, gameState.value.m, gameTime, chording, quickStart)
 })
 
@@ -391,7 +391,7 @@ const startRatingUpdate = () => {
   updateGameTime() // Обновляем сразу
   ratingUpdateInterval.value = setInterval(() => {
     updateGameTime()
-  }, 1000) // Обновляем каждую секунду
+  }, 10) // Обновляем каждую секунду
 }
 
 // Останавливаем обновление
@@ -651,7 +651,7 @@ const handleMessage = (msg: WebSocketMessage) => {
         ratingChange.value = null // Игра не дает рейтинг (плотность < 10%)
       }
     }
-    
+
     // Если игра окончена (поражение), останавливаем обновление рейтинга
     if (msg.gameState.go && !prevGameOver && gameStartTime.value !== null) {
       stopRatingUpdate()
@@ -1714,7 +1714,7 @@ onUnmounted(() => {
   .info-item {
     flex: 1;
   }
-  
+
   .info-item--rating {
     color: #667eea;
     font-weight: 600;
