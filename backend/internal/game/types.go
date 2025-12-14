@@ -80,11 +80,19 @@ type Player struct {
 	Color    string `json:"color"`
 }
 
+// GameStateEncoder кодирует GameState в бинарный формат
+type GameStateEncoder func(*GameState) ([]byte, error)
+
+// GameStateDecoder декодирует GameState из бинарного формата
+type GameStateDecoder func([]byte) (*GameState, error)
+
 // RoomManager управляет комнатами
 type RoomManager struct {
-	rooms  map[string]*Room
-	mu     sync.RWMutex
-	server interface{} // Ссылка на сервер для доступа к DeleteRoom (используется через интерфейс)
-	db     interface{} // Ссылка на базу данных для персистентности
+	rooms            map[string]*Room
+	mu               sync.RWMutex
+	server           interface{} // Ссылка на сервер для доступа к DeleteRoom (используется через интерфейс)
+	db               interface{} // Ссылка на базу данных для персистентности
+	gameStateEncoder GameStateEncoder // Функция для кодирования GameState
+	gameStateDecoder GameStateDecoder // Функция для декодирования GameState
 }
 

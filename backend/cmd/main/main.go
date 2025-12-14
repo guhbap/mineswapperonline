@@ -533,6 +533,10 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				log.Printf("Сброс игры для комнаты %s (асинхронно)", roomID)
 				room.ResetGame()
 				log.Printf("Новая игра начата для комнаты %s", roomID)
+				// Сохраняем комнату в БД после сброса игры
+				if err := s.roomManager.SaveRoom(room); err != nil {
+					log.Printf("Предупреждение: не удалось сохранить комнату %s после сброса игры: %v", roomID, err)
+				}
 				// Отправляем состояние игры после сброса
 				log.Printf("Отправка состояния новой игры для комнаты %s", roomID)
 				s.broadcastGameState(room)
@@ -795,6 +799,10 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 									go func() {
 										if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, chording, quickStart, participants); err != nil {
 											log.Printf("Ошибка записи результата игры: %v", err)
+										}
+										// Сохраняем комнату в БД после проигрыша
+										if err := s.roomManager.SaveRoom(room); err != nil {
+											log.Printf("Предупреждение: не удалось сохранить комнату %s после проигрыша (chording): %v", room.ID, err)
 										}
 									}()
 								}
@@ -1192,6 +1200,10 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 				log.Printf("[MUTEX] handleCellClick (победа goroutine): разблокируем room.Mu.RUnlock() после записи результатов")
 				room.Mu.RUnlock()
 				log.Printf("[MUTEX] handleCellClick (победа goroutine): room.Mu.RUnlock() разблокирован после записи результатов")
+				// Сохраняем комнату в БД после победы
+				if err := s.roomManager.SaveRoom(room); err != nil {
+					log.Printf("Предупреждение: не удалось сохранить комнату %s после победы: %v", room.ID, err)
+				}
 			}()
 		}
 	}
@@ -1199,6 +1211,15 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 	log.Printf("Отправка обновленного состояния игры после клика")
 	// Разблокируем мьютекс перед отправкой состояния игры
 	room.GameState.Mu.Unlock()
+	
+	// Сохраняем комнату в БД после завершения игры (проигрыш)
+	if room.GameState.GameOver {
+		go func() {
+			if err := s.roomManager.SaveRoom(room); err != nil {
+				log.Printf("Предупреждение: не удалось сохранить комнату %s после проигрыша: %v", room.ID, err)
+			}
+		}()
+	}
 
 	// Отправляем только измененные клетки
 	s.broadcastCellUpdates(room, changedCells, room.GameState.GameOver, room.GameState.GameWon, room.GameState.Revealed, room.GameState.HintsUsed, room.GameState.LoserPlayerID, room.GameState.LoserNickname)
@@ -1463,6 +1484,10 @@ func (s *Server) handleHint(room *game.Room, playerID string, hint *Hint) {
 				log.Printf("[MUTEX] handleHint (победа goroutine): разблокируем room.Mu.RUnlock() после записи результатов")
 				room.Mu.RUnlock()
 				log.Printf("[MUTEX] handleHint (победа goroutine): room.Mu.RUnlock() разблокирован после записи результатов")
+				// Сохраняем комнату в БД после победы
+				if err := s.roomManager.SaveRoom(room); err != nil {
+					log.Printf("Предупреждение: не удалось сохранить комнату %s после победы (hint): %v", room.ID, err)
+				}
 			}()
 		}
 
@@ -2104,6 +2129,10 @@ func main() {
 
 	roomManager := game.NewRoomManager()
 	roomManager.SetDB(db)
+	
+	// Устанавливаем функции для кодирования/декодирования GameState
+	roomManager.SetGameStateEncoder(EncodeGameStateForPersistence)
+	roomManager.SetGameStateDecoder(DecodeGameStateFromPersistence)
 
 	// Загружаем комнаты из БД при старте
 	if err := roomManager.LoadRooms(); err != nil {
