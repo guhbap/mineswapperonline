@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"math"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"minesweeperonline/internal/auth"
+	"minesweeperonline/internal/cache"
 	"minesweeperonline/internal/database"
 	"minesweeperonline/internal/game"
 	"minesweeperonline/internal/models"
@@ -19,11 +21,17 @@ import (
 )
 
 type ProfileHandler struct {
-	db *database.DB
+	db    *database.DB
+	cache *cache.Cache
 }
 
 func NewProfileHandler(db *database.DB) *ProfileHandler {
-	return &ProfileHandler{db: db}
+	// Создаем кеш с TTL 5 минут для профилей и статистики
+	// Для лидерборда используем более короткий TTL (1 минута)
+	return &ProfileHandler{
+		db:    db,
+		cache: cache.NewCache(5 * time.Minute),
+	}
 }
 
 // calculateGameRating рассчитывает рейтинг для одной игры с учетом модификаторов
@@ -115,6 +123,16 @@ func (h *ProfileHandler) calculateUserRating(userID int, topGamesCount int) floa
 
 // buildUserProfile создает профиль пользователя с расчетом рейтинга и статистики
 func (h *ProfileHandler) buildUserProfile(userID int) (models.UserProfile, error) {
+	// Проверяем кеш
+	cacheKey := fmt.Sprintf("profile:%d", userID)
+	if cached, found := h.cache.Get(cacheKey); found {
+		if profile, ok := cached.(models.UserProfile); ok {
+			// Обновляем онлайн статус (он может измениться)
+			profile.Stats.IsOnline = time.Since(profile.Stats.LastSeen) < 5*time.Minute
+			return profile, nil
+		}
+	}
+
 	// Получаем информацию о пользователе
 	user, err := h.FindUserByID(userID)
 	if err != nil {
@@ -137,10 +155,15 @@ func (h *ProfileHandler) buildUserProfile(userID int) (models.UserProfile, error
 	userRating := h.calculateUserRating(userID, 100)
 	user.Rating = userRating
 
-	return models.UserProfile{
+	profile := models.UserProfile{
 		User:  user,
 		Stats: stats,
-	}, nil
+	}
+
+	// Сохраняем в кеш
+	h.cache.Set(cacheKey, profile)
+
+	return profile, nil
 }
 
 func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
@@ -198,12 +221,20 @@ func (h *ProfileHandler) UpdateLastSeen(userID int) error {
 	}
 
 	// Обновляем last_seen и updated_at
-	return h.db.Model(&models.UserStats{}).
+	err = h.db.Model(&models.UserStats{}).
 		Where("user_id = ?", userID).
 		Updates(map[string]interface{}{
 			"last_seen":  now,
 			"updated_at": now,
 		}).Error
+
+	// Инвалидируем кеш статистики и профиля (last_seen влияет на онлайн статус)
+	if err == nil {
+		h.cache.Delete(fmt.Sprintf("stats:%d", userID))
+		h.cache.Delete(fmt.Sprintf("profile:%d", userID))
+	}
+
+	return err
 }
 
 func (h *ProfileHandler) UpdateActivity(w http.ResponseWriter, r *http.Request) {
@@ -248,6 +279,15 @@ func (h *ProfileHandler) UpdateColor(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error updating color for user %d: %v", userID, err)
 		utils.JSONError(w, http.StatusInternalServerError, "Failed to update color")
 		return
+	}
+
+	// Инвалидируем кеш пользователя и профиля
+	h.cache.Delete(fmt.Sprintf("user:id:%d", userID))
+	h.cache.Delete(fmt.Sprintf("profile:%d", userID))
+	// Найдем username для инвалидации кеша по username
+	user, _ := h.FindUserByID(userID)
+	if user.Username != "" {
+		h.cache.Delete(fmt.Sprintf("user:username:%s", user.Username))
 	}
 
 	utils.JSONResponse(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -316,6 +356,12 @@ func (h *ProfileHandler) ChangePassword(w http.ResponseWriter, r *http.Request) 
 		log.Printf("Error updating password for user %d: %v", userID, err)
 		utils.JSONError(w, http.StatusInternalServerError, "Failed to update password")
 		return
+	}
+
+	// Инвалидируем кеш пользователя (пароль не влияет на профиль, но для безопасности очистим)
+	h.cache.Delete(fmt.Sprintf("user:id:%d", userID))
+	if user.Username != "" {
+		h.cache.Delete(fmt.Sprintf("user:username:%s", user.Username))
 	}
 
 	utils.JSONResponse(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -494,36 +540,93 @@ func (h *ProfileHandler) updateGameStats(userID int, won bool) error {
 		updates["games_lost"] = gorm.Expr("games_lost + ?", 1)
 	}
 
-	return h.db.Model(&models.UserStats{}).
+	err := h.db.Model(&models.UserStats{}).
 		Where("user_id = ?", userID).
 		Updates(updates).Error
+
+	// Инвалидируем кеш статистики, профиля и лидерборда
+	if err == nil {
+		h.cache.Delete(fmt.Sprintf("stats:%d", userID))
+		h.cache.Delete(fmt.Sprintf("profile:%d", userID))
+		h.cache.Delete("leaderboard") // Лидерборд зависит от статистики
+	}
+
+	return err
 }
 
 // FindUserByID находит пользователя по ID
 func (h *ProfileHandler) FindUserByID(userID int) (models.User, error) {
+	// Проверяем кеш
+	cacheKey := fmt.Sprintf("user:id:%d", userID)
+	if cached, found := h.cache.Get(cacheKey); found {
+		if user, ok := cached.(models.User); ok {
+			return user, nil
+		}
+	}
+
 	var user models.User
 	err := h.db.First(&user, userID).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return models.User{}, err
 	}
+
+	if err == nil {
+		// Сохраняем в кеш
+		h.cache.Set(cacheKey, user)
+		// Также кешируем по username для быстрого поиска
+		if user.Username != "" {
+			h.cache.Set(fmt.Sprintf("user:username:%s", user.Username), user)
+		}
+	}
+
 	return user, err
 }
 
 func (h *ProfileHandler) findUserByUsername(username string) (models.User, error) {
+	// Проверяем кеш
+	cacheKey := fmt.Sprintf("user:username:%s", username)
+	if cached, found := h.cache.Get(cacheKey); found {
+		if user, ok := cached.(models.User); ok {
+			return user, nil
+		}
+	}
+
 	var user models.User
 	err := h.db.Where("username = ?", username).First(&user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return models.User{}, err
 	}
+
+	if err == nil {
+		// Сохраняем в кеш
+		h.cache.Set(cacheKey, user)
+		// Также кешируем по ID
+		h.cache.Set(fmt.Sprintf("user:id:%d", user.ID), user)
+	}
+
 	return user, err
 }
 
 func (h *ProfileHandler) getUserStats(userID int) (models.UserStats, error) {
+	// Проверяем кеш
+	cacheKey := fmt.Sprintf("stats:%d", userID)
+	if cached, found := h.cache.Get(cacheKey); found {
+		if stats, ok := cached.(models.UserStats); ok {
+			return stats, nil
+		}
+	}
+
 	var stats models.UserStats
 	err := h.db.Where("user_id = ?", userID).First(&stats).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return models.UserStats{}, err
 	}
+
+	if err == nil {
+		// Сохраняем в кеш
+		h.cache.Set(cacheKey, stats)
+	}
+
 	return stats, err
 }
 
@@ -544,16 +647,26 @@ func (h *ProfileHandler) createUserStats(userID int) (models.UserStats, error) {
 	return stats, nil
 }
 
+// LeaderboardEntry представляет запись в лидерборде
+type LeaderboardEntry struct {
+	ID          int     `json:"id"`
+	Username    string  `json:"username"`
+	Color       string  `json:"color,omitempty"`
+	Rating      float64 `json:"rating"`
+	GamesPlayed int     `json:"gamesPlayed"`
+	GamesWon    int     `json:"gamesWon"`
+	GamesLost   int     `json:"gamesLost"`
+}
+
 // GetLeaderboard возвращает список всех игроков, отсортированных по рейтингу
 func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
-	type LeaderboardEntry struct {
-		ID          int     `json:"id"`
-		Username    string  `json:"username"`
-		Color       string  `json:"color,omitempty"`
-		Rating      float64 `json:"rating"`
-		GamesPlayed int     `json:"gamesPlayed"`
-		GamesWon    int     `json:"gamesWon"`
-		GamesLost   int     `json:"gamesLost"`
+	// Проверяем кеш (лидерборд кешируем на 1 минуту)
+	cacheKey := "leaderboard"
+	if cached, found := h.cache.Get(cacheKey); found {
+		if leaderboard, ok := cached.([]LeaderboardEntry); ok {
+			utils.JSONResponse(w, http.StatusOK, leaderboard)
+			return
+		}
 	}
 
 	var users []models.User
@@ -578,12 +691,13 @@ func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) 
 			entry.Color = *user.Color
 		}
 
-		// Получаем статистику пользователя
-		var stats models.UserStats
-		h.db.Where("user_id = ?", user.ID).First(&stats)
-		entry.GamesPlayed = stats.GamesPlayed
-		entry.GamesWon = stats.GamesWon
-		entry.GamesLost = stats.GamesLost
+		// Получаем статистику пользователя (используем кешированный метод)
+		stats, err := h.getUserStats(user.ID)
+		if err == nil {
+			entry.GamesPlayed = stats.GamesPlayed
+			entry.GamesWon = stats.GamesWon
+			entry.GamesLost = stats.GamesLost
+		}
 
 		leaderboard = append(leaderboard, entry)
 	}
@@ -595,6 +709,9 @@ func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) 
 		}
 		return leaderboard[i].Username < leaderboard[j].Username
 	})
+
+	// Сохраняем в кеш (используем основной кеш, но лидерборд обновляется часто)
+	h.cache.Set(cacheKey, leaderboard)
 
 	utils.JSONResponse(w, http.StatusOK, leaderboard)
 }
