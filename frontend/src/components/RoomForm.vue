@@ -118,10 +118,10 @@
     </div>
 
     <div v-else class="form-group">
-      <div class="difficulty-info">
+      <!-- <div class="difficulty-info">
         <span class="difficulty-label">Текущие параметры:</span>
         <span class="difficulty-value">{{ form.rows }}×{{ form.cols }}, {{ form.mines }} мин</span>
-      </div>
+      </div> -->
       <div class="difficulty-info">
         <span class="difficulty-label">Сложность поля:</span>
         <span class="difficulty-value">{{ difficulty.toFixed(2) }}</span>
@@ -171,7 +171,7 @@
         <span class="advanced-toggle__icon">{{ showAdvanced ? '▼' : '▶' }}</span>
         <span class="advanced-toggle__text">Продвинутые настройки</span>
       </button>
-      
+
       <div v-if="showAdvanced" class="advanced-options">
         <div class="form-group">
           <label class="form-label">
@@ -210,10 +210,7 @@
             Укажите seed для воспроизводимой генерации поля. Если указан - игра будет нерейтинговой.
           </div>
         </div>
-      </div>
-    </div>
-
-    <div class="form-group">
+        <div class="form-group">
       <label class="form-label">Режим игры</label>
       <div class="game-mode-selector">
         <label class="game-mode-option" :class="{ 'game-mode-option--active': form.gameMode === 'classic' }">
@@ -254,6 +251,10 @@
         </label>
       </div>
     </div>
+      </div>
+    </div>
+
+
 
     <slot name="warning"></slot>
 
@@ -363,7 +364,7 @@ const applyTemplate = (template: 'easy' | 'medium' | 'hard' | 'custom') => {
     currentTemplate.value = 'custom'
     return
   }
-  
+
   const templateData = templates[template]
   form.value = {
     ...form.value,
@@ -377,14 +378,14 @@ const applyTemplate = (template: 'easy' | 'medium' | 'hard' | 'custom') => {
 // Проверяем, соответствует ли текущая конфигурация какому-либо шаблону
 const checkTemplate = () => {
   const { rows, cols, mines } = form.value
-  
+
   for (const [key, template] of Object.entries(templates)) {
     if (template.rows === rows && template.cols === cols && template.mines === mines) {
       currentTemplate.value = key as 'easy' | 'medium' | 'hard'
       return
     }
   }
-  
+
   currentTemplate.value = 'custom'
 }
 </script>
@@ -743,15 +744,15 @@ const checkTemplate = () => {
     grid-template-columns: repeat(2, 1fr);
     gap: 0.5rem;
   }
-  
+
   .difficulty-template {
     padding: 0.75rem 0.5rem;
   }
-  
+
   .difficulty-template__title {
     font-size: 0.8125rem;
   }
-  
+
   .difficulty-template__params {
     font-size: 0.6875rem;
   }
