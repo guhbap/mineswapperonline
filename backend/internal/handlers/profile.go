@@ -25,6 +25,25 @@ func NewProfileHandler(db *database.DB) *ProfileHandler {
 	return &ProfileHandler{db: db}
 }
 
+// calculateGameRating рассчитывает рейтинг для одной игры с учетом модификаторов
+func (h *ProfileHandler) calculateGameRating(width, height, mines int, gameTime float64, chording, quickStart bool) float64 {
+	if !rating.IsRatingEligible(float64(width), float64(height), float64(mines), gameTime) {
+		return 0.0
+	}
+
+	gameRating := rating.CalculateGameRating(float64(width), float64(height), float64(mines), gameTime)
+
+	// Применяем модификаторы
+	if chording {
+		gameRating = gameRating * 0.8
+	}
+	if quickStart {
+		gameRating = gameRating * 0.9
+	}
+
+	return gameRating
+}
+
 // calculateUserRating рассчитывает рейтинг пользователя как сумму рейтинга лучших игр
 // topGamesCount - количество лучших игр для суммирования (по умолчанию 10)
 func (h *ProfileHandler) calculateUserRating(userID int, topGamesCount int) float64 {
@@ -59,18 +78,7 @@ func (h *ProfileHandler) calculateUserRating(userID int, topGamesCount int) floa
 		}
 
 		// Рассчитываем рейтинг для игры
-		var gameRating float64
-		if rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
-			gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
-
-			// Применяем модификаторы
-			if record.Chording {
-				gameRating = gameRating * 0.8
-			}
-			if record.QuickStart {
-				gameRating = gameRating * 0.9
-			}
-		}
+		gameRating := h.calculateGameRating(record.Width, record.Height, record.Mines, record.GameTime, record.Chording, record.QuickStart)
 
 		if gameRating > 0 {
 			gameRatings = append(gameRatings, GameRating{Rating: gameRating})
@@ -104,25 +112,20 @@ func (h *ProfileHandler) calculateUserRating(userID int, topGamesCount int) floa
 	return totalRating
 }
 
-func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("userID").(int)
-
+// buildUserProfile создает профиль пользователя с расчетом рейтинга и статистики
+func (h *ProfileHandler) buildUserProfile(userID int) (models.UserProfile, error) {
 	// Получаем информацию о пользователе
-	user, err := h.findUserByID(userID)
+	user, err := h.FindUserByID(userID)
 	if err != nil {
-		utils.JSONError(w, http.StatusNotFound, "User not found")
-		return
+		return models.UserProfile{}, err
 	}
 
-	// Получаем статистику пользователя
+	// Получаем или создаем статистику пользователя
 	stats, err := h.getUserStats(userID)
 	if err != nil {
-		// Если статистики нет, создаем запись
 		stats, err = h.createUserStats(userID)
 		if err != nil {
-			log.Printf("Error creating user stats: %v", err)
-			utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
-			return
+			return models.UserProfile{}, err
 		}
 	}
 
@@ -133,9 +136,24 @@ func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	userRating := h.calculateUserRating(userID, 100)
 	user.Rating = userRating
 
-	profile := models.UserProfile{
+	return models.UserProfile{
 		User:  user,
 		Stats: stats,
+	}, nil
+}
+
+func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(int)
+
+	profile, err := h.buildUserProfile(userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			utils.JSONError(w, http.StatusNotFound, "User not found")
+		} else {
+			log.Printf("Error building user profile: %v", err)
+			utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
+		}
+		return
 	}
 
 	utils.JSONResponse(w, http.StatusOK, profile)
@@ -155,28 +173,11 @@ func (h *ProfileHandler) GetProfileByUsername(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Получаем статистику пользователя
-	stats, err := h.getUserStats(user.ID)
+	profile, err := h.buildUserProfile(user.ID)
 	if err != nil {
-		// Если статистики нет, создаем запись
-		stats, err = h.createUserStats(user.ID)
-		if err != nil {
-			log.Printf("Error creating user stats: %v", err)
-			utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
-			return
-		}
-	}
-
-	// Проверяем онлайн статус (последний раз был онлайн менее 5 минут назад)
-	stats.IsOnline = time.Since(stats.LastSeen) < 5*time.Minute
-
-	// Рассчитываем рейтинг динамически
-	userRating := h.calculateUserRating(user.ID, 100)
-	user.Rating = userRating
-
-	profile := models.UserProfile{
-		User:  user,
-		Stats: stats,
+		log.Printf("Error building user profile: %v", err)
+		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
+		return
 	}
 
 	utils.JSONResponse(w, http.StatusOK, profile)
@@ -402,44 +403,34 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 	}
 
 	// Update game statistics
-	now := time.Now()
-	if won {
-		stats := models.UserStats{UserID: userID}
-		err = h.db.Where("user_id = ?", userID).FirstOrCreate(&stats).Error
-		if err != nil {
-			return err
-		}
-		err = h.db.Model(&models.UserStats{}).
-			Where("user_id = ?", userID).
-			Updates(map[string]interface{}{
-				"games_played": gorm.Expr("games_played + ?", 1),
-				"games_won":    gorm.Expr("games_won + ?", 1),
-				"updated_at":   now,
-			}).Error
-		return err
-	} else {
-		stats := models.UserStats{UserID: userID}
-		err = h.db.Where("user_id = ?", userID).FirstOrCreate(&stats).Error
-		if err != nil {
-			return err
-		}
-		err = h.db.Model(&models.UserStats{}).
-			Where("user_id = ?", userID).
-			Updates(map[string]interface{}{
-				"games_played": gorm.Expr("games_played + ?", 1),
-				"games_lost":   gorm.Expr("games_lost + ?", 1),
-				"updated_at":   now,
-			}).Error
+	return h.updateGameStats(userID, won)
+}
+
+// updateGameStats обновляет статистику игр пользователя
+func (h *ProfileHandler) updateGameStats(userID int, won bool) error {
+	stats := models.UserStats{UserID: userID}
+	if err := h.db.Where("user_id = ?", userID).FirstOrCreate(&stats).Error; err != nil {
 		return err
 	}
+
+	now := time.Now()
+	updates := map[string]interface{}{
+		"games_played": gorm.Expr("games_played + ?", 1),
+		"updated_at":   now,
+	}
+
+	if won {
+		updates["games_won"] = gorm.Expr("games_won + ?", 1)
+	} else {
+		updates["games_lost"] = gorm.Expr("games_lost + ?", 1)
+	}
+
+	return h.db.Model(&models.UserStats{}).
+		Where("user_id = ?", userID).
+		Updates(updates).Error
 }
 
-// findUserByID находит пользователя по ID (приватный метод)
-func (h *ProfileHandler) findUserByID(userID int) (models.User, error) {
-	return h.FindUserByID(userID)
-}
-
-// FindUserByID находит пользователя по ID (публичный метод)
+// FindUserByID находит пользователя по ID
 func (h *ProfileHandler) FindUserByID(userID int) (models.User, error) {
 	var user models.User
 	err := h.db.First(&user, userID).Error
@@ -539,29 +530,34 @@ func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) 
 	utils.JSONResponse(w, http.StatusOK, leaderboard)
 }
 
-// GetTopGames возвращает топ-100 лучших игр пользователя по начисленному рейтингу
-func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
-	// Получаем userID из параметра или из контекста (для своего профиля)
-	var userID int
-	var err error
-
+// getUserIDFromRequest получает userID из запроса (из username параметра или контекста)
+func (h *ProfileHandler) getUserIDFromRequest(r *http.Request) (int, error) {
 	username := r.URL.Query().Get("username")
 	if username != "" {
-		// Получаем userID по username
 		user, err := h.findUserByUsername(username)
 		if err != nil {
+			return 0, err
+		}
+		return user.ID, nil
+	}
+
+	userIDValue := r.Context().Value("userID")
+	if userIDValue == nil {
+		return 0, errors.New("unauthorized")
+	}
+	return userIDValue.(int), nil
+}
+
+// GetTopGames возвращает топ-100 лучших игр пользователя по начисленному рейтингу
+func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
+	userID, err := h.getUserIDFromRequest(r)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			utils.JSONError(w, http.StatusNotFound, "User not found")
-			return
-		}
-		userID = user.ID
-	} else {
-		// Используем userID из контекста (свой профиль)
-		userIDValue := r.Context().Value("userID")
-		if userIDValue == nil {
+		} else {
 			utils.JSONError(w, http.StatusUnauthorized, "Unauthorized")
-			return
 		}
-		userID = userIDValue.(int)
+		return
 	}
 
 	// Получаем все игры пользователя для расчета рейтинга
@@ -590,19 +586,10 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 
 	var games []GameHistory
 	for _, record := range historyRecords {
-		// Рассчитываем рейтинг только для выигранных игр
+		// Рассчитываем рейтинг только для выигранных игр без явно указанного seed
 		var gameRating float64
-		if record.Won && !record.HasCustomSeed && rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
-			// Пропускаем игры с явно указанным пользователем seed (нерейтинговые)
-			gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
-
-			// Применяем модификаторы
-			if record.Chording {
-				gameRating = gameRating * 0.8
-			}
-			if record.QuickStart {
-				gameRating = gameRating * 0.9
-			}
+		if record.Won && !record.HasCustomSeed {
+			gameRating = h.calculateGameRating(record.Width, record.Height, record.Mines, record.GameTime, record.Chording, record.QuickStart)
 		}
 
 		games = append(games, GameHistory{
@@ -649,27 +636,14 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 
 // GetRecentGames возвращает последние 10 игр пользователя с информацией об участниках
 func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) {
-	// Получаем userID из параметра или из контекста (для своего профиля)
-	var userID int
-	var err error
-
-	username := r.URL.Query().Get("username")
-	if username != "" {
-		// Получаем userID по username
-		user, err := h.findUserByUsername(username)
-		if err != nil {
+	userID, err := h.getUserIDFromRequest(r)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			utils.JSONError(w, http.StatusNotFound, "User not found")
-			return
-		}
-		userID = user.ID
-	} else {
-		// Используем userID из контекста (свой профиль)
-		userIDValue := r.Context().Value("userID")
-		if userIDValue == nil {
+		} else {
 			utils.JSONError(w, http.StatusUnauthorized, "Unauthorized")
-			return
 		}
-		userID = userIDValue.(int)
+		return
 	}
 
 	// Получаем последние 10 игр
@@ -707,17 +681,8 @@ func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) 
 	for _, record := range historyRecords {
 		// Рассчитываем рейтинг только для выигранных игр без явно указанного seed
 		var gameRating float64
-		if record.Won && !record.HasCustomSeed && rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
-			// Пропускаем игры с явно указанным пользователем seed (нерейтинговые)
-			gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
-
-			// Применяем модификаторы
-			if record.Chording {
-				gameRating = gameRating * 0.8
-			}
-			if record.QuickStart {
-				gameRating = gameRating * 0.9
-			}
+		if record.Won && !record.HasCustomSeed {
+			gameRating = h.calculateGameRating(record.Width, record.Height, record.Mines, record.GameTime, record.Chording, record.QuickStart)
 		}
 
 		game := RecentGame{
