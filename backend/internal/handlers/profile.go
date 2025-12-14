@@ -545,6 +545,7 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 		Mines     int     `json:"mines"`
 		GameTime  float64 `json:"gameTime"`
 		Rating    float64 `json:"rating"`
+		Won       bool    `json:"won"`
 		CreatedAt string  `json:"createdAt"`
 	}
 
@@ -584,17 +585,28 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 			Mines:     record.Mines,
 			GameTime:  record.GameTime,
 			Rating:    gameRating,
+			Won:       record.Won,
 			CreatedAt: record.CreatedAt.Format(time.RFC3339),
 		})
 	}
 
-	// Сортируем по рейтингу (по убыванию) и берем топ-10
-	sort.Slice(games, func(i, j int) bool {
-		return games[i].Rating > games[j].Rating
-	})
-	if len(games) > 10 {
-		games = games[:10]
+	// Фильтруем только выигранные игры с рейтингом > 0
+	var wonGames []GameHistory
+	for _, game := range games {
+		if game.Won && game.Rating > 0 {
+			wonGames = append(wonGames, game)
+		}
 	}
+
+	// Сортируем по рейтингу (по убыванию) и берем топ-10
+	sort.Slice(wonGames, func(i, j int) bool {
+		return wonGames[i].Rating > wonGames[j].Rating
+	})
+	if len(wonGames) > 10 {
+		wonGames = wonGames[:10]
+	}
+
+	utils.JSONResponse(w, http.StatusOK, wonGames)
 
 	utils.JSONResponse(w, http.StatusOK, games)
 }
@@ -638,6 +650,7 @@ func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) 
 		Mines        int                   `json:"mines"`
 		GameTime     float64               `json:"gameTime"`
 		Rating       float64               `json:"rating"`
+		Won          bool                  `json:"won"`
 		CreatedAt    string                `json:"createdAt"`
 		Participants []GameParticipantInfo `json:"participants"`
 	}
@@ -656,17 +669,20 @@ func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) 
 
 	var games []RecentGame
 	for _, record := range historyRecords {
-		// Рассчитываем рейтинг для игры
+		// Рассчитываем рейтинг только для выигранных игр
 		var gameRating float64
-		if rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
-			gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
-			
-			// Применяем модификаторы
-			if record.Chording {
-				gameRating = gameRating * 0.8
-			}
-			if record.QuickStart {
-				gameRating = gameRating * 0.9
+		if record.Won && rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
+			// Пропускаем игры с seed (нерейтинговые)
+			if record.Seed == 0 {
+				gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
+				
+				// Применяем модификаторы
+				if record.Chording {
+					gameRating = gameRating * 0.8
+				}
+				if record.QuickStart {
+					gameRating = gameRating * 0.9
+				}
 			}
 		}
 
@@ -677,6 +693,7 @@ func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) 
 			Mines:        record.Mines,
 			GameTime:     record.GameTime,
 			Rating:       gameRating,
+			Won:          record.Won,
 			CreatedAt:    record.CreatedAt.Format(time.RFC3339),
 			Participants: []GameParticipantInfo{},
 		}

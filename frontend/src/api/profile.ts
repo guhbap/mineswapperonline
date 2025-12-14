@@ -63,6 +63,7 @@ export interface TopGame {
   mines: number
   gameTime: number
   rating: number
+  won: boolean
   createdAt: string
 }
 
@@ -87,6 +88,7 @@ export interface RecentGame {
   mines: number
   gameTime: number
   rating: number
+  won: boolean
   createdAt: string
   participants: GameParticipant[]
 }

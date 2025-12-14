@@ -125,10 +125,10 @@
               </div>
             </div>
             <div class="game-rating">
-              <div class="rating-gain" v-if="game.rating > 0">
+              <div class="rating-gain" v-if="game.won && game.rating > 0">
                 +{{ Math.round(game.rating) }}
               </div>
-              <div class="rating-label" v-if="game.rating > 0">рейтинг</div>
+              <div class="rating-label" v-if="game.won && game.rating > 0">рейтинг</div>
               <div class="rating-label" v-else style="color: var(--text-secondary);">—</div>
             </div>
           </div>
@@ -147,6 +147,7 @@
             v-for="game in recentGames"
             :key="game.id"
             class="recent-game-item"
+            :class="{ 'recent-game-item--lost': !game.won }"
           >
             <div class="game-main-info">
               <div class="game-field-info">
@@ -164,7 +165,7 @@
                 <div class="game-date">{{ formatDate(game.createdAt) }}</div>
               </div>
             </div>
-            <div class="game-rating-info">
+            <div class="game-rating-info" v-if="game.won">
               <div class="rating-label">Рейтинг за игру:</div>
               <div class="rating-value" v-if="game.rating > 0">
                 +{{ Math.round(game.rating) }}
@@ -858,6 +859,11 @@ onMounted(() => {
   border-radius: 0.75rem;
   transition: transform 0.2s, box-shadow 0.2s;
   border-left: 4px solid #667eea;
+}
+
+.recent-game-item--lost {
+  background: rgba(239, 68, 68, 0.1);
+  border-left-color: #ef4444;
 }
 
 .recent-game-item:hover {
