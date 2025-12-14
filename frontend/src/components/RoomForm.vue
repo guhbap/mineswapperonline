@@ -102,41 +102,55 @@
       <div class="form-hint">Пароль будет установлен только если поле заполнено</div>
     </div>
 
-    <div v-if="showAdvancedOptions" class="form-group">
-      <label class="form-label">
-        <input
-          v-model="form.quickStart"
-          type="checkbox"
-          class="form-checkbox"
-        />
-        Быстрый старт
-      </label>
-      <div class="form-hint">Первая кликнутая клетка всегда будет нулевой (без мин вокруг)</div>
-    </div>
+    <div class="form-group">
+      <button
+        type="button"
+        @click="showAdvanced = !showAdvanced"
+        class="advanced-toggle"
+        :class="{ 'advanced-toggle--open': showAdvanced }"
+      >
+        <span class="advanced-toggle__icon">{{ showAdvanced ? '▼' : '▶' }}</span>
+        <span class="advanced-toggle__text">Продвинутые настройки</span>
+      </button>
+      
+      <div v-if="showAdvanced" class="advanced-options">
+        <div class="form-group">
+          <label class="form-label">
+            <input
+              v-model="form.quickStart"
+              type="checkbox"
+              class="form-checkbox"
+            />
+            Быстрый старт
+          </label>
+          <div class="form-hint">Первая кликнутая клетка всегда будет нулевой (без мин вокруг)</div>
+        </div>
 
-    <div v-if="showAdvancedOptions" class="form-group">
-      <label class="form-label">
-        <input
-          v-model="form.chording"
-          type="checkbox"
-          class="form-checkbox"
-        />
-        Chording
-      </label>
-      <div class="form-hint">Клик на открытую клетку с цифрой открывает соседние клетки, если вокруг стоит нужное количество флагов</div>
-    </div>
+        <div class="form-group">
+          <label class="form-label">
+            <input
+              v-model="form.chording"
+              type="checkbox"
+              class="form-checkbox"
+            />
+            Chording
+          </label>
+          <div class="form-hint">Клик на открытую клетку с цифрой открывает соседние клетки, если вокруг стоит нужное количество флагов</div>
+        </div>
 
-    <div v-if="showAdvancedOptions" class="form-group">
-      <label class="form-label">Seed (UUID, опционально)</label>
-      <input
-        v-model="form.seed"
-        type="text"
-        class="form-input"
-        placeholder="Оставьте пустым для случайной генерации"
-        pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-      />
-      <div class="form-hint">
-        Укажите seed для воспроизводимой генерации поля. Если указан - игра будет нерейтинговой.
+        <div class="form-group">
+          <label class="form-label">Seed (UUID, опционально)</label>
+          <input
+            v-model="form.seed"
+            type="text"
+            class="form-input"
+            placeholder="Оставьте пустым для случайной генерации"
+            pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+          />
+          <div class="form-hint">
+            Укажите seed для воспроизводимой генерации поля. Если указан - игра будет нерейтинговой.
+          </div>
+        </div>
       </div>
     </div>
 
@@ -209,7 +223,7 @@ const props = defineProps<{
   modelValue: RoomFormData
   hasPassword?: boolean // Оставляем для обратной совместимости, но не используем
   error?: string
-  showAdvancedOptions?: boolean
+  showAdvancedOptions?: boolean // Больше не используется, оставлено для обратной совместимости
   showAllGameModes?: boolean
   autoGenerateName?: boolean
 }>()
@@ -224,6 +238,8 @@ const form = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value)
 })
+
+const showAdvanced = ref(false)
 
 const error = computed(() => props.error)
 
@@ -369,6 +385,71 @@ const generateRoomName = () => {
 
 .form-checkbox {
   margin-right: 0.5rem;
+}
+
+.advanced-toggle {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.advanced-toggle:hover {
+  background: var(--bg-tertiary);
+  border-color: #667eea;
+}
+
+.advanced-toggle--open {
+  border-color: #667eea;
+  background: var(--bg-tertiary);
+}
+
+.advanced-toggle__icon {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.advanced-toggle--open .advanced-toggle__icon {
+  transform: rotate(0deg);
+}
+
+.advanced-toggle__text {
+  flex: 1;
+}
+
+.advanced-options {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  border-radius: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .game-mode-selector {

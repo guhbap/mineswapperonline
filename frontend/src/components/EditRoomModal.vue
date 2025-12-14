@@ -7,7 +7,6 @@
         <RoomForm
           v-model="form"
           :error="error"
-          :show-advanced-options="true"
           :show-all-game-modes="false"
           :auto-generate-name="false"
         >
@@ -69,8 +68,8 @@ watch([() => props.show, () => props.room], ([isShowing, room]) => {
       mines: room.mines,
       password: '', // Пароль не показываем при редактировании (по соображениям безопасности)
       gameMode: (room.gameMode ?? 'classic') as 'classic' | 'training' | 'fair',
-      quickStart: room.quickStart ?? false,
-      chording: room.chording ?? false,
+      quickStart: room.quickStart ?? true, // По умолчанию включено
+      chording: room.chording ?? true, // По умолчанию включено
       seed: null,
     }
     error.value = ''

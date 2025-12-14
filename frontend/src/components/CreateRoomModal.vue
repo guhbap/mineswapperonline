@@ -7,7 +7,6 @@
         <RoomForm
           v-model="form"
           :error="error"
-          :show-advanced-options="true"
           :show-all-game-modes="false"
           :auto-generate-name="false"
         />
@@ -44,8 +43,8 @@ const form = ref<RoomFormData>({
   mines: 40,
   password: '',
   gameMode: 'classic',
-  quickStart: false,
-  chording: false,
+  quickStart: true, // Включено по умолчанию
+  chording: true, // Включено по умолчанию
   seed: null,
 })
 
@@ -102,8 +101,8 @@ const handleCancel = () => {
     mines: 40,
     password: '',
     gameMode: 'classic',
-    quickStart: false,
-    chording: false,
+    quickStart: true, // Включено по умолчанию
+    chording: true, // Включено по умолчанию
     seed: null,
   }
 }
