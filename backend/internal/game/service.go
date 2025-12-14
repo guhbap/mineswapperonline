@@ -45,23 +45,26 @@ func NewService(roomManager *RoomManager, profileHandler ProfileHandler, wsManag
 
 // HandleCellClick обрабатывает клик по ячейке
 func (s *Service) HandleCellClick(room *Room, playerID string, click *CellClick) error {
-	log.Printf("HandleCellClick: начало, row=%d, col=%d, flag=%v", click.Row, click.Col, click.Flag)
+	log.Printf("[GAME] HandleCellClick: начало, playerID=%s, row=%d, col=%d, flag=%v", playerID, click.Row, click.Col, click.Flag)
 	
 	room.GameState.Mu.Lock()
-	defer room.GameState.Mu.Unlock()
+	log.Printf("[GAME] HandleCellClick: мьютекс заблокирован")
 
 	if room.GameState.GameOver || room.GameState.GameWon {
-		log.Printf("Игра уже окончена, клик игнорируется")
+		log.Printf("[GAME] HandleCellClick: игра уже окончена (GameOver=%v, GameWon=%v), клик игнорируется", room.GameState.GameOver, room.GameState.GameWon)
+		room.GameState.Mu.Unlock()
 		return nil
 	}
 
 	row, col := click.Row, click.Col
 	if row < 0 || row >= room.GameState.Rows || col < 0 || col >= room.GameState.Cols {
-		log.Printf("Некорректные координаты: row=%d, col=%d", row, col)
+		log.Printf("[GAME] HandleCellClick: некорректные координаты: row=%d, col=%d (размеры: rows=%d, cols=%d)", row, col, room.GameState.Rows, room.GameState.Cols)
+		room.GameState.Mu.Unlock()
 		return fmt.Errorf("invalid coordinates")
 	}
 
 	cell := &room.GameState.Board[row][col]
+	log.Printf("[GAME] HandleCellClick: ячейка найдена, isRevealed=%v, isFlagged=%v, isMine=%v, neighborMines=%d", cell.IsRevealed, cell.IsFlagged, cell.IsMine, cell.NeighborMines)
 
 	// Получаем информацию об игроке
 	room.Mu.RLock()
@@ -75,16 +78,22 @@ func (s *Service) HandleCellClick(room *Room, playerID string, click *CellClick)
 	room.Mu.RUnlock()
 
 	if click.Flag {
+		log.Printf("[GAME] HandleCellClick: обработка флага")
+		// handleFlagToggle разблокирует мьютекс сам
 		return s.handleFlagToggle(room, playerID, row, col, cell, nickname, playerColor)
 	}
 
+	log.Printf("[GAME] HandleCellClick: обработка открытия ячейки")
+	// handleCellReveal разблокирует мьютекс сам
 	return s.handleCellReveal(room, playerID, row, col, cell, nickname, playerColor)
 }
 
 // handleFlagToggle обрабатывает переключение флага
 func (s *Service) handleFlagToggle(room *Room, playerID string, row, col int, cell *Cell, nickname, playerColor string) error {
+	log.Printf("[GAME] handleFlagToggle: начало, row=%d, col=%d", row, col)
 	if cell.IsRevealed {
-		log.Printf("Нельзя поставить флаг на открытую ячейку: row=%d, col=%d", row, col)
+		log.Printf("[GAME] handleFlagToggle: нельзя поставить флаг на открытую ячейку: row=%d, col=%d", row, col)
+		room.GameState.Mu.Unlock()
 		return nil
 	}
 
@@ -113,12 +122,14 @@ func (s *Service) handleFlagToggle(room *Room, playerID string, row, col int, ce
 	}
 
 	cell.IsFlagged = !cell.IsFlagged
-	log.Printf("Флаг переключен: row=%d, col=%d, flagged=%v", row, col, cell.IsFlagged)
+	log.Printf("[GAME] handleFlagToggle: флаг переключен: row=%d, col=%d, flagged=%v", row, col, cell.IsFlagged)
 
 	gameMode := room.GameMode
 	room.GameState.Mu.Unlock()
+	log.Printf("[GAME] handleFlagToggle: мьютекс разблокирован, отправка BroadcastGameState")
 
 	go func() {
+		log.Printf("[GAME] handleFlagToggle: запуск BroadcastGameState в горутине")
 		s.BroadcastGameState(room)
 	}()
 
@@ -155,8 +166,10 @@ func (s *Service) handleFlagToggle(room *Room, playerID string, row, col int, ce
 
 // handleCellReveal обрабатывает открытие ячейки
 func (s *Service) handleCellReveal(room *Room, playerID string, row, col int, cell *Cell, nickname, playerColor string) error {
+	log.Printf("[GAME] handleCellReveal: начало, row=%d, col=%d", row, col)
 	if cell.IsFlagged {
-		log.Printf("Нельзя открыть ячейку с флагом: row=%d, col=%d", row, col)
+		log.Printf("[GAME] handleCellReveal: нельзя открыть ячейку с флагом: row=%d, col=%d", row, col)
+		room.GameState.Mu.Unlock()
 		return nil
 	}
 
@@ -275,7 +288,9 @@ func (s *Service) handleCellReveal(room *Room, playerID string, row, col int, ce
 	}
 
 	// Отправляем только измененные клетки
+	log.Printf("[GAME] handleCellReveal: отправка BroadcastCellUpdates, changedCells=%d, gameOver=%v, gameWon=%v", len(changedCells), gameOver, gameWon)
 	s.BroadcastCellUpdates(room, changedCells, gameOver, gameWon, revealed, hintsUsed, loserPlayerID, loserNickname)
+	log.Printf("[GAME] handleCellReveal: BroadcastCellUpdates завершен")
 
 	return nil
 }

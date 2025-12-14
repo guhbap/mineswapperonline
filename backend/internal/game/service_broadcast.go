@@ -10,7 +10,7 @@ import (
 func (s *Service) BroadcastGameState(room *Room) {
 	binaryData, err := EncodeGameStateProtobuf(room.GameState)
 	if err != nil {
-		log.Printf("Ошибка кодирования gameState: %v", err)
+		log.Printf("[WS OUT] Ошибка кодирования gameState: %v", err)
 		return
 	}
 
@@ -20,6 +20,8 @@ func (s *Service) BroadcastGameState(room *Room) {
 		playerIDs = append(playerIDs, id)
 	}
 	room.Mu.RUnlock()
+
+	log.Printf("[WS OUT] BroadcastGameState: отправка всем игрокам (количество=%d), размер=%d байт", len(playerIDs), len(binaryData))
 
 	for _, id := range playerIDs {
 		wsPlayer := s.wsManager.GetWSPlayer(id)
@@ -32,13 +34,19 @@ func (s *Service) BroadcastGameState(room *Room) {
 						muVal.Lock()
 					}
 					if err := wsConn.WriteMessage(gorillaWS.BinaryMessage, binaryData); err != nil {
-						log.Printf("Ошибка отправки состояния игры игроку %s: %v", id, err)
+						log.Printf("[WS OUT] Ошибка отправки gameState игроку %s: %v", id, err)
+					} else {
+						log.Printf("[WS OUT] Игрок %s: отправлен gameState, размер=%d байт", id, len(binaryData))
 					}
 					if muVal, ok := mu.(interface{ Lock(); Unlock() }); ok {
 						muVal.Unlock()
 					}
 				}
+			} else {
+				log.Printf("[WS OUT] Игрок %s: соединение nil, пропуск отправки gameState", id)
 			}
+		} else {
+			log.Printf("[WS OUT] Игрок %s: wsPlayer не найден, пропуск отправки gameState", id)
 		}
 	}
 }
@@ -46,15 +54,16 @@ func (s *Service) BroadcastGameState(room *Room) {
 // BroadcastCellUpdates отправляет обновления клеток всем игрокам
 func (s *Service) BroadcastCellUpdates(room *Room, changedCells map[[2]int]bool, gameOver, gameWon bool, revealed, hintsUsed int, loserPlayerID, loserNickname string) {
 	if len(changedCells) == 0 && !gameOver && !gameWon {
-		log.Printf("BroadcastCellUpdates: пропуск (changedCells=%d, gameOver=%v, gameWon=%v)", len(changedCells), gameOver, gameWon)
+		log.Printf("[WS OUT] BroadcastCellUpdates: пропуск (changedCells=%d, gameOver=%v, gameWon=%v)", len(changedCells), gameOver, gameWon)
 		return
 	}
 
-	log.Printf("BroadcastCellUpdates: отправка обновлений (changedCells=%d, gameOver=%v, gameWon=%v, revealed=%d)", len(changedCells), gameOver, gameWon, revealed)
+	log.Printf("[WS OUT] BroadcastCellUpdates: отправка обновлений (changedCells=%d, gameOver=%v, gameWon=%v, revealed=%d)", len(changedCells), gameOver, gameWon, revealed)
 	updates := CollectCellUpdates(room, changedCells)
+	log.Printf("[WS OUT] BroadcastCellUpdates: собрано обновлений клеток: %d", len(updates))
 	binaryData, err := EncodeCellUpdateProtobuf(updates, gameOver, gameWon, revealed, hintsUsed, loserPlayerID, loserNickname)
 	if err != nil {
-		log.Printf("Ошибка кодирования обновлений клеток: %v", err)
+		log.Printf("[WS OUT] Ошибка кодирования обновлений клеток: %v", err)
 		s.BroadcastGameState(room)
 		return
 	}
@@ -66,6 +75,8 @@ func (s *Service) BroadcastCellUpdates(room *Room, changedCells map[[2]int]bool,
 	}
 	room.Mu.RUnlock()
 
+	log.Printf("[WS OUT] BroadcastCellUpdates: отправка всем игрокам (количество=%d), размер=%d байт", len(playerIDs), len(binaryData))
+
 	for _, id := range playerIDs {
 		wsPlayer := s.wsManager.GetWSPlayer(id)
 		if wsPlayer != nil {
@@ -77,13 +88,19 @@ func (s *Service) BroadcastCellUpdates(room *Room, changedCells map[[2]int]bool,
 						muVal.Lock()
 					}
 					if err := wsConn.WriteMessage(gorillaWS.BinaryMessage, binaryData); err != nil {
-						log.Printf("Ошибка отправки обновлений клеток игроку %s: %v", id, err)
+						log.Printf("[WS OUT] Ошибка отправки cellUpdate игроку %s: %v", id, err)
+					} else {
+						log.Printf("[WS OUT] Игрок %s: отправлен cellUpdate, размер=%d байт, обновлений=%d", id, len(binaryData), len(updates))
 					}
 					if muVal, ok := mu.(interface{ Lock(); Unlock() }); ok {
 						muVal.Unlock()
 					}
 				}
+			} else {
+				log.Printf("[WS OUT] Игрок %s: соединение nil, пропуск отправки cellUpdate", id)
 			}
+		} else {
+			log.Printf("[WS OUT] Игрок %s: wsPlayer не найден, пропуск отправки cellUpdate", id)
 		}
 	}
 }
@@ -95,10 +112,11 @@ func (s *Service) BroadcastToAll(room *Room, msg Message) {
 	if msg.Type == "chat" && msg.Chat != nil {
 		binaryData, err = EncodeChatProtobuf(&msg)
 		if err != nil {
-			log.Printf("Ошибка кодирования чата: %v", err)
+			log.Printf("[WS OUT] Ошибка кодирования чата: %v", err)
 			return
 		}
 	} else {
+		log.Printf("[WS OUT] BroadcastToAll: неизвестный тип сообщения или пустой чат: type=%s", msg.Type)
 		return
 	}
 
@@ -108,6 +126,8 @@ func (s *Service) BroadcastToAll(room *Room, msg Message) {
 		playerIDs = append(playerIDs, id)
 	}
 	room.Mu.RUnlock()
+
+	log.Printf("[WS OUT] BroadcastToAll (chat): отправка всем игрокам (количество=%d), размер=%d байт, текст=%s", len(playerIDs), len(binaryData), msg.Chat.Text)
 
 	for _, id := range playerIDs {
 		wsPlayer := s.wsManager.GetWSPlayer(id)
@@ -120,7 +140,9 @@ func (s *Service) BroadcastToAll(room *Room, msg Message) {
 						muVal.Lock()
 					}
 					if err := wsConn.WriteMessage(gorillaWS.BinaryMessage, binaryData); err != nil {
-						log.Printf("Ошибка отправки сообщения чата игроку %s: %v", id, err)
+						log.Printf("[WS OUT] Ошибка отправки chat игроку %s: %v", id, err)
+					} else {
+						log.Printf("[WS OUT] Игрок %s: отправлен chat, размер=%d байт", id, len(binaryData))
 					}
 					if muVal, ok := mu.(interface{ Lock(); Unlock() }); ok {
 						muVal.Unlock()
@@ -142,10 +164,11 @@ func (s *Service) BroadcastToOthers(room *Room, senderID string, msg Message) {
 	if msg.Type == "cursor" && msg.Cursor != nil {
 		binaryData, err = EncodeCursorProtobuf(&msg)
 		if err != nil {
-			log.Printf("Ошибка кодирования курсора: %v", err)
+			log.Printf("[WS OUT] Ошибка кодирования курсора: %v", err)
 			return
 		}
 	} else {
+		log.Printf("[WS OUT] BroadcastToOthers: неизвестный тип сообщения: type=%s", msg.Type)
 		return
 	}
 
@@ -158,6 +181,9 @@ func (s *Service) BroadcastToOthers(room *Room, senderID string, msg Message) {
 	}
 	room.Mu.RUnlock()
 
+	// Курсор логируем реже, чтобы не засорять логи
+	// log.Printf("[WS OUT] BroadcastToOthers (cursor): отправка игрокам (количество=%d), размер=%d байт", len(playerIDs), len(binaryData))
+
 	for _, id := range playerIDs {
 		wsPlayer := s.wsManager.GetWSPlayer(id)
 		if wsPlayer != nil {
@@ -169,7 +195,7 @@ func (s *Service) BroadcastToOthers(room *Room, senderID string, msg Message) {
 						muVal.Lock()
 					}
 					if err := wsConn.WriteMessage(gorillaWS.BinaryMessage, binaryData); err != nil {
-						log.Printf("Ошибка отправки сообщения игроку %s: %v", id, err)
+						log.Printf("[WS OUT] Ошибка отправки cursor игроку %s: %v", id, err)
 					}
 					if muVal, ok := mu.(interface{ Lock(); Unlock() }); ok {
 						muVal.Unlock()
@@ -195,7 +221,7 @@ func (s *Service) BroadcastPlayerList(room *Room) {
 
 	binaryData, err := EncodePlayersProtobuf(playersList)
 	if err != nil {
-		log.Printf("Ошибка кодирования списка игроков: %v", err)
+		log.Printf("[WS OUT] Ошибка кодирования списка игроков: %v", err)
 		return
 	}
 
@@ -205,6 +231,8 @@ func (s *Service) BroadcastPlayerList(room *Room) {
 		playerIDs = append(playerIDs, id)
 	}
 	room.Mu.RUnlock()
+
+	log.Printf("[WS OUT] BroadcastPlayerList: отправка всем игрокам (количество=%d), размер=%d байт, игроков в списке=%d", len(playerIDs), len(binaryData), len(playersList))
 
 	for _, id := range playerIDs {
 		wsPlayer := s.wsManager.GetWSPlayer(id)
@@ -217,7 +245,9 @@ func (s *Service) BroadcastPlayerList(room *Room) {
 						muVal.Lock()
 					}
 					if err := wsConn.WriteMessage(gorillaWS.BinaryMessage, binaryData); err != nil {
-						log.Printf("Ошибка отправки списка игроков: %v", err)
+						log.Printf("[WS OUT] Ошибка отправки players игроку %s: %v", id, err)
+					} else {
+						log.Printf("[WS OUT] Игрок %s: отправлен players, размер=%d байт", id, len(binaryData))
 					}
 					if muVal, ok := mu.(interface{ Lock(); Unlock() }); ok {
 						muVal.Unlock()
@@ -232,7 +262,7 @@ func (s *Service) BroadcastPlayerList(room *Room) {
 func (s *Service) SendGameStateToPlayer(room *Room, player WSPlayer) {
 	binaryData, err := EncodeGameStateProtobuf(room.GameState)
 	if err != nil {
-		log.Printf("Ошибка кодирования gameState: %v", err)
+		log.Printf("[WS OUT] Ошибка кодирования gameState: %v", err)
 		return
 	}
 
@@ -245,9 +275,13 @@ func (s *Service) SendGameStateToPlayer(room *Room, player WSPlayer) {
 				defer muVal.Unlock()
 			}
 			if err := wsConn.WriteMessage(gorillaWS.BinaryMessage, binaryData); err != nil {
-				log.Printf("Ошибка отправки состояния игры: %v", err)
+				log.Printf("[WS OUT] Ошибка отправки gameState игроку: %v", err)
+			} else {
+				log.Printf("[WS OUT] Отправлен gameState игроку, размер=%d байт", len(binaryData))
 			}
 		}
+	} else {
+		log.Printf("[WS OUT] Соединение nil, пропуск отправки gameState")
 	}
 }
 
@@ -266,7 +300,7 @@ func (s *Service) SendPlayerListToPlayer(room *Room, player WSPlayer) {
 
 	binaryData, err := EncodePlayersProtobuf(playersList)
 	if err != nil {
-		log.Printf("Ошибка кодирования списка игроков: %v", err)
+		log.Printf("[WS OUT] Ошибка кодирования списка игроков: %v", err)
 		return
 	}
 
@@ -279,9 +313,13 @@ func (s *Service) SendPlayerListToPlayer(room *Room, player WSPlayer) {
 				defer muVal.Unlock()
 			}
 			if err := wsConn.WriteMessage(gorillaWS.BinaryMessage, binaryData); err != nil {
-				log.Printf("Ошибка отправки списка игроков: %v", err)
+				log.Printf("[WS OUT] Ошибка отправки players игроку: %v", err)
+			} else {
+				log.Printf("[WS OUT] Отправлен players игроку, размер=%d байт, игроков в списке=%d", len(binaryData), len(playersList))
 			}
 		}
+	} else {
+		log.Printf("[WS OUT] Соединение nil, пропуск отправки players")
 	}
 }
 

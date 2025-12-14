@@ -206,29 +206,43 @@ func (m *Manager) handleMessages(conn *websocket.Conn, room *game.Room, player *
 
 		// Обрабатываем бинарные сообщения (protobuf)
 		if messageType == websocket.BinaryMessage {
+			log.Printf("[WS IN] Игрок %s: получено бинарное сообщение, размер=%d байт", playerID, len(data))
 			msg, parseErr = decodeClientMessageProtobuf(data)
 			if parseErr != nil {
-				log.Printf("Ошибка декодирования protobuf сообщения: %v", parseErr)
+				log.Printf("[WS IN] Ошибка декодирования protobuf сообщения от игрока %s: %v", playerID, parseErr)
 				continue
 			}
 		} else if messageType == websocket.TextMessage {
 			// Fallback: парсим JSON сообщение (для обратной совместимости)
+			log.Printf("[WS IN] Игрок %s: получено текстовое сообщение, размер=%d байт", playerID, len(data))
 			var jsonMsg game.Message
 			if parseErr := utils.DecodeJSONFromBytes(data, &jsonMsg); parseErr != nil {
-				log.Printf("Ошибка парсинга JSON сообщения: %v", parseErr)
+				log.Printf("[WS IN] Ошибка парсинга JSON сообщения от игрока %s: %v", playerID, parseErr)
 				continue
 			}
 			msg = &jsonMsg
 		} else {
+			log.Printf("[WS IN] Игрок %s: неизвестный тип сообщения: %d", playerID, messageType)
 			continue
 		}
 
 		if msg == nil {
+			log.Printf("[WS IN] Игрок %s: сообщение декодировано как nil", playerID)
 			continue
 		}
 
-		if msg.Type != "cursor" {
-			log.Printf("Получено сообщение от игрока %s: тип=%s", playerID, msg.Type)
+		// Детальное логирование входящих сообщений
+		if msg.Type == "cellClick" && msg.CellClick != nil {
+			log.Printf("[WS IN] Игрок %s: cellClick - row=%d, col=%d, flag=%v", playerID, msg.CellClick.Row, msg.CellClick.Col, msg.CellClick.Flag)
+		} else if msg.Type == "cursor" && msg.Cursor != nil {
+			// Курсор логируем реже, чтобы не засорять логи
+			// log.Printf("[WS IN] Игрок %s: cursor - x=%.2f, y=%.2f", playerID, msg.Cursor.X, msg.Cursor.Y)
+		} else if msg.Type == "hint" && msg.Hint != nil {
+			log.Printf("[WS IN] Игрок %s: hint - row=%d, col=%d", playerID, msg.Hint.Row, msg.Hint.Col)
+		} else if msg.Type == "chat" && msg.Chat != nil {
+			log.Printf("[WS IN] Игрок %s: chat - text=%s", playerID, msg.Chat.Text)
+		} else {
+			log.Printf("[WS IN] Игрок %s: тип=%s", playerID, msg.Type)
 		}
 
 		switch msg.Type {
@@ -257,7 +271,9 @@ func (m *Manager) handlePing(player *Player, playerID string) {
 	if player.Conn != nil {
 		pongMsg, _ := EncodePongProtobuf()
 		if err := player.Conn.WriteMessage(websocket.BinaryMessage, pongMsg); err != nil {
-			log.Printf("Ошибка отправки pong игроку %s: %v", playerID, err)
+			log.Printf("[WS OUT] Ошибка отправки pong игроку %s: %v", playerID, err)
+		} else {
+			log.Printf("[WS OUT] Игрок %s: отправлен pong, размер=%d байт", playerID, len(pongMsg))
 		}
 	}
 }
