@@ -420,7 +420,19 @@ func (m *Manager) handleNewGame(room *game.Room, roomID string) {
 func (m *Manager) GetWSPlayer(playerID string) *Player {
 	m.wsPlayersMu.RLock()
 	defer m.wsPlayersMu.RUnlock()
-	return m.wsPlayers[playerID]
+	player := m.wsPlayers[playerID]
+	if player == nil {
+		log.Printf("[WS] GetWSPlayer: playerID=%s не найден в wsPlayers (всего игроков: %d)", playerID, len(m.wsPlayers))
+		// Логируем все ключи для отладки
+		if len(m.wsPlayers) > 0 {
+			keys := make([]string, 0, len(m.wsPlayers))
+			for k := range m.wsPlayers {
+				keys = append(keys, k)
+			}
+			log.Printf("[WS] GetWSPlayer: доступные playerID в wsPlayers: %v", keys)
+		}
+	}
+	return player
 }
 
 // getWSPlayer получает WebSocket Player по ID (внутренний метод)

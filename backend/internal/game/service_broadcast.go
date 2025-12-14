@@ -78,8 +78,10 @@ func (s *Service) BroadcastCellUpdates(room *Room, changedCells map[[2]int]bool,
 	log.Printf("[WS OUT] BroadcastCellUpdates: отправка всем игрокам (количество=%d), размер=%d байт", len(playerIDs), len(binaryData))
 
 	for _, id := range playerIDs {
+		log.Printf("[WS OUT] BroadcastCellUpdates: поиск wsPlayer для id=%s", id)
 		wsPlayer := s.wsManager.GetWSPlayer(id)
 		if wsPlayer != nil {
+			log.Printf("[WS OUT] BroadcastCellUpdates: wsPlayer найден для id=%s", id)
 			mu := wsPlayer.GetMu()
 			conn := wsPlayer.GetConn()
 			if conn != nil {
@@ -95,12 +97,14 @@ func (s *Service) BroadcastCellUpdates(room *Room, changedCells map[[2]int]bool,
 					if muVal, ok := mu.(interface{ Lock(); Unlock() }); ok {
 						muVal.Unlock()
 					}
+				} else {
+					log.Printf("[WS OUT] Игрок %s: соединение не является *gorillaWS.Conn, пропуск", id)
 				}
 			} else {
 				log.Printf("[WS OUT] Игрок %s: соединение nil, пропуск отправки cellUpdate", id)
 			}
 		} else {
-			log.Printf("[WS OUT] Игрок %s: wsPlayer не найден, пропуск отправки cellUpdate", id)
+			log.Printf("[WS OUT] Игрок %s: wsPlayer не найден в wsPlayers, пропуск отправки cellUpdate", id)
 		}
 	}
 }
