@@ -5,8 +5,8 @@ import (
 	"log"
 
 	"minesweeperonline/internal/game"
-	"minesweeperonline/internal/utils"
 	pb "minesweeperonline/proto"
+
 	"google.golang.org/protobuf/proto"
 )
 
@@ -152,7 +152,7 @@ func decodeGameStateFromProtobuf(data []byte) (*game.GameState, error) {
 		Rows:          int(gameStateProto.Rows),
 		Cols:          int(gameStateProto.Cols),
 		Mines:         int(gameStateProto.Mines),
-		Seed:          utils.Int64ToUUID(gameStateProto.Seed), // Временная конвертация: protobuf еще использует int64
+		Seed:          gameStateProto.Seed,
 		GameOver:      gameStateProto.GameOver,
 		GameWon:       gameStateProto.GameWon,
 		Revealed:      int(gameStateProto.Revealed),
@@ -194,4 +194,3 @@ func decodeGameStateFromProtobuf(data []byte) (*game.GameState, error) {
 	// Конвертируем в game.GameState
 	return convertGameStateFromMain(mainGS), nil
 }
-

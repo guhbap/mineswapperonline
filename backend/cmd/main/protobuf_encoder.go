@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	pb "minesweeperonline/proto"
-	"minesweeperonline/internal/utils"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -61,7 +60,7 @@ func encodeGameStateProtobuf(gs *GameState) ([]byte, error) {
 		Rows:           int32(gs.Rows),
 		Cols:           int32(gs.Cols),
 		Mines:          int32(gs.Mines),
-		Seed:           utils.UUIDToInt64(gs.Seed), // Временная конвертация: protobuf еще использует int64
+		Seed:           gs.Seed,
 		GameOver:       gs.GameOver,
 		GameWon:        gs.GameWon,
 		Revealed:       int32(gs.Revealed),
