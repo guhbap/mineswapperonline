@@ -1,5 +1,5 @@
 <template>
-  <svg :class="className" :style="style" viewBox="0 0 32 32" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+  <svg :class="className" :style="style" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
     <circle cx="16" cy="16" r="12" stroke="currentColor" stroke-width="2"/>
     <path d="M16 2V5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="bevel"/>
     <path d="M16 27V30" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="bevel"/>
