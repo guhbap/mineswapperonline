@@ -277,8 +277,8 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 		if seed != 0 {
 			log.Printf("Игра не дает рейтинг: указан seed=%d (игра нерейтинговая)", seed)
 		} else if !rating.IsRatingEligible(float64(width), float64(height), float64(mines), gameTime) {
-			log.Printf("Игра не дает рейтинг: время=%.2f сек (мин. 3 сек), плотность=%.2f%% (мин. 10%%)",
-				gameTime, float64(mines)/(float64(width)*float64(height))*100)
+			log.Printf("Игра не дает рейтинг: плотность=%.2f%% (мин. 10%%)",
+				float64(mines)/(float64(width)*float64(height))*100)
 		} else {
 			// Вычисляем рейтинг за игру по формуле: R = K * d / ln(t + 1)
 			gameRating := rating.CalculateGameRating(float64(width), float64(height), float64(mines), gameTime)

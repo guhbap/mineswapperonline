@@ -292,7 +292,7 @@
       </div>
       <div v-else-if="gameState && gameStartTime" class="rating-change">
         <div class="rating-change__hint">
-          Игра не дает рейтинг (время &lt; 3 сек или плотность мин &lt; 10%)
+          Игра не дает рейтинг (плотность мин &lt; 10%)
         </div>
       </div>
       <button @click="handleNewGame" class="game-message__button">
@@ -648,7 +648,7 @@ const handleMessage = (msg: WebSocketMessage) => {
       if (isRatingEligible(gameState.value.c, gameState.value.r, gameState.value.m, gameTime)) {
         ratingChange.value = calculateGameRating(gameState.value.c, gameState.value.r, gameState.value.m, gameTime, chording, quickStart)
       } else {
-        ratingChange.value = null // Игра не дает рейтинг (время < 3 сек или плотность < 10%)
+        ratingChange.value = null // Игра не дает рейтинг (плотность < 10%)
       }
     }
     
@@ -757,7 +757,7 @@ const handleMessage = (msg: WebSocketMessage) => {
       if (isRatingEligible(gameState.value.c, gameState.value.r, gameState.value.m, gameTime)) {
         ratingChange.value = calculateGameRating(gameState.value.c, gameState.value.r, gameState.value.m, gameTime, chording, quickStart)
       } else {
-        ratingChange.value = null // Игра не дает рейтинг (время < 3 сек или плотность < 10%)
+        ratingChange.value = null // Игра не дает рейтинг (плотность < 10%)
       }
     }
   } else if (msg.type === 'cursor' && msg.cursor) {

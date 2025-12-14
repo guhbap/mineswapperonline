@@ -79,7 +79,7 @@
           {{ isRatedGame ? 'Рейтинговая игра' : 'Нерейтинговая игра' }}
         </div>
         <div v-if="isRatedGame && maxRatingGain > 0" class="rating-status__gain">
-          Макс. рейтинг: {{ Math.round(maxRatingGain) }} (при времени ≥ 3 сек)
+          Макс. рейтинг: {{ Math.round(maxRatingGain) }}
         </div>
         <div v-else-if="!isRatedGame && form.seed != null && form.seed !== 0" class="rating-status__hint">
           Указан seed - игра нерейтинговая
@@ -266,7 +266,7 @@ const isRatedGame = computed(() => {
   return density >= 0.1
 })
 
-// Максимальный рейтинг при минимальном времени (3 секунды)
+// Максимальный рейтинг при минимальном времени (0.1 секунды для расчета)
 const maxRatingGain = computed(() => {
   if (!isRatedGame.value) return 0
   return calculateMaxRating(

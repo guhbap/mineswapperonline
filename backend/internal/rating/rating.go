@@ -122,13 +122,8 @@ func CalculateGameRating(width, height, mines, gameTime float64) float64 {
 
 // IsRatingEligible проверяет, может ли игра дать рейтинг
 // Возвращает true, если:
-// 1. Время игры >= 3 секунд
-// 2. Плотность мин >= 10% (0.1)
+// 1. Плотность мин >= 10% (0.1)
 func IsRatingEligible(width, height, mines, gameTime float64) bool {
-	// Минимальное время - 3 секунды
-	if gameTime < 3.0 {
-		return false
-	}
 	// Минимальная плотность мин - 10%
 	cells := width * height
 	if cells <= 0 {

@@ -48,18 +48,13 @@ export function calculateGameRating(
 
 // Проверяет, может ли игра дать рейтинг
 // Возвращает true, если:
-// 1. Время игры >= 3 секунд
-// 2. Плотность мин >= 10% (0.1)
+// 1. Плотность мин >= 10% (0.1)
 export function isRatingEligible(
   width: number,
   height: number,
   mines: number,
   gameTime: number
 ): boolean {
-  // Минимальное время - 3 секунды
-  if (gameTime < 3.0) {
-    return false
-  }
   // Минимальная плотность мин - 10%
   const cells = width * height
   if (cells <= 0) {
@@ -72,7 +67,7 @@ export function isRatingEligible(
   return true
 }
 
-// Вычисляет максимальный возможный рейтинг для данного поля (при минимальном времени 3 сек)
+// Вычисляет максимальный возможный рейтинг для данного поля (при минимальном времени 0.1 сек для расчета)
 export function calculateMaxRating(
   width: number,
   height: number,
@@ -80,7 +75,7 @@ export function calculateMaxRating(
   chording: boolean = false,
   quickStart: boolean = false
 ): number {
-  return calculateGameRating(width, height, mines, 3.0, chording, quickStart)
+  return calculateGameRating(width, height, mines, 0.1, chording, quickStart)
 }
 
 // Вычисляет изменение рейтинга на основе игры
