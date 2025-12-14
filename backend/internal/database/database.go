@@ -124,11 +124,52 @@ func (db *DB) InitSchema() error {
 			if err := db.Raw(`SELECT data_type FROM information_schema.columns WHERE table_name = 'user_game_history' AND column_name = 'seed'`).Scan(&columnType).Error; err == nil {
 				if columnType == "bigint" {
 					log.Println("Converting seed column from BIGINT to VARCHAR(36)")
-					if err := db.Exec(`ALTER TABLE user_game_history ALTER COLUMN seed TYPE VARCHAR(36) USING ''`).Error; err != nil {
-						log.Printf("Warning: failed to convert seed column type: %v", err)
+					// В PostgreSQL нельзя напрямую конвертировать BIGINT в VARCHAR
+					// Используем временную колонку для миграции
+					// Сначала создаем временную колонку
+					if err := db.Exec(`ALTER TABLE user_game_history ADD COLUMN seed_new VARCHAR(36) DEFAULT ''`).Error; err != nil {
+						log.Printf("Warning: failed to add temporary seed column: %v", err)
 					} else {
-						log.Println("Converted seed column to VARCHAR(36)")
+						log.Println("Added temporary seed_new column")
+						// Генерируем UUID для всех существующих записей
+						// Используем gen_random_uuid() если доступно, иначе генерируем через MD5
+						if err := db.Exec(`
+							UPDATE user_game_history 
+							SET seed_new = LOWER(
+								SUBSTRING(MD5(RANDOM()::TEXT || CLOCK_TIMESTAMP()::TEXT || id::TEXT) FROM 1 FOR 8) || '-' ||
+								SUBSTRING(MD5(RANDOM()::TEXT || CLOCK_TIMESTAMP()::TEXT || id::TEXT) FROM 9 FOR 4) || '-' ||
+								'4' || SUBSTRING(MD5(RANDOM()::TEXT || CLOCK_TIMESTAMP()::TEXT || id::TEXT) FROM 14 FOR 3) || '-' ||
+								SUBSTRING('89ab', FLOOR(RANDOM() * 4 + 1)::INT, 1) || SUBSTRING(MD5(RANDOM()::TEXT || CLOCK_TIMESTAMP()::TEXT || id::TEXT) FROM 18 FOR 3) || '-' ||
+								SUBSTRING(MD5(RANDOM()::TEXT || CLOCK_TIMESTAMP()::TEXT || id::TEXT) FROM 22 FOR 12)
+							)
+							WHERE seed_new = ''
+						`).Error; err != nil {
+							log.Printf("Warning: failed to generate UUIDs for existing records: %v", err)
+						} else {
+							log.Println("Generated UUIDs for existing records")
+						}
+						// Удаляем старую колонку
+						if err := db.Exec(`ALTER TABLE user_game_history DROP COLUMN seed`).Error; err != nil {
+							log.Printf("Warning: failed to drop old seed column: %v", err)
+						} else {
+							log.Println("Dropped old seed column")
+						}
+						// Переименовываем новую колонку
+						if err := db.Exec(`ALTER TABLE user_game_history RENAME COLUMN seed_new TO seed`).Error; err != nil {
+							log.Printf("Warning: failed to rename seed_new column: %v", err)
+						} else {
+							log.Println("Renamed seed_new to seed")
+						}
+						// Устанавливаем NOT NULL после заполнения данных
+						if err := db.Exec(`ALTER TABLE user_game_history ALTER COLUMN seed SET NOT NULL`).Error; err != nil {
+							log.Printf("Warning: failed to set seed NOT NULL: %v", err)
+						} else {
+							log.Println("Set seed column to NOT NULL")
+						}
+						log.Println("Converted seed column from BIGINT to VARCHAR(36)")
 					}
+				} else if columnType != "character varying" && columnType != "varchar" {
+					log.Printf("Warning: seed column has unexpected type: %s, expected VARCHAR(36)", columnType)
 				}
 			}
 		}
