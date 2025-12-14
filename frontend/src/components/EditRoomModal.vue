@@ -165,11 +165,12 @@ const handleOverlayClick = () => {
   padding: 2.5rem;
   border-radius: 1rem;
   box-shadow: 0 20px 60px var(--shadow);
-  min-width: 500px;
-  max-width: 90vw;
+  width: 100%;
+  max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
   animation: slideIn 0.3s ease-out;
+  box-sizing: border-box;
 }
 
 @media (max-width: 768px) {
@@ -204,6 +205,9 @@ const handleOverlayClick = () => {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .form-warning {

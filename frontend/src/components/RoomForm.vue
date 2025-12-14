@@ -395,18 +395,28 @@ const checkTemplate = () => {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .form-label {
   font-weight: 600;
   color: var(--text-primary);
   font-size: 0.875rem;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
 }
 
 .form-label-small {
@@ -564,6 +574,8 @@ const checkTemplate = () => {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .game-mode-option {
@@ -576,6 +588,9 @@ const checkTemplate = () => {
   cursor: pointer;
   transition: all 0.2s;
   gap: 0.75rem;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .game-mode-option:hover {
@@ -596,6 +611,8 @@ const checkTemplate = () => {
 
 .game-mode-content {
   flex: 1;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .game-mode-title {
@@ -609,6 +626,9 @@ const checkTemplate = () => {
   font-size: 0.875rem;
   color: var(--text-secondary);
   line-height: 1.4;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
 }
 
 .form-hint {
