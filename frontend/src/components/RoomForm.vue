@@ -134,13 +134,13 @@
     </div>
 
     <div v-if="showAdvancedOptions" class="form-group">
-      <label class="form-label">Seed (опционально)</label>
+      <label class="form-label">Seed (UUID, опционально)</label>
       <input
         v-model="form.seed"
-        type="number"
+        type="text"
         class="form-input"
         placeholder="Оставьте пустым для случайной генерации"
-        :min="1"
+        pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
       />
       <div class="form-hint">
         Укажите seed для воспроизводимой генерации поля. Если указан - игра будет нерейтинговой.
