@@ -50,7 +50,7 @@ func (h *ProfileHandler) calculateUserRating(userID int, topGamesCount int) floa
 		if !record.Won {
 			continue
 		}
-		
+
 		// Пропускаем игры с явно указанным пользователем seed (нерейтинговые)
 		if record.HasCustomSeed {
 			continue
@@ -60,7 +60,7 @@ func (h *ProfileHandler) calculateUserRating(userID int, topGamesCount int) floa
 		var gameRating float64
 		if rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
 			gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
-			
+
 			// Применяем модификаторы
 			if record.Chording {
 				gameRating = gameRating * 0.8
@@ -302,8 +302,8 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 
 	var err error
 	// Сохраняем игру в историю (для побед и поражений)
-	log.Printf("Сохранение игры в историю: userID=%d, roomID=%s, размер=%dx%d, мины=%d, время=%.2f сек, seed=%s, creatorID=%d, won=%v",
-		userID, roomID, width, height, mines, gameTime, seed, creatorID, won)
+	log.Printf("Сохранение игры в историю: userID=%d, roomID=%s, размер=%dx%d, мины=%d, время=%.2f сек, seed=%s (len=%d), creatorID=%d, won=%v",
+		userID, roomID, width, height, mines, gameTime, seed, len(seed), creatorID, won)
 	gameHistory := models.UserGameHistory{
 		UserID:        userID,
 		RoomID:        roomID,
@@ -319,26 +319,35 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 		QuickStart:    quickStart,
 		CreatedAt:     time.Now(),
 	}
+	log.Printf("GameHistory перед сохранением: Seed=%s (len=%d)", gameHistory.Seed, len(gameHistory.Seed))
 	err = h.db.Create(&gameHistory).Error
 	if err != nil {
 		log.Printf("Error saving game to history: %v", err)
-	} else if len(participants) > 0 {
-		// Сохраняем участников игры
-		for _, participant := range participants {
-			var colorPtr *string
-			if participant.Color != "" {
-				colorPtr = &participant.Color
-			}
-			gameParticipant := models.GameParticipant{
-				GameHistoryID: gameHistory.ID,
-				UserID:        participant.UserID,
-				Nickname:      participant.Nickname,
-				Color:         colorPtr,
-			}
-			err = h.db.Where("game_history_id = ? AND user_id = ?", gameHistory.ID, participant.UserID).
-				FirstOrCreate(&gameParticipant).Error
-			if err != nil {
-				log.Printf("Error saving game participant: %v", err)
+	} else {
+		// Проверяем, что сохранилось
+		var savedRecord models.UserGameHistory
+		if err := h.db.First(&savedRecord, gameHistory.ID).Error; err == nil {
+			log.Printf("Проверка сохраненного seed: ID=%d, Seed=%s (len=%d)", savedRecord.ID, savedRecord.Seed, len(savedRecord.Seed))
+		}
+
+		if len(participants) > 0 {
+			// Сохраняем участников игры
+			for _, participant := range participants {
+				var colorPtr *string
+				if participant.Color != "" {
+					colorPtr = &participant.Color
+				}
+				gameParticipant := models.GameParticipant{
+					GameHistoryID: gameHistory.ID,
+					UserID:        participant.UserID,
+					Nickname:      participant.Nickname,
+					Color:         colorPtr,
+				}
+				err = h.db.Where("game_history_id = ? AND user_id = ?", gameHistory.ID, participant.UserID).
+					FirstOrCreate(&gameParticipant).Error
+				if err != nil {
+					log.Printf("Error saving game participant: %v", err)
+				}
 			}
 		}
 	}
@@ -354,13 +363,13 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 		} else {
 			// Вычисляем рейтинг за игру по формуле: R = K * d / ln(t + 1)
 			gameRating := rating.CalculateGameRating(float64(width), float64(height), float64(mines), gameTime)
-			
+
 			// Если используется Chording, рейтинг умножается на 0.8
 			if chording {
 				gameRating = gameRating * 0.8
 				log.Printf("Chording enabled: рейтинг умножен на 0.8")
 			}
-			
+
 			// Если используется QuickStart, рейтинг умножается на 0.9
 			if quickStart {
 				gameRating = gameRating * 0.9
@@ -409,14 +418,15 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 	}
 }
 
-func (h *ProfileHandler) findUserByID(id int) (models.User, error) {
-	return h.FindUserByID(id)
+// findUserByID находит пользователя по ID (приватный метод)
+func (h *ProfileHandler) findUserByID(userID int) (models.User, error) {
+	return h.FindUserByID(userID)
 }
 
 // FindUserByID находит пользователя по ID (публичный метод)
-func (h *ProfileHandler) FindUserByID(id int) (models.User, error) {
+func (h *ProfileHandler) FindUserByID(userID int) (models.User, error) {
 	var user models.User
-	err := h.db.First(&user, id).Error
+	err := h.db.First(&user, userID).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return models.User{}, err
 	}
@@ -567,7 +577,7 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 		if record.Won && !record.HasCustomSeed && rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
 			// Пропускаем игры с явно указанным пользователем seed (нерейтинговые)
 			gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
-			
+
 			// Применяем модификаторы
 			if record.Chording {
 				gameRating = gameRating * 0.8
@@ -671,7 +681,7 @@ func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) 
 		if record.Won && !record.HasCustomSeed && rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
 			// Пропускаем игры с явно указанным пользователем seed (нерейтинговые)
 			gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
-			
+
 			// Применяем модификаторы
 			if record.Chording {
 				gameRating = gameRating * 0.8

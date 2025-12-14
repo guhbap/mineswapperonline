@@ -63,12 +63,13 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 	var seed string = ""
 	if req.Seed != nil && *req.Seed != "" {
 		seed = *req.Seed
-		log.Printf("CreateRoom: пользователь указал seed=%s", seed)
+		log.Printf("CreateRoom: пользователь указал seed=%s (len=%d)", seed, len(seed))
 	} else {
 		log.Printf("CreateRoom: seed не указан, будет сгенерирован автоматически")
 	}
 	room := h.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID, gameMode, req.QuickStart, req.Chording, seed)
-	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, GameMode: %s, QuickStart: %v, Chording: %v, Seed: %d, HasCustomSeed: %v)", req.Name, room.ID, creatorID, gameMode, req.QuickStart, req.Chording, room.GameState.Seed, room.HasCustomSeed)
+	log.Printf("CreateRoom: после создания комнаты GameState.Seed=%s (len=%d)", room.GameState.Seed, len(room.GameState.Seed))
+	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, GameMode: %s, QuickStart: %v, Chording: %v, Seed: %s, HasCustomSeed: %v)", req.Name, room.ID, creatorID, gameMode, req.QuickStart, req.Chording, room.GameState.Seed, room.HasCustomSeed)
 	utils.JSONResponse(w, http.StatusOK, room.ToResponse())
 }
 

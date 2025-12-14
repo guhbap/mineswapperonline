@@ -745,11 +745,13 @@ func (s *Server) handleCellClick(room *game.Room, playerID string, click *CellCl
 									seed := ""
 									if room.GameState != nil {
 										seed = room.GameState.Seed
+										log.Printf("RecordGameResult (chording взрыв): seed=%s (len=%d)", seed, len(seed))
 									}
 									room.Mu.RUnlock()
 									log.Printf("[MUTEX] handleCellClick (взрыв chording): room.Mu.RUnlock() разблокирован после сбора участников")
 
 									go func() {
+										log.Printf("RecordGameResult (chording взрыв): передаем seed=%s (len=%d)", seed, len(seed))
 										if err := s.profileHandler.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, chording, quickStart, roomID, seed, hasCustomSeed, creatorID, participants); err != nil {
 											log.Printf("Ошибка записи результата игры: %v", err)
 										}
