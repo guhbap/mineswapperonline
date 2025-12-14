@@ -76,7 +76,7 @@ const inputValue = computed({
 .input__label {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-primary);
   margin-bottom: 0.25rem;
   display: block;
 }
@@ -86,9 +86,9 @@ const inputValue = computed({
   padding: 0.75rem 1rem;
   font-size: 1rem;
   line-height: 1.5;
-  color: #111827;
-  background-color: #ffffff;
-  border: 2px solid #e5e7eb;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  border: 2px solid var(--border-color);
   border-radius: 0.5rem;
   transition: all 0.2s ease-in-out;
   outline: none;
@@ -96,7 +96,7 @@ const inputValue = computed({
 }
 
 .input__target:hover:not(:disabled) {
-  border-color: #d1d5db;
+  border-color: var(--text-secondary);
 }
 
 .input__target:focus {
@@ -105,14 +105,15 @@ const inputValue = computed({
 }
 
 .input__target:disabled {
-  background-color: #f9fafb;
-  color: #9ca3af;
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
   cursor: not-allowed;
   opacity: 0.6;
 }
 
 .input__target::placeholder {
-  color: #9ca3af;
+  color: var(--text-secondary);
+  opacity: 0.7;
 }
 
 .input__target--textarea {
