@@ -79,16 +79,17 @@ func (s *Service) HandleCellClick(room *Room, playerID string, click *CellClick)
 
 	if click.Flag {
 		log.Printf("[GAME] HandleCellClick: обработка флага")
-		// handleFlagToggle разблокирует мьютекс сам
+		// handleFlagToggle разблокирует мьютекс сам перед возвратом
 		return s.handleFlagToggle(room, playerID, row, col, cell, nickname, playerColor)
 	}
 
 	log.Printf("[GAME] HandleCellClick: обработка открытия ячейки")
-	// handleCellReveal разблокирует мьютекс сам
+	// handleCellReveal разблокирует мьютекс сам перед возвратом
 	return s.handleCellReveal(room, playerID, row, col, cell, nickname, playerColor)
 }
 
 // handleFlagToggle обрабатывает переключение флага
+// ВАЖНО: эта функция должна разблокировать room.GameState.Mu перед возвратом
 func (s *Service) handleFlagToggle(room *Room, playerID string, row, col int, cell *Cell, nickname, playerColor string) error {
 	log.Printf("[GAME] handleFlagToggle: начало, row=%d, col=%d", row, col)
 	if cell.IsRevealed {
@@ -106,7 +107,8 @@ func (s *Service) handleFlagToggle(room *Room, playerID string, row, col int, ce
 			if flagInfo.PlayerID != playerID {
 				timeSinceFlagSet := now.Sub(flagInfo.SetTime)
 				if timeSinceFlagSet < 1*time.Second {
-					log.Printf("Нельзя снять флаг сразу после установки другим игроком: row=%d, col=%d", row, col)
+					log.Printf("[GAME] handleFlagToggle: нельзя снять флаг сразу после установки другим игроком: row=%d, col=%d", row, col)
+					room.GameState.Mu.Unlock()
 					return nil
 				}
 			}
@@ -181,7 +183,9 @@ func (s *Service) handleCellReveal(room *Room, playerID string, row, col int, ce
 	}
 
 	if cell.IsRevealed {
-		log.Printf("Клик на открытую клетку без chording, игнорируем")
+		log.Printf("[GAME] handleCellReveal: клик на открытую клетку без chording, игнорируем")
+		// Разблокируем мьютекс перед возвратом
+		room.GameState.Mu.Unlock()
 		return nil
 	}
 
@@ -296,7 +300,9 @@ func (s *Service) handleCellReveal(room *Room, playerID string, row, col int, ce
 }
 
 // handleChording обрабатывает chording (клик на открытую клетку с цифрой)
+// ВАЖНО: эта функция должна разблокировать room.GameState.Mu перед возвратом, так как мьютекс был заблокирован в HandleCellClick
 func (s *Service) handleChording(room *Room, playerID string, row, col int, cell *Cell, nickname, playerColor string) error {
+	log.Printf("[GAME] handleChording: начало, row=%d, col=%d", row, col)
 	flagCount := 0
 	for di := -1; di <= 1; di++ {
 		for dj := -1; dj <= 1; dj++ {
@@ -313,11 +319,13 @@ func (s *Service) handleChording(room *Room, playerID string, row, col int, cell
 	}
 
 	if flagCount != cell.NeighborMines {
-		log.Printf("Chording не активирован (флагов: %d, нужно: %d)", flagCount, cell.NeighborMines)
+		log.Printf("[GAME] handleChording: не активирован (флагов: %d, нужно: %d)", flagCount, cell.NeighborMines)
+		// Разблокируем мьютекс перед возвратом
+		room.GameState.Mu.Unlock()
 		return nil
 	}
 
-	log.Printf("Chording активирован, открываем соседние клетки")
+	log.Printf("[GAME] handleChording: активирован, открываем соседние клетки")
 	changedCells := make(map[[2]int]bool)
 	for di := -1; di <= 1; di++ {
 		for dj := -1; dj <= 1; dj++ {
@@ -358,6 +366,7 @@ func (s *Service) handleChording(room *Room, playerID string, row, col int, cell
 		s.handleGameWin(room, playerID)
 	}
 
+	// Разблокируем мьютекс перед отправкой обновлений
 	room.GameState.Mu.Unlock()
 	go func() {
 		s.BroadcastGameState(room)
