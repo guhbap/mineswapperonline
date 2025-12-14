@@ -125,10 +125,10 @@
               </div>
             </div>
             <div class="game-rating">
-              <div class="rating-gain" v-if="game.won && game.rating > 0">
+              <div class="rating-gain" v-if="game.rating > 0">
                 +{{ Math.round(game.rating) }}
               </div>
-              <div class="rating-label" v-if="game.won && game.rating > 0">рейтинг</div>
+              <div class="rating-label" v-if="game.rating > 0">рейтинг</div>
               <div class="rating-label" v-else style="color: var(--text-secondary);">—</div>
             </div>
           </div>

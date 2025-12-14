@@ -607,8 +607,6 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.JSONResponse(w, http.StatusOK, wonGames)
-
-	utils.JSONResponse(w, http.StatusOK, games)
 }
 
 // GetRecentGames возвращает последние 10 игр пользователя с информацией об участниках
