@@ -186,21 +186,40 @@ func (gs *GameState) EnsureFirstClickSafe(firstRow, firstCol int) {
 	}
 
 	// Перемещаем мины в случайные свободные места
-	seedInt64 := utils.UUIDToInt64(gs.Seed)
-	rng := mathrand.New(mathrand.NewSource(seedInt64))
-	for range minesToMove {
+	// Используем seed-based генератор, если seed установлен, иначе обычный
+	var rng *mathrand.Rand
+	if gs.Seed != "" {
+		seedInt64 := utils.UUIDToInt64(gs.Seed)
+		rng = mathrand.New(mathrand.NewSource(seedInt64))
+	} else {
+		// Если seed пустой, используем обычный генератор
+		rng = mathrand.New(mathrand.NewSource(mathrand.Int63()))
+	}
+	
+	movedCount := 0
+	for _, minePos := range minesToMove {
 		attempts := 0
-		for attempts < 100 {
+		moved := false
+		for attempts < 1000 { // Увеличиваем количество попыток
 			newRow := rng.Intn(gs.Rows)
 			newCol := rng.Intn(gs.Cols)
 
 			if !gs.isInRadius(newRow, newCol, firstRow, firstCol, 1) &&
 				!gs.Board[newRow][newCol].IsMine {
 				gs.Board[newRow][newCol].IsMine = true
+				moved = true
+				movedCount++
 				break
 			}
 			attempts++
 		}
+		if !moved {
+			log.Printf("EnsureFirstClickSafe: не удалось переместить мину из (%d, %d) после %d попыток", minePos.row, minePos.col, attempts)
+		}
+	}
+	
+	if movedCount < len(minesToMove) {
+		log.Printf("EnsureFirstClickSafe: предупреждение - перемещено только %d из %d мин", movedCount, len(minesToMove))
 	}
 
 	// Пересчитываем соседние мины

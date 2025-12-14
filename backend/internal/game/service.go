@@ -198,12 +198,14 @@ func (s *Service) handleCellReveal(room *Room, playerID string, row, col int, ce
 	}
 
 	// Для classic режима с QuickStart: делаем первую клетку нулевой
-	if gameMode == "classic" && isFirstClick && room.QuickStart && room.GameState.Seed == "" {
-		log.Printf("QuickStart включен, делаем первую клетку нулевой")
+	// Применяем QuickStart всегда, когда он включен, независимо от seed
+	if gameMode == "classic" && isFirstClick && room.QuickStart {
+		log.Printf("[GAME] handleCellReveal: QuickStart включен, делаем первую клетку нулевой (seed=%s)", room.GameState.Seed)
 		room.GameState.Mu.Unlock()
 		room.GameState.EnsureFirstClickSafe(row, col)
 		room.GameState.Mu.Lock()
 		cell = &room.GameState.Board[row][col]
+		log.Printf("[GAME] handleCellReveal: QuickStart применен, cell.isMine=%v, neighborMines=%d", cell.IsMine, cell.NeighborMines)
 	}
 
 	// В режимах training и fair мины размещаются динамически при клике
