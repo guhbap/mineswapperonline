@@ -74,9 +74,6 @@ export interface RequestPasswordResetRequest {
 export interface RequestPasswordResetResponse {
   status: string
   message: string
-  resetToken?: string // Только для разработки!
-  expiresIn?: string
-  note?: string
 }
 
 export async function requestPasswordReset(data: RequestPasswordResetRequest): Promise<RequestPasswordResetResponse> {

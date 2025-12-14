@@ -16,14 +16,18 @@
         />
         <div v-if="error" class="error-message">{{ error }}</div>
         <div v-if="success" class="success-message">
-          <p>{{ success }}</p>
-          <div v-if="resetToken" class="reset-token-info">
-            <p><strong>Токен сброса пароля (только для разработки):</strong></p>
-            <div class="token-display">{{ resetToken }}</div>
-            <p class="token-note">В продакшене этот токен будет отправлен на email</p>
-            <router-link :to="`/reset-password?token=${resetToken}`" class="reset-link">
-              Перейти к сбросу пароля
-            </router-link>
+          <p><strong>{{ success }}</strong></p>
+          <div class="email-instructions">
+            <p>Для восстановления пароля отправьте письмо на адрес:</p>
+            <p class="admin-email">
+              <a href="mailto:guhbap@gmail.com" class="email-link">guhbap@gmail.com</a>
+            </p>
+            <p class="instructions-text">
+              <strong>Важно:</strong> Письмо должно быть отправлено с email-адреса, на который зарегистрирован ваш аккаунт.
+            </p>
+            <p class="instructions-text">
+              В письме укажите ваш username или email аккаунта, и мы поможем вам восстановить доступ.
+            </p>
           </div>
         </div>
         <button type="submit" class="auth-button" :disabled="loading">
@@ -49,21 +53,15 @@ const email = ref('')
 const loading = ref(false)
 const error = ref<string | null>(null)
 const success = ref<string | null>(null)
-const resetToken = ref<string | null>(null)
 
 const handleSubmit = async () => {
   error.value = null
   success.value = null
-  resetToken.value = null
   loading.value = true
 
   try {
     const response = await requestPasswordReset({ email: email.value })
     success.value = response.message
-    // В разработке получаем токен напрямую (в продакшене это небезопасно!)
-    if (response.resetToken) {
-      resetToken.value = response.resetToken
-    }
   } catch (err: any) {
     error.value = getErrorMessage(err, 'Ошибка запроса сброса пароля')
   } finally {
@@ -130,41 +128,40 @@ const handleSubmit = async () => {
   border-radius: 0.5rem;
 }
 
-.reset-token-info {
+.email-instructions {
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid rgba(34, 197, 94, 0.3);
 }
 
-.token-display {
-  background: #f3f4f6;
-  padding: 0.75rem;
-  border-radius: 0.5rem;
-  font-family: monospace;
-  font-size: 0.75rem;
-  word-break: break-all;
-  margin: 0.5rem 0;
-  color: #111827;
+.admin-email {
+  margin: 1rem 0;
+  text-align: center;
 }
 
-.token-note {
-  font-size: 0.75rem;
-  color: #6b7280;
-  margin-top: 0.5rem;
-  font-style: italic;
-}
-
-.reset-link {
+.email-link {
   display: inline-block;
-  margin-top: 0.75rem;
-  color: #667eea;
+  padding: 0.75rem 1.5rem;
+  background: #667eea;
+  color: #ffffff;
   text-decoration: none;
+  border-radius: 0.5rem;
   font-weight: 600;
-  transition: color 0.2s;
+  font-size: 1rem;
+  transition: all 0.2s;
 }
 
-.reset-link:hover {
-  color: #764ba2;
+.email-link:hover {
+  background: #764ba2;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.instructions-text {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #374151;
 }
 
 .auth-button {

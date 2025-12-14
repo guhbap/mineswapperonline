@@ -344,34 +344,20 @@ func (h *AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Проверяем, существует ли пользователь с таким email
-	user, err := h.findUserByEmail(req.Email)
+	_, err := h.findUserByEmail(req.Email)
 	if err != nil {
 		// Для безопасности не сообщаем, существует ли пользователь
 		utils.JSONResponse(w, http.StatusOK, map[string]string{
 			"status":  "ok",
-			"message": "If the email exists, a password reset link has been sent",
+			"message": "Если указанный email зарегистрирован, следуйте инструкциям ниже",
 		})
 		return
 	}
 
-	// Генерируем токен сброса пароля (действителен 1 час)
-	resetToken, err := auth.GeneratePasswordResetToken(user.ID, user.Email)
-	if err != nil {
-		log.Printf("Error generating reset token: %v", err)
-		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
-		return
-	}
-
-	// В реальном приложении здесь должна быть отправка email с токеном
-	// Для разработки возвращаем токен в ответе (в продакшене это небезопасно!)
-	log.Printf("Password reset token for user %s (email: %s): %s", user.Username, user.Email, resetToken)
-
-	utils.JSONResponse(w, http.StatusOK, map[string]interface{}{
-		"status":     "ok",
-		"message":    "Password reset token generated",
-		"resetToken": resetToken, // В продакшене убрать это поле!
-		"expiresIn":  "1 hour",
-		"note":       "In production, this token would be sent via email",
+	// Пользователь существует - возвращаем сообщение с инструкциями
+	utils.JSONResponse(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"message": "Для восстановления пароля отправьте письмо на guhbap@gmail.com с email-адреса, на который зарегистрирован ваш аккаунт",
 	})
 }
 
