@@ -206,12 +206,19 @@ func (r *Room) ResetGame() {
 		locked <- true
 	}()
 
+	// Сохраняем seed из текущего GameState, если он был указан пользователем
+	var savedSeed int64 = 0
+	if r.GameState != nil && r.HasCustomSeed {
+		savedSeed = r.GameState.Seed
+		log.Printf("ResetGame: сохраняем пользовательский seed=%d", savedSeed)
+	}
+
 	select {
 	case <-locked:
 		log.Printf("ResetGame: room.Mu успешно заблокирован (Lock), создаем новый GameState")
-		r.GameState = NewGameState(r.Rows, r.Cols, r.Mines, r.GameMode, 0)
+		r.GameState = NewGameState(r.Rows, r.Cols, r.Mines, r.GameMode, savedSeed)
 		// При сбросе игры HasCustomSeed сохраняется (не сбрасывается)
-		log.Printf("ResetGame: новый GameState создан, сбрасываем StartTime")
+		log.Printf("ResetGame: новый GameState создан с seed=%d, сбрасываем StartTime", savedSeed)
 		r.StartTime = nil
 		log.Printf("ResetGame: разблокируем room.Mu")
 		r.Mu.Unlock()
@@ -221,7 +228,7 @@ func (r *Room) ResetGame() {
 		// Все равно пытаемся продолжить, но это может быть проблемой
 		r.Mu.Lock()
 		log.Printf("ResetGame: room.Mu наконец заблокирован после ожидания")
-		r.GameState = NewGameState(r.Rows, r.Cols, r.Mines, r.GameMode, 0)
+		r.GameState = NewGameState(r.Rows, r.Cols, r.Mines, r.GameMode, savedSeed)
 		// При сбросе игры HasCustomSeed сохраняется (не сбрасывается)
 		r.StartTime = nil
 		r.Mu.Unlock()

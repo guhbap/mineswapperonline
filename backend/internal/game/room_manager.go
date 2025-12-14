@@ -45,8 +45,15 @@ func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, co
 	room.QuickStart = quickStart
 	room.Chording = chording
 
+	// Сохраняем seed из текущего GameState, если он был указан пользователем
+	var savedSeed int64 = 0
+	if room.GameState != nil && room.HasCustomSeed {
+		savedSeed = room.GameState.Seed
+		log.Printf("UpdateRoom: сохраняем пользовательский seed=%d", savedSeed)
+	}
+
 	// Пересоздаем игровое поле с новыми параметрами
-	room.GameState = NewGameState(rows, cols, mines, gameMode, 0)
+	room.GameState = NewGameState(rows, cols, mines, gameMode, savedSeed)
 	room.StartTime = nil // Сбрасываем время начала игры
 
 	log.Printf("Комната обновлена: %s (ID: %s, GameMode: %s, QuickStart: %v, Chording: %v)", name, roomID, gameMode, quickStart, chording)

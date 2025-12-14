@@ -63,9 +63,12 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 	var seed int64 = 0
 	if req.Seed != nil && *req.Seed > 0 {
 		seed = *req.Seed
+		log.Printf("CreateRoom: пользователь указал seed=%d", seed)
+	} else {
+		log.Printf("CreateRoom: seed не указан, будет сгенерирован автоматически")
 	}
 	room := h.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID, gameMode, req.QuickStart, req.Chording, seed)
-	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, GameMode: %s, QuickStart: %v, Chording: %v, Seed: %d)", req.Name, room.ID, creatorID, gameMode, req.QuickStart, req.Chording, seed)
+	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, GameMode: %s, QuickStart: %v, Chording: %v, Seed: %d, HasCustomSeed: %v)", req.Name, room.ID, creatorID, gameMode, req.QuickStart, req.Chording, room.GameState.Seed, room.HasCustomSeed)
 	utils.JSONResponse(w, http.StatusOK, room.ToResponse())
 }
 
