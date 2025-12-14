@@ -197,10 +197,11 @@
           Пока нет игр с начисленным рейтингом
         </div>
         <div v-else class="top-games-list">
-          <div
+          <router-link
             v-for="(game, index) in topGames"
             :key="game.id"
-            class="top-game-item"
+            :to="`/game/details?id=${game.id}`"
+            class="top-game-item top-game-item--link"
           >
             <div class="game-rank">#{{ index + 1 }}</div>
             <div class="game-info">
@@ -228,7 +229,7 @@
               </div>
               <div v-else class="rating-label" style="color: var(--text-secondary);">—</div>
             </div>
-          </div>
+          </router-link>
         </div>
       </div>
 
@@ -240,10 +241,11 @@
           Пока нет сыгранных игр
         </div>
         <div v-else class="recent-games-list">
-          <div
+          <router-link
             v-for="game in recentGames"
             :key="game.id"
-            class="recent-game-item"
+            :to="`/game/details?id=${game.id}`"
+            class="recent-game-item recent-game-item--link"
             :class="{ 'recent-game-item--lost': !game.won }"
           >
             <div class="game-main-info">
@@ -284,7 +286,7 @@
                 </span>
               </div>
             </div>
-          </div>
+          </router-link>
         </div>
       </div>
     </div>
@@ -1118,6 +1120,12 @@ onMounted(() => {
   border-left: 4px solid #667eea;
 }
 
+.top-game-item--link {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
 .top-game-item:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px var(--shadow);
@@ -1265,6 +1273,12 @@ onMounted(() => {
   border-radius: 0.75rem;
   transition: transform 0.2s, box-shadow 0.2s;
   border-left: 4px solid #667eea;
+}
+
+.recent-game-item--link {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
 }
 
 .recent-game-item--lost {

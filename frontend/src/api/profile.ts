@@ -110,3 +110,34 @@ export async function getRecentGames(username?: string): Promise<RecentGame[]> {
   return response.data
 }
 
+export interface GameParticipantInfo {
+  userId: number
+  username: string
+  nickname: string
+  color?: string
+}
+
+export interface GameDetails {
+  id: number
+  roomId: string
+  width: number
+  height: number
+  mines: number
+  seed: string
+  hasCustomSeed: boolean
+  creatorId: number
+  creatorName: string
+  won: boolean
+  chording: boolean
+  quickStart: boolean
+  startTime: string
+  duration: number
+  rating: number
+  participants: GameParticipantInfo[]
+}
+
+export async function getGameDetails(gameId: number): Promise<GameDetails> {
+  const response = await axios.get<GameDetails>(`${API_BASE}/game/details?id=${gameId}`)
+  return response.data
+}
+

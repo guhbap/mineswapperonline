@@ -12,6 +12,7 @@ import ResetPasswordPage from '@/components/pages/auth/ResetPasswordPage.vue'
 import ProfilePage from '@/components/pages/profile/ProfilePage.vue'
 import RatingPage from '@/components/pages/rating/RatingPage.vue'
 import FAQPage from '@/components/pages/faq/FAQPage.vue'
+import GameDetailsPage from '@/components/pages/game/GameDetailsPage.vue'
 
 // Типизированный массив маршрутов
 const routes: RouteRecordRaw[] = [
@@ -59,9 +60,9 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     component: RouterPage,
     children: [
-      { 
-        path: '', 
-        name: 'Home', 
+      {
+        path: '',
+        name: 'Home',
         component: MainPage,
         meta: {
           title: 'Сапер Онлайн - Играй в Сапера с Друзьями',
@@ -118,6 +119,16 @@ const routes: RouteRecordRaw[] = [
           description: 'Ответы на часто задаваемые вопросы об игре Сапер Онлайн',
           keywords: 'faq, вопросы, помощь, сапер онлайн, как играть'
         }
+      },
+      {
+        path: 'game/details',
+        name: 'GameDetails',
+        component: GameDetailsPage,
+        meta: {
+          title: 'Результаты игры - Сапер Онлайн',
+          description: 'Детальная информация о результатах игры',
+          keywords: 'результаты игры, детали игры, сапер онлайн'
+        }
       }
     ]
   }
@@ -132,14 +143,14 @@ const router = createRouter({
 // Защита роутов и обновление мета-тегов
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
-  
+
   // Если есть токен в localStorage, но пользователь еще не загружен, инициализируем store
   const hasToken = localStorage.getItem('token')
   if (hasToken && !authStore.user) {
     // Дожидаемся инициализации перед проверкой авторизации
     await authStore.init()
   }
-  
+
   const isAuthenticated = authStore.isAuthenticated
 
   // Публичные маршруты (доступны без авторизации)

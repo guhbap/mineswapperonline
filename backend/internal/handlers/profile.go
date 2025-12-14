@@ -904,3 +904,113 @@ func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) 
 
 	utils.JSONResponse(w, http.StatusOK, games)
 }
+
+// GetGameDetails возвращает детальную информацию об игре по ID
+func (h *ProfileHandler) GetGameDetails(w http.ResponseWriter, r *http.Request) {
+	gameID := r.URL.Query().Get("id")
+	if gameID == "" {
+		utils.JSONError(w, http.StatusBadRequest, "Game ID parameter is required")
+		return
+	}
+
+	var gameHistory models.UserGameHistory
+	err := h.db.First(&gameHistory, gameID).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			utils.JSONError(w, http.StatusNotFound, "Game not found")
+		} else {
+			log.Printf("Error getting game details: %v", err)
+			utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
+		}
+		return
+	}
+
+	// Получаем информацию о создателе комнаты
+	var creator models.User
+	creatorErr := h.db.First(&creator, gameHistory.CreatorID).Error
+	if creatorErr != nil {
+		log.Printf("Error getting creator: %v", creatorErr)
+	}
+
+	// Получаем участников игры
+	var participants []models.GameParticipant
+	h.db.Where("game_history_id = ?", gameHistory.ID).Find(&participants)
+
+	// Получаем информацию о пользователях-участниках
+	type ParticipantInfo struct {
+		UserID   int    `json:"userId"`
+		Username string `json:"username"`
+		Nickname string `json:"nickname"`
+		Color    string `json:"color,omitempty"`
+	}
+
+	participantInfos := make([]ParticipantInfo, 0, len(participants))
+	for _, p := range participants {
+		var user models.User
+		if err := h.db.First(&user, p.UserID).Error; err == nil {
+			participantInfo := ParticipantInfo{
+				UserID:   p.UserID,
+				Username: user.Username,
+				Nickname: p.Nickname,
+			}
+			if p.Color != nil {
+				participantInfo.Color = *p.Color
+			}
+			participantInfos = append(participantInfos, participantInfo)
+		}
+	}
+
+	// Рассчитываем рейтинг игры
+	var gameRating float64
+	if gameHistory.Won && !gameHistory.HasCustomSeed {
+		gameRating = h.calculateGameRating(
+			gameHistory.Width,
+			gameHistory.Height,
+			gameHistory.Mines,
+			gameHistory.GameTime,
+			gameHistory.Chording,
+			gameHistory.QuickStart,
+		)
+	}
+
+	// Формируем ответ
+	type GameDetailsResponse struct {
+		ID            int               `json:"id"`
+		RoomID        string            `json:"roomId"`
+		Width         int               `json:"width"`
+		Height        int               `json:"height"`
+		Mines         int               `json:"mines"`
+		Seed          string            `json:"seed"`
+		HasCustomSeed bool              `json:"hasCustomSeed"`
+		CreatorID     int               `json:"creatorId"`
+		CreatorName   string            `json:"creatorName"`
+		Won           bool              `json:"won"`
+		Chording      bool              `json:"chording"`
+		QuickStart    bool              `json:"quickStart"`
+		StartTime     string            `json:"startTime"`
+		Duration      float64           `json:"duration"`
+		Rating        float64           `json:"rating"`
+		Participants  []ParticipantInfo `json:"participants"`
+	}
+
+	response := GameDetailsResponse{
+		ID:            gameHistory.ID,
+		RoomID:        gameHistory.RoomID,
+		Width:         gameHistory.Width,
+		Height:        gameHistory.Height,
+		Mines:         gameHistory.Mines,
+		Seed:          gameHistory.Seed,
+		HasCustomSeed: gameHistory.HasCustomSeed,
+		CreatorID:     gameHistory.CreatorID,
+		CreatorName:   creator.Username,
+		Won:           gameHistory.Won,
+		Chording:      gameHistory.Chording,
+		QuickStart:    gameHistory.QuickStart,
+		StartTime:     gameHistory.CreatedAt.Format(time.RFC3339),
+		Duration:      gameHistory.GameTime,
+		Rating:        gameRating,
+		Participants:  participantInfos,
+	}
+
+	utils.JSONResponse(w, http.StatusOK, response)
+}

@@ -2183,6 +2183,8 @@ func main() {
 	r.HandleFunc("/profile/recent-games", profileHandler.GetRecentGames).Methods("GET", "OPTIONS").Queries("username", "{username}")
 	// Защищенный маршрут для получения своих последних 10 игр (без параметра username)
 	protected.HandleFunc("/profile/recent-games", profileHandler.GetRecentGames).Methods("GET", "OPTIONS")
+	// Публичный маршрут для получения детальной информации об игре
+	r.HandleFunc("/game/details", profileHandler.GetGameDetails).Methods("GET", "OPTIONS")
 
 	log.Printf("Сервер запущен на :%s", cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, middleware.CORSMiddleware(router)))
