@@ -51,8 +51,10 @@ func (h *ProfileHandler) calculateUserRating(userID int, topGamesCount int) floa
 			continue
 		}
 		
-		// Seed всегда генерируется автоматически, поэтому проверяем только на выигрыш и соответствие критериям
-		// Игры с явно указанным пользователем seed будут обрабатываться отдельно (пока учитываем все)
+		// Пропускаем игры с явно указанным пользователем seed (нерейтинговые)
+		if record.HasCustomSeed {
+			continue
+		}
 
 		// Рассчитываем рейтинг для игры
 		var gameRating float64
@@ -292,7 +294,7 @@ type GameParticipant struct {
 	Color    string
 }
 
-func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool, chording bool, quickStart bool, roomID string, seed int64, creatorID int, participants []GameParticipant) error {
+func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, gameTime float64, won bool, chording bool, quickStart bool, roomID string, seed int64, hasCustomSeed bool, creatorID int, participants []GameParticipant) error {
 	// Если participants не передан, используем пустой слайс
 	if participants == nil {
 		participants = []GameParticipant{}
@@ -303,18 +305,19 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 	log.Printf("Сохранение игры в историю: userID=%d, roomID=%s, размер=%dx%d, мины=%d, время=%.2f сек, seed=%d, creatorID=%d, won=%v",
 		userID, roomID, width, height, mines, gameTime, seed, creatorID, won)
 	gameHistory := models.UserGameHistory{
-		UserID:     userID,
-		RoomID:     roomID,
-		Width:      width,
-		Height:     height,
-		Mines:      mines,
-		GameTime:   gameTime,
-		Seed:       seed,
-		CreatorID:  creatorID,
-		Won:        won,
-		Chording:   chording,
-		QuickStart: quickStart,
-		CreatedAt:  time.Now(),
+		UserID:        userID,
+		RoomID:        roomID,
+		Width:         width,
+		Height:        height,
+		Mines:         mines,
+		GameTime:      gameTime,
+		Seed:          seed,
+		HasCustomSeed: hasCustomSeed,
+		CreatorID:     creatorID,
+		Won:           won,
+		Chording:      chording,
+		QuickStart:    quickStart,
+		CreatedAt:     time.Now(),
 	}
 	err = h.db.Create(&gameHistory).Error
 	if err != nil {
@@ -342,8 +345,8 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 
 	if won {
 		// Проверяем, может ли игра дать рейтинг
-		// Если указан seed (не равен 0), игра нерейтинговая
-		if seed != 0 {
+		// Если seed был указан пользователем явно, игра нерейтинговая
+		if hasCustomSeed {
 			log.Printf("Игра не дает рейтинг: указан seed=%d (игра нерейтинговая)", seed)
 		} else if !rating.IsRatingEligible(float64(width), float64(height), float64(mines), gameTime) {
 			log.Printf("Игра не дает рейтинг: плотность=%.2f%% (мин. 10%%)",
@@ -561,9 +564,8 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 	for _, record := range historyRecords {
 		// Рассчитываем рейтинг только для выигранных игр
 		var gameRating float64
-		if record.Won && rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
-			// Seed всегда генерируется автоматически, поэтому проверяем только на выигрыш и соответствие критериям
-			// Игры с явно указанным пользователем seed будут обрабатываться отдельно (пока учитываем все)
+		if record.Won && !record.HasCustomSeed && rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
+			// Пропускаем игры с явно указанным пользователем seed (нерейтинговые)
 			gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
 			
 			// Применяем модификаторы
@@ -664,11 +666,10 @@ func (h *ProfileHandler) GetRecentGames(w http.ResponseWriter, r *http.Request) 
 
 	var games []RecentGame
 	for _, record := range historyRecords {
-		// Рассчитываем рейтинг только для выигранных игр
+		// Рассчитываем рейтинг только для выигранных игр без явно указанного seed
 		var gameRating float64
-		if record.Won && rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
-			// Seed всегда генерируется автоматически, поэтому проверяем только на выигрыш и соответствие критериям
-			// Игры с явно указанным пользователем seed будут обрабатываться отдельно (пока учитываем все)
+		if record.Won && !record.HasCustomSeed && rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
+			// Пропускаем игры с явно указанным пользователем seed (нерейтинговые)
 			gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
 			
 			// Применяем модификаторы

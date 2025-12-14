@@ -64,13 +64,14 @@ type Room struct {
 	QuickStart    bool               `json:"quickStart"` // Быстрый старт - первая клетка всегда нулевая
 	Chording      bool               `json:"chording"`  // Chording - открытие соседних клеток при клике на открытую клетку с цифрой
 	CreatorID     int                `json:"creatorId"`
+	HasCustomSeed bool               `json:"-"`        // Флаг: был ли seed указан пользователем явно
 	Players       map[string]*Player `json:"-"`        // Используется только в WebSocket контексте
 	GameState     *GameState         `json:"-"`
 	CreatedAt     time.Time          `json:"createdAt"`
 	StartTime     *time.Time         `json:"-"`        // Время начала игры
 	deleteTimer   *time.Timer        // Таймер для отложенного удаления
 	deleteTimerMu sync.Mutex         // Мьютекс для безопасной работы с таймером
-	Mu            sync.RWMutex       // Экспортировано для доступа из main.go
+	Mu            sync.RWMutex        // Экспортировано для доступа из main.go
 }
 
 // Player представляет игрока (используется в контексте комнаты)

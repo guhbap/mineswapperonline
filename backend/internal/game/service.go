@@ -230,12 +230,13 @@ func (s *GameService) handleMineExplosion(room *Room, playerID string, userID in
 		quickStart := room.QuickStart
 		roomID := room.ID
 		creatorID := room.CreatorID
+		hasCustomSeed := room.HasCustomSeed
 		seed := int64(0)
 		if room.GameState != nil {
 			seed = room.GameState.Seed
 		}
 		room.Mu.RUnlock()
-		if err := s.resultRecorder.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, chording, quickStart, roomID, seed, creatorID, participants); err != nil {
+		if err := s.resultRecorder.RecordGameResult(userID, room.Cols, room.Rows, room.Mines, gameTime, false, chording, quickStart, roomID, seed, hasCustomSeed, creatorID, participants); err != nil {
 			log.Printf("Ошибка записи результата игры: %v", err)
 		}
 	}
@@ -266,13 +267,14 @@ func (s *GameService) handleGameWin(room *Room) {
 	quickStart := room.QuickStart
 	roomID := room.ID
 	creatorID := room.CreatorID
+	hasCustomSeed := room.HasCustomSeed
 	seed := int64(0)
 	if room.GameState != nil {
 		seed = room.GameState.Seed
 	}
 	for _, p := range room.Players {
 		if p.ID != loserID && p.UserID > 0 && s.resultRecorder != nil {
-			if err := s.resultRecorder.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, roomID, seed, creatorID, participants); err != nil {
+			if err := s.resultRecorder.RecordGameResult(p.UserID, room.Cols, room.Rows, room.Mines, gameTime, true, chording, quickStart, roomID, seed, hasCustomSeed, creatorID, participants); err != nil {
 				log.Printf("Ошибка записи результата игры: %v", err)
 			}
 		}

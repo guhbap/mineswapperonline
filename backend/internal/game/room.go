@@ -13,31 +13,34 @@ func NewRoomManager() *RoomManager {
 	}
 }
 
-func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, gameMode string, quickStart bool, chording bool, seed int64) *Room {
+func NewRoom(id, name, password string, rows, cols, mines int, creatorID int, gameMode string, quickStart bool, chording bool, seed int64, hasCustomSeed bool) *Room {
 	// По умолчанию classic, если не указан
 	if gameMode == "" {
 		gameMode = "classic"
 	}
 	return &Room{
-		ID:         id,
-		Name:       name,
-		Password:   password,
-		Rows:       rows,
-		Cols:       cols,
-		Mines:      mines,
-		GameMode:   gameMode,
-		QuickStart: quickStart,
-		Chording:   chording,
-		CreatorID:  creatorID,
-		Players:    make(map[string]*Player),
-		GameState:  NewGameState(rows, cols, mines, gameMode, seed),
-		CreatedAt:  time.Now(),
+		ID:            id,
+		Name:          name,
+		Password:      password,
+		Rows:          rows,
+		Cols:          cols,
+		Mines:         mines,
+		GameMode:      gameMode,
+		QuickStart:    quickStart,
+		Chording:      chording,
+		CreatorID:     creatorID,
+		HasCustomSeed: hasCustomSeed,
+		Players:       make(map[string]*Player),
+		GameState:     NewGameState(rows, cols, mines, gameMode, seed),
+		CreatedAt:     time.Now(),
 	}
 }
 
 func (rm *RoomManager) CreateRoom(name, password string, rows, cols, mines int, creatorID int, gameMode string, quickStart bool, chording bool, seed int64) *Room {
 	roomID := utils.GenerateID()
-	room := NewRoom(roomID, name, password, rows, cols, mines, creatorID, gameMode, quickStart, chording, seed)
+	// Определяем, был ли seed указан пользователем явно (seed > 0 означает, что он был указан)
+	hasCustomSeed := seed > 0
+	room := NewRoom(roomID, name, password, rows, cols, mines, creatorID, gameMode, quickStart, chording, seed, hasCustomSeed)
 	rm.mu.Lock()
 	rm.rooms[roomID] = room
 	rm.mu.Unlock()
@@ -207,6 +210,7 @@ func (r *Room) ResetGame() {
 	case <-locked:
 		log.Printf("ResetGame: room.Mu успешно заблокирован (Lock), создаем новый GameState")
 		r.GameState = NewGameState(r.Rows, r.Cols, r.Mines, r.GameMode, 0)
+		// При сбросе игры HasCustomSeed сохраняется (не сбрасывается)
 		log.Printf("ResetGame: новый GameState создан, сбрасываем StartTime")
 		r.StartTime = nil
 		log.Printf("ResetGame: разблокируем room.Mu")
@@ -218,6 +222,7 @@ func (r *Room) ResetGame() {
 		r.Mu.Lock()
 		log.Printf("ResetGame: room.Mu наконец заблокирован после ожидания")
 		r.GameState = NewGameState(r.Rows, r.Cols, r.Mines, r.GameMode, 0)
+		// При сбросе игры HasCustomSeed сохраняется (не сбрасывается)
 		r.StartTime = nil
 		r.Mu.Unlock()
 		log.Printf("ResetGame: завершено для комнаты %s (с задержкой)", r.ID)

@@ -135,6 +135,14 @@ func (db *DB) InitSchema() error {
 				log.Println("Added won column to user_game_history")
 			}
 		}
+		// Проверяем и добавляем has_custom_seed
+		if !migrator.HasColumn(&models.UserGameHistory{}, "has_custom_seed") {
+			if err := db.Exec(`ALTER TABLE user_game_history ADD COLUMN has_custom_seed BOOLEAN NOT NULL DEFAULT false`).Error; err != nil {
+				log.Printf("Warning: failed to add has_custom_seed column: %v", err)
+			} else {
+				log.Println("Added has_custom_seed column to user_game_history")
+			}
+		}
 	}
 
 	// Создаем уникальные индексы вручную, если их нет
