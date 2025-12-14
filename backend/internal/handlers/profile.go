@@ -273,7 +273,10 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 
 	if won {
 		// Проверяем, может ли игра дать рейтинг
-		if !rating.IsRatingEligible(float64(width), float64(height), float64(mines), gameTime) {
+		// Если указан seed (не равен 0), игра нерейтинговая
+		if seed != 0 {
+			log.Printf("Игра не дает рейтинг: указан seed=%d (игра нерейтинговая)", seed)
+		} else if !rating.IsRatingEligible(float64(width), float64(height), float64(mines), gameTime) {
 			log.Printf("Игра не дает рейтинг: время=%.2f сек (мин. 3 сек), плотность=%.2f%% (мин. 10%%)",
 				gameTime, float64(mines)/(float64(width)*float64(height))*100)
 		} else {

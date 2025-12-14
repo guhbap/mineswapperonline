@@ -46,7 +46,7 @@ func (rm *RoomManager) UpdateRoom(roomID string, name, password string, rows, co
 	room.Chording = chording
 
 	// Пересоздаем игровое поле с новыми параметрами
-	room.GameState = NewGameState(rows, cols, mines, gameMode)
+	room.GameState = NewGameState(rows, cols, mines, gameMode, 0)
 	room.StartTime = nil // Сбрасываем время начала игры
 
 	log.Printf("Комната обновлена: %s (ID: %s, GameMode: %s, QuickStart: %v, Chording: %v)", name, roomID, gameMode, quickStart, chording)

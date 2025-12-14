@@ -54,6 +54,7 @@ const form = ref<RoomFormData>({
   gameMode: 'classic',
   quickStart: false,
   chording: false,
+  seed: null,
 })
 
 const hasPassword = ref(false)

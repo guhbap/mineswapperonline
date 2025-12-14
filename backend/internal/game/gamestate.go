@@ -7,15 +7,18 @@ import (
 )
 
 // NewGameState создает новое состояние игры
-func NewGameState(rows, cols, mines int, gameMode string) *GameState {
-	log.Printf("NewGameState: начало создания, rows=%d, cols=%d, mines=%d, gameMode=%s", rows, cols, mines, gameMode)
+// seed: если 0, генерируется новый seed; иначе используется переданный
+func NewGameState(rows, cols, mines int, gameMode string, seed int64) *GameState {
+	log.Printf("NewGameState: начало создания, rows=%d, cols=%d, mines=%d, gameMode=%s, seed=%d", rows, cols, mines, gameMode, seed)
 	// По умолчанию classic
 	if gameMode == "" {
 		gameMode = "classic"
 	}
 	
-	// Генерируем seed для воспроизводимости
-	seed := time.Now().UnixNano()
+	// Генерируем seed для воспроизводимости, если не передан
+	if seed == 0 {
+		seed = time.Now().UnixNano()
+	}
 	gs := &GameState{
 		Rows:          rows,
 		Cols:          cols,

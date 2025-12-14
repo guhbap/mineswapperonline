@@ -81,6 +81,9 @@
         <div v-if="isRatedGame && maxRatingGain > 0" class="rating-status__gain">
           Макс. рейтинг: {{ Math.round(maxRatingGain) }} (при времени ≥ 3 сек)
         </div>
+        <div v-else-if="!isRatedGame && form.seed != null && form.seed !== 0" class="rating-status__hint">
+          Указан seed - игра нерейтинговая
+        </div>
         <div v-else-if="!isRatedGame" class="rating-status__hint">
           Плотность мин &lt; 10% (минимальное требование для рейтинга)
         </div>
@@ -128,6 +131,20 @@
         Chording
       </label>
       <div class="form-hint">Клик на открытую клетку с цифрой открывает соседние клетки, если вокруг стоит нужное количество флагов</div>
+    </div>
+
+    <div v-if="showAdvancedOptions" class="form-group">
+      <label class="form-label">Seed (опционально)</label>
+      <input
+        v-model.number="form.seed"
+        type="number"
+        class="form-input"
+        placeholder="Оставьте пустым для случайной генерации"
+        :min="1"
+      />
+      <div class="form-hint">
+        Укажите seed для воспроизводимой генерации поля. Если указан - игра будет нерейтинговой.
+      </div>
     </div>
 
     <div class="form-group">
@@ -192,6 +209,7 @@ export interface RoomFormData {
   gameMode: 'classic' | 'training' | 'fair'
   quickStart: boolean
   chording: boolean
+  seed?: number | null
 }
 
 const props = defineProps<{
@@ -237,7 +255,10 @@ const difficulty = computed(() => {
 })
 
 // Проверяем, может ли игра дать рейтинг (проверяем только плотность, время проверится при завершении)
+// Если указан seed - игра нерейтинговая
 const isRatedGame = computed(() => {
+  // Если указан seed - игра нерейтинговая
+  if (form.value.seed != null && form.value.seed !== 0) return false
   // Проверяем минимальную плотность мин (10%)
   const cells = form.value.cols * form.value.rows
   if (cells <= 0) return false

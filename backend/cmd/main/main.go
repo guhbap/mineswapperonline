@@ -146,65 +146,10 @@ func NewServer(roomManager *game.RoomManager, db *database.DB) *Server {
 }
 
 func NewGameState(rows, cols, mines int, gameMode string) *GameState {
-	// По умолчанию classic
-	if gameMode == "" {
-		gameMode = "classic"
-	}
-	gs := &GameState{
-		Rows:          rows,
-		Cols:          cols,
-		Mines:         mines,
-		GameOver:      false,
-		GameWon:       false,
-		Revealed:      0,
-		HintsUsed:     0,
-		LoserPlayerID: "",
-		LoserNickname: "",
-		Board:         make([][]Cell, rows),
-		flagSetInfo:   make(map[int]FlagInfo),
-	}
-
-	// Инициализация поля
-	for i := range gs.Board {
-		gs.Board[i] = make([]Cell, cols)
-	}
-
-	// В режимах training и fair мины НЕ размещаются заранее - они определяются динамически при клике
-	// В классическом режиме размещаем мины случайно
-	if gameMode == "classic" {
-		minesPlaced := 0
-		for minesPlaced < mines {
-			row := mathrand.Intn(rows)
-			col := mathrand.Intn(cols)
-			if !gs.Board[row][col].IsMine {
-				gs.Board[row][col].IsMine = true
-				minesPlaced++
-			}
-		}
-
-		// Подсчет соседних мин для обычного режима
-		for i := 0; i < rows; i++ {
-			for j := 0; j < cols; j++ {
-				if !gs.Board[i][j].IsMine {
-					count := 0
-					for di := -1; di <= 1; di++ {
-						for dj := -1; dj <= 1; dj++ {
-							ni, nj := i+di, j+dj
-							if ni >= 0 && ni < rows && nj >= 0 && nj < cols {
-								if gs.Board[ni][nj].IsMine {
-									count++
-								}
-							}
-						}
-					}
-					gs.Board[i][j].NeighborMines = count
-				}
-			}
-		}
-	}
-	// В режимах training и fair подсчет соседних мин будет происходить динамически при размещении мин
-
-	return gs
+	// Эта функция используется только в main.go для совместимости
+	// Внутри используется game.NewGameState с seed=0
+	gs := game.NewGameState(rows, cols, mines, gameMode, 0)
+	return convertGameStateToMain(gs)
 }
 
 // generateRandomBoard создает случайное поле (используется как fallback)

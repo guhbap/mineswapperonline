@@ -61,6 +61,7 @@ export interface CreateRoomRequest {
   gameMode: string
   quickStart: boolean
   chording: boolean
+  seed?: number | null
 }
 
 export interface JoinRoomRequest {

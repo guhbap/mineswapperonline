@@ -33,6 +33,7 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		GameMode   string `json:"gameMode"`
 		QuickStart bool   `json:"quickStart"`
 		Chording   bool   `json:"chording"`
+		Seed       *int64 `json:"seed,omitempty"` // Опциональный seed
 	}
 
 	if err := utils.DecodeJSON(r, &req); err != nil {
@@ -59,8 +60,12 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		gameMode = "classic" // По умолчанию
 	}
 
-	room := h.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID, gameMode, req.QuickStart, req.Chording)
-	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, GameMode: %s, QuickStart: %v, Chording: %v)", req.Name, room.ID, creatorID, gameMode, req.QuickStart, req.Chording)
+	var seed int64 = 0
+	if req.Seed != nil && *req.Seed > 0 {
+		seed = *req.Seed
+	}
+	room := h.roomManager.CreateRoom(req.Name, req.Password, req.Rows, req.Cols, req.Mines, creatorID, gameMode, req.QuickStart, req.Chording, seed)
+	log.Printf("Создана комната: %s (ID: %s, CreatorID: %d, GameMode: %s, QuickStart: %v, Chording: %v, Seed: %d)", req.Name, room.ID, creatorID, gameMode, req.QuickStart, req.Chording, seed)
 	utils.JSONResponse(w, http.StatusOK, room.ToResponse())
 }
 
