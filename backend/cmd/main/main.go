@@ -2121,8 +2121,8 @@ func main() {
 	}
 
 	server := NewServer(roomManager, db)
-	authHandler := handlers.NewAuthHandler(db)
 	profileHandler := handlers.NewProfileHandler(db)
+	authHandler := handlers.NewAuthHandler(db, profileHandler)
 	roomHandler := handlers.NewRoomHandler(roomManager)
 
 	router := mux.NewRouter()

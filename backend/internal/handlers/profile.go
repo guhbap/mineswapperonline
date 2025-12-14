@@ -23,6 +23,71 @@ func NewProfileHandler(db *database.DB) *ProfileHandler {
 	return &ProfileHandler{db: db}
 }
 
+// calculateUserRating рассчитывает рейтинг пользователя как сумму рейтинга лучших игр
+// topGamesCount - количество лучших игр для суммирования (по умолчанию 10)
+func (h *ProfileHandler) calculateUserRating(userID int, topGamesCount int) float64 {
+	if topGamesCount <= 0 {
+		topGamesCount = 10 // По умолчанию топ-10
+	}
+
+	var historyRecords []models.UserGameHistory
+	err := h.db.Where("user_id = ?", userID).
+		Find(&historyRecords).Error
+
+	if err != nil {
+		log.Printf("Error querying games for rating calculation: %v", err)
+		return 0.0
+	}
+
+	// Рассчитываем рейтинг для каждой игры
+	type GameRating struct {
+		Rating float64
+	}
+	var gameRatings []GameRating
+
+	for _, record := range historyRecords {
+		// Пропускаем игры с seed (нерейтинговые)
+		if record.Seed != 0 {
+			continue
+		}
+
+		// Рассчитываем рейтинг для игры
+		var gameRating float64
+		if rating.IsRatingEligible(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime) {
+			gameRating = rating.CalculateGameRating(float64(record.Width), float64(record.Height), float64(record.Mines), record.GameTime)
+			
+			// Применяем модификаторы
+			if record.Chording {
+				gameRating = gameRating * 0.8
+			}
+			if record.QuickStart {
+				gameRating = gameRating * 0.9
+			}
+		}
+
+		if gameRating > 0 {
+			gameRatings = append(gameRatings, GameRating{Rating: gameRating})
+		}
+	}
+
+	// Сортируем по рейтингу (по убыванию)
+	sort.Slice(gameRatings, func(i, j int) bool {
+		return gameRatings[i].Rating > gameRatings[j].Rating
+	})
+
+	// Суммируем топ-N игр
+	totalRating := 0.0
+	count := topGamesCount
+	if len(gameRatings) < count {
+		count = len(gameRatings)
+	}
+	for i := 0; i < count; i++ {
+		totalRating += gameRatings[i].Rating
+	}
+
+	return totalRating
+}
+
 func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value("userID").(int)
 
@@ -47,6 +112,10 @@ func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 
 	// Проверяем онлайн статус (последний раз был онлайн менее 5 минут назад)
 	stats.IsOnline = time.Since(stats.LastSeen) < 5*time.Minute
+
+	// Рассчитываем рейтинг динамически
+	userRating := h.calculateUserRating(userID, 10)
+	user.Rating = userRating
 
 	profile := models.UserProfile{
 		User:  user,
@@ -84,6 +153,10 @@ func (h *ProfileHandler) GetProfileByUsername(w http.ResponseWriter, r *http.Req
 
 	// Проверяем онлайн статус (последний раз был онлайн менее 5 минут назад)
 	stats.IsOnline = time.Since(stats.LastSeen) < 5*time.Minute
+
+	// Рассчитываем рейтинг динамически
+	userRating := h.calculateUserRating(user.ID, 10)
+	user.Rating = userRating
 
 	profile := models.UserProfile{
 		User:  user,
@@ -221,16 +294,8 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 	if participants == nil {
 		participants = []GameParticipant{}
 	}
-	// Get current player rating
-	var user models.User
-	err := h.db.Select("rating").First(&user, userID).Error
-	currentRating := 0.0
-	if err == nil {
-		currentRating = user.Rating
-	} else {
-		log.Printf("Error getting player rating: %v", err)
-	}
 
+	var err error
 	// Сохраняем игру в историю (для побед и поражений)
 	log.Printf("Сохранение игры в историю: userID=%d, roomID=%s, размер=%dx%d, мины=%d, время=%.2f сек, seed=%d, creatorID=%d, won=%v",
 		userID, roomID, width, height, mines, gameTime, seed, creatorID, won)
@@ -294,23 +359,10 @@ func (h *ProfileHandler) RecordGameResult(userID int, width, height, mines int, 
 				gameRating = gameRating * 0.9
 				log.Printf("QuickStart enabled: рейтинг умножен на 0.9")
 			}
-			
-			// Рейтинг пользователя - максимальное достигнутое значение за все его игры
-			newRating := currentRating
-			if gameRating > currentRating {
-				newRating = gameRating
-			}
 
-			log.Printf("Field %dx%d with %d mines, time=%.2f, chording=%v, quickStart=%v: gameRating=%.2f, userRating %.2f -> %.2f",
-				width, height, mines, gameTime, chording, quickStart, gameRating, currentRating, newRating)
-
-			// Update user rating in database
-			err = h.db.Model(&models.User{}).
-				Where("id = ?", userID).
-				Update("rating", newRating).Error
-			if err != nil {
-				log.Printf("Error updating player rating: %v", err)
-			}
+			log.Printf("Field %dx%d with %d mines, time=%.2f, chording=%v, quickStart=%v: gameRating=%.2f",
+				width, height, mines, gameTime, chording, quickStart, gameRating)
+			// Рейтинг теперь рассчитывается динамически как сумма лучших игр, не сохраняем в БД
 		}
 	} else {
 		// For lost games, don't update rating
@@ -412,7 +464,7 @@ func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var users []models.User
-	err := h.db.Order("COALESCE(rating, 0.0) DESC, username ASC").Find(&users).Error
+	err := h.db.Order("username ASC").Find(&users).Error
 	if err != nil {
 		log.Printf("Error getting leaderboard: %v", err)
 		utils.JSONError(w, http.StatusInternalServerError, "Internal server error")
@@ -421,10 +473,13 @@ func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) 
 
 	var leaderboard []LeaderboardEntry
 	for _, user := range users {
+		// Рассчитываем рейтинг динамически для каждого пользователя
+		userRating := h.calculateUserRating(user.ID, 10)
+
 		entry := LeaderboardEntry{
 			ID:       user.ID,
 			Username: user.Username,
-			Rating:   user.Rating,
+			Rating:   userRating,
 		}
 		if user.Color != nil {
 			entry.Color = *user.Color
@@ -439,6 +494,14 @@ func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) 
 
 		leaderboard = append(leaderboard, entry)
 	}
+
+	// Сортируем по рейтингу (по убыванию), затем по username
+	sort.Slice(leaderboard, func(i, j int) bool {
+		if leaderboard[i].Rating != leaderboard[j].Rating {
+			return leaderboard[i].Rating > leaderboard[j].Rating
+		}
+		return leaderboard[i].Username < leaderboard[j].Username
+	})
 
 	utils.JSONResponse(w, http.StatusOK, leaderboard)
 }

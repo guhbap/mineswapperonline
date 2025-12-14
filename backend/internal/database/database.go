@@ -145,6 +145,17 @@ func (db *DB) InitSchema() error {
 		log.Printf("Warning: failed to create index idx_game_participants_game_history_id: %v", err)
 	}
 
+	// Удаляем поле rating из таблицы users, если оно существует (рейтинг теперь рассчитывается динамически)
+	if migrator.HasTable(&models.User{}) {
+		if migrator.HasColumn(&models.User{}, "rating") {
+			if err := db.Exec(`ALTER TABLE users DROP COLUMN IF EXISTS rating`).Error; err != nil {
+				log.Printf("Warning: failed to drop rating column: %v", err)
+			} else {
+				log.Println("Dropped rating column from users table (rating is now calculated dynamically)")
+			}
+		}
+	}
+
 	log.Println("Database schema initialized successfully")
 	return nil
 }

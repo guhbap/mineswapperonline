@@ -10,7 +10,7 @@ type User struct {
 	Email        string    `gorm:"type:varchar(100);uniqueIndex:idx_users_email;not null" json:"email"`
 	PasswordHash string    `gorm:"type:varchar(255);not null;column:password_hash" json:"-"`
 	Color        *string   `gorm:"type:varchar(7)" json:"color,omitempty"`
-	Rating       float64   `gorm:"type:double precision;default:0.0" json:"rating"`
+	Rating       float64   `gorm:"-" json:"rating"` // Вычисляемое поле, не хранится в БД
 	CreatedAt    time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"createdAt"`
 }
 

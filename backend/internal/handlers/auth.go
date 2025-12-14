@@ -16,11 +16,15 @@ import (
 )
 
 type AuthHandler struct {
-	db *database.DB
+	db            *database.DB
+	profileHandler *ProfileHandler
 }
 
-func NewAuthHandler(db *database.DB) *AuthHandler {
-	return &AuthHandler{db: db}
+func NewAuthHandler(db *database.DB, profileHandler *ProfileHandler) *AuthHandler {
+	return &AuthHandler{
+		db:            db,
+		profileHandler: profileHandler,
+	}
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -118,6 +122,12 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.JSONError(w, http.StatusNotFound, "User not found")
 		return
+	}
+
+	// Рассчитываем рейтинг динамически
+	if h.profileHandler != nil {
+		userRating := h.profileHandler.calculateUserRating(userID, 10)
+		user.Rating = userRating
 	}
 
 	utils.JSONResponse(w, http.StatusOK, user)
