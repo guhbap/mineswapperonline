@@ -16,13 +16,13 @@ import (
 )
 
 type AuthHandler struct {
-	db            *database.DB
+	db             *database.DB
 	profileHandler *ProfileHandler
 }
 
 func NewAuthHandler(db *database.DB, profileHandler *ProfileHandler) *AuthHandler {
 	return &AuthHandler{
-		db:            db,
+		db:             db,
 		profileHandler: profileHandler,
 	}
 }
@@ -126,7 +126,7 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 
 	// Рассчитываем рейтинг динамически
 	if h.profileHandler != nil {
-		userRating := h.profileHandler.calculateUserRating(userID, 10)
+		userRating := h.profileHandler.calculateUserRating(userID, 100)
 		user.Rating = userRating
 	}
 

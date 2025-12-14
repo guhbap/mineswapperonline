@@ -101,7 +101,7 @@
       </div>
 
       <div class="top-games-section">
-        <h3 class="top-games-title">Топ-10 лучших игр</h3>
+        <h3 class="top-games-title">Топ-100 лучших игр</h3>
         <div v-if="topGamesLoading" class="top-games-loading">Загрузка...</div>
         <div v-else-if="topGamesError" class="top-games-error">{{ topGamesError }}</div>
         <div v-else-if="!topGames || topGames.length === 0" class="top-games-empty">
@@ -265,24 +265,25 @@ const loadProfile = async () => {
     loading.value = true
     error.value = ''
 
-    // Проверяем, есть ли username в параметрах роута
+    // Определяем, чей профиль загружать
     const username = route.params.username as string
-    if (username) {
-      // Загружаем профиль другого пользователя
-      isOwnProfile.value = false
-      profile.value = await getProfileByUsername(username)
-      // Загружаем топ-10 игр для этого пользователя (публичный запрос с username)
-      await loadTopGames(username)
-      await loadRecentGames(username)
-    } else {
-      // Загружаем свой профиль
-      isOwnProfile.value = true
-      profile.value = await getProfile()
+    isOwnProfile.value = !username
+
+    // Загружаем профиль
+    profile.value = username
+      ? await getProfileByUsername(username)
+      : await getProfile()
+
+    // Устанавливаем выбранный цвет только для своего профиля
+    if (isOwnProfile.value) {
       selectedColor.value = profile.value?.user.color || ''
-      // Загружаем топ-10 игр для себя (защищенный запрос без username)
-      await loadTopGames()
-      await loadRecentGames()
     }
+
+    // Загружаем игры (одинаковая логика для обоих случаев)
+    await Promise.all([
+      loadTopGames(username),
+      loadRecentGames(username)
+    ])
   } catch (err: any) {
     error.value = getErrorMessage(err, 'Ошибка загрузки профиля')
     console.error('Ошибка загрузки профиля:', err)

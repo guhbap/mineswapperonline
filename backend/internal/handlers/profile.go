@@ -29,7 +29,7 @@ func NewProfileHandler(db *database.DB) *ProfileHandler {
 // topGamesCount - количество лучших игр для суммирования (по умолчанию 10)
 func (h *ProfileHandler) calculateUserRating(userID int, topGamesCount int) float64 {
 	if topGamesCount <= 0 {
-		topGamesCount = 10 // По умолчанию топ-10
+		topGamesCount = 100 // По умолчанию топ-100
 	}
 
 	var historyRecords []models.UserGameHistory
@@ -130,7 +130,7 @@ func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	stats.IsOnline = time.Since(stats.LastSeen) < 5*time.Minute
 
 	// Рассчитываем рейтинг динамически
-	userRating := h.calculateUserRating(userID, 10)
+	userRating := h.calculateUserRating(userID, 100)
 	user.Rating = userRating
 
 	profile := models.UserProfile{
@@ -171,7 +171,7 @@ func (h *ProfileHandler) GetProfileByUsername(w http.ResponseWriter, r *http.Req
 	stats.IsOnline = time.Since(stats.LastSeen) < 5*time.Minute
 
 	// Рассчитываем рейтинг динамически
-	userRating := h.calculateUserRating(user.ID, 10)
+	userRating := h.calculateUserRating(user.ID, 100)
 	user.Rating = userRating
 
 	profile := models.UserProfile{
@@ -507,7 +507,7 @@ func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) 
 	var leaderboard []LeaderboardEntry
 	for _, user := range users {
 		// Рассчитываем рейтинг динамически для каждого пользователя
-		userRating := h.calculateUserRating(user.ID, 10)
+		userRating := h.calculateUserRating(user.ID, 100)
 
 		entry := LeaderboardEntry{
 			ID:       user.ID,
@@ -539,7 +539,7 @@ func (h *ProfileHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) 
 	utils.JSONResponse(w, http.StatusOK, leaderboard)
 }
 
-// GetTopGames возвращает топ-10 лучших игр пользователя по начисленному рейтингу
+// GetTopGames возвращает топ-100 лучших игр пользователя по начисленному рейтингу
 func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 	// Получаем userID из параметра или из контекста (для своего профиля)
 	var userID int
@@ -629,8 +629,8 @@ func (h *ProfileHandler) GetTopGames(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(wonGames, func(i, j int) bool {
 		return wonGames[i].Rating > wonGames[j].Rating
 	})
-	if len(wonGames) > 10 {
-		wonGames = wonGames[:10]
+	if len(wonGames) > 100 {
+		wonGames = wonGames[:100]
 	}
 
 	// Вычисляем процент засчитанного и полученный рейтинг для каждой игры
