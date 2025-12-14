@@ -3,19 +3,6 @@
     <nav class="nav" aria-label="Главная навигация">
       <div class="nav__container">
         <div class="nav__left">
-          <a
-            @click="handleMainClick"
-            class="nav__logo"
-            :class="{ 'nav__logo--active': $route.path === '/' || $route.path === '' }"
-          >
-            <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="12" cy="12" r="8" fill="currentColor"/>
-              <path d="M8 8L10 6M16 8L14 6M10 6L12 4L14 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              <circle cx="12" cy="12" r="2" fill="white"/>
-              <path d="M12 10V8" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            <span class="logo-text">Сапер Онлайн</span>
-          </a>
           <div class="nav__links">
             <a
               @click="handleMainClick"
